@@ -4,7 +4,7 @@
  * XState-powered state machine with heating/cooling strategies.
  */
 
-import { createMachine, assign, fromCallback, ActorRefFrom } from 'xstate';
+import { createMachine, assign, createActor, ActorRefFrom } from 'xstate';
 import { HvacOptions, TemperatureThresholds, DefrostOptions } from '../config/settings.ts';
 import { HVACContext, StateChangeData, SystemMode, HVACMode } from '../types/common.ts';
 import { StateError } from '../core/exceptions.ts';
@@ -278,7 +278,8 @@ export function createHVACMachine(hvacOptions: HvacOptions) {
     },
   }, {
     actions: {
-      logStateEntry: ({ context }, { type }) => {
+      logStateEntry: ({ context }, event) => {
+        const { type } = event as any;
         console.log(`[HVAC] Entering state: ${type}`, {
           indoorTemp: context.indoorTemp,
           outdoorTemp: context.outdoorTemp,
@@ -297,7 +298,8 @@ export function createHVACMachine(hvacOptions: HvacOptions) {
           indoorTemp: context.indoorTemp,
         });
       },
-      logManualOverride: (_, { type, ...event }) => {
+      logManualOverride: (_, event) => {
+        const { type, ...eventData } = event as any;
         console.log(`[HVAC] Manual override activated`, event);
       },
       updateConditions: assign(({ context, event }) => {
@@ -418,7 +420,7 @@ export class HVACStateMachine {
       throw new StateError('State machine is already running');
     }
 
-    this.actor = this.machine.createActor();
+    this.actor = createActor(this.machine);
     this.actor.start();
   }
 

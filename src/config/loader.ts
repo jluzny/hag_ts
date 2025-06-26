@@ -60,11 +60,10 @@ export class ConfigLoader {
     try {
       await loadEnv({
         export: true,
-        allowEmptyValues: true,
       });
     } catch (error) {
       // .env file is optional, log warning but continue
-      logger.warning(`Could not load .env file: ${error instanceof Error ? error.message : String(error)}`);
+      logger.warn(`Could not load .env file: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

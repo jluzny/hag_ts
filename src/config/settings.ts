@@ -143,20 +143,37 @@ export const defaultSettings: Partial<Settings> = {
     aiTemperature: 0.1,
   },
   hassOptions: {
+    wsUrl: 'ws://localhost:8123/api/websocket',
+    restUrl: 'http://localhost:8123/api',
+    token: 'your-token-here',
     maxRetries: 5,
     retryDelayMs: 1000,
     stateCheckInterval: 300000,
   },
   hvacOptions: {
+    tempSensor: 'sensor.temperature',
+    outdoorSensor: 'sensor.openweathermap_temperature',
     systemMode: SystemMode.AUTO,
     hvacEntities: [],
     heating: {
       temperature: 21.0,
       presetMode: 'comfort',
+      temperatureThresholds: {
+        indoorMin: 18.0,
+        indoorMax: 28.0,
+        outdoorMin: -20.0,
+        outdoorMax: 40.0,
+      },
     },
     cooling: {
       temperature: 24.0,
       presetMode: 'eco',
+      temperatureThresholds: {
+        indoorMin: 18.0,
+        indoorMax: 28.0,
+        outdoorMin: -20.0,
+        outdoorMax: 40.0,
+      },
     },
     activeHours: {
       start: 8,

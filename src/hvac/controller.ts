@@ -7,7 +7,7 @@
 import { injectable, inject } from '@needle-di/core';
 import { delay } from '@std/async';
 import { TYPES, LoggerService } from '../core/container.ts';
-import { HvacOptions, ApplicationOptions } from '../config/settings.ts';
+import type { HvacOptions, ApplicationOptions } from '../config/settings.ts';
 import { HVACStateMachine, HVACEvent } from './state-machine.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
 import { HassEventImpl, HassServiceCallImpl } from '../home-assistant/models.ts';
@@ -90,7 +90,7 @@ export class HVACController {
         await this.monitoringTask;
       } catch (error) {
         // Ignore cancellation errors
-        if (error.name !== 'AbortError') {
+        if (error instanceof Error && error.name !== 'AbortError') {
           this.logger.error('Error stopping monitoring task', error);
         }
       }
@@ -103,7 +103,7 @@ export class HVACController {
     try {
       await this.haClient.disconnect();
     } catch (error) {
-      this.logger.warning('Error disconnecting from Home Assistant', error);
+      this.logger.warning('Error disconnecting from Home Assistant', { error });
     }
 
     this.logger.info('✅ HVAC controller stopped');
@@ -139,7 +139,7 @@ export class HVACController {
           const aiStatus = await this.hvacAgent.getStatusSummary();
           status.aiAnalysis = aiStatus.success ? aiStatus.aiSummary : undefined;
         } catch (error) {
-          this.logger.warning('Failed to get AI status', error);
+          this.logger.warning('Failed to get AI status', { error });
         }
       }
 
@@ -362,7 +362,7 @@ export class HVACController {
           outdoorTemp = outdoorValue;
         }
       } catch (error) {
-        this.logger.warning('Failed to get outdoor temperature', error);
+        this.logger.warning('Failed to get outdoor temperature', { error });
       }
 
       // Update state machine with new conditions
@@ -390,7 +390,7 @@ export class HVACController {
           await this.performEvaluation();
           await delay(interval);
         } catch (error) {
-          if (error.name === 'AbortError') {
+          if (error instanceof Error && error.name === 'AbortError') {
             break;
           }
           this.logger.error('Error in monitoring loop', error);
@@ -452,7 +452,7 @@ export class HVACController {
         await this.evaluateStateMachineDirect();
       }
     } catch (error) {
-      this.logger.warning('Initial evaluation failed', error);
+      this.logger.warning('Initial evaluation failed', { error });
     }
   }
 
@@ -478,7 +478,7 @@ export class HVACController {
           outdoorTemp = outdoorValue;
         }
       } catch (error) {
-        this.logger.warning('Failed to get outdoor temperature', error);
+        this.logger.warning('Failed to get outdoor temperature', { error });
       }
 
       // Update state machine conditions

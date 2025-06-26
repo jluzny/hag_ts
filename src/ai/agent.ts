@@ -11,7 +11,7 @@ import { Tool } from '@langchain/core/tools';
 import { AgentExecutor, createToolCallingAgent } from 'langchain/agents';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { TYPES, LoggerService } from '../core/container.ts';
-import { HvacOptions, ApplicationOptions } from '../config/settings.ts';
+import type { HvacOptions, ApplicationOptions } from '../config/settings.ts';
 import { HVACStateMachine } from '../hvac/state-machine.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
 import { HVACMode, OperationResult } from '../types/common.ts';
@@ -114,7 +114,7 @@ class TemperatureReadingTool extends Tool {
         const outdoorState = await this.haClient.getState(this.hvacOptions.outdoorSensor);
         outdoorTemp = outdoorState.getNumericState();
       } catch (error) {
-        this.logger.warning('Failed to get outdoor temperature', error);
+        this.logger.warning('Failed to get outdoor temperature', { error });
       }
 
       const result = {
@@ -246,7 +246,7 @@ Respond concisely and provide actionable insights.`;
       ]);
 
       const agent = await createToolCallingAgent({
-        llm: this.llm,
+        llm: this.llm as any,
         tools: this.tools,
         prompt,
       });

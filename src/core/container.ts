@@ -6,7 +6,7 @@
 
 import { Container, injectable, inject } from '@needle-di/core';
 import { getLogger, Logger } from '@std/log';
-import { Settings, HvacOptions, HassOptions, ApplicationOptions } from '../config/settings.ts';
+import type { Settings, HvacOptions, HassOptions, ApplicationOptions } from '../config/settings.ts';
 import { ConfigLoader } from '../config/loader.ts';
 import { HVACAgent } from '../ai/agent.ts';
 
@@ -62,7 +62,7 @@ export class LoggerService {
   }
 
   warning(message: string, data?: Record<string, unknown>): void {
-    this.logger.warning(data ? `${message} ${JSON.stringify(data)}` : message);
+    this.logger.warn(data ? `${message} ${JSON.stringify(data)}` : message);
   }
 }
 
@@ -154,17 +154,17 @@ export class ApplicationContainer {
     await setup({
       handlers: {
         console: {
-          level: logLevel.toUpperCase(),
-          formatter: '[{datetime}] {levelName} {msg}',
+          level: logLevel.toUpperCase() as any,
+          formatter: '[{datetime}] {levelName} {msg}' as any,
         },
       },
       loggers: {
         default: {
-          level: logLevel.toUpperCase(),
+          level: logLevel.toUpperCase() as any,
           handlers: ['console'],
         },
         HAG: {
-          level: logLevel.toUpperCase(), 
+          level: logLevel.toUpperCase() as any, 
           handlers: ['console'],
         },
       },
@@ -179,18 +179,18 @@ export class ApplicationContainer {
       throw new Error('Settings not loaded');
     }
 
-    this.container.bind(TYPES.Settings).toConstantValue(this.settings);
-    this.container.bind(TYPES.HvacOptions).toConstantValue(this.settings.hvacOptions);
-    this.container.bind(TYPES.HassOptions).toConstantValue(this.settings.hassOptions);
-    this.container.bind(TYPES.ApplicationOptions).toConstantValue(this.settings.appOptions);
+    this.container.bind({ provide: TYPES.Settings, useValue: this.settings });
+    this.container.bind({ provide: TYPES.HvacOptions, useValue: this.settings.hvacOptions });
+    this.container.bind({ provide: TYPES.HassOptions, useValue: this.settings.hassOptions });
+    this.container.bind({ provide: TYPES.ApplicationOptions, useValue: this.settings.appOptions });
   }
 
   /**
    * Register core services
    */
   private registerCoreServices(): void {
-    this.container.bind(TYPES.Logger).to(LoggerService).inSingletonScope();
-    this.container.bind(TYPES.ConfigLoader).to(ConfigLoader).inSingletonScope();
+    this.container.bind({ provide: TYPES.Logger, useClass: LoggerService });
+    this.container.bind({ provide: TYPES.ConfigLoader, useClass: ConfigLoader });
   }
 
   /**
@@ -199,7 +199,7 @@ export class ApplicationContainer {
   private registerHomeAssistantServices(): void {
     // Lazy import to avoid circular dependencies
     import('../home-assistant/client.ts').then(({ HomeAssistantClient }) => {
-      this.container.bind(TYPES.HomeAssistantClient).to(HomeAssistantClient).inSingletonScope();
+      this.container.bind({ provide: TYPES.HomeAssistantClient, useClass: HomeAssistantClient });
     });
   }
 
@@ -212,13 +212,13 @@ export class ApplicationContainer {
       import('../hvac/state-machine.ts'),
       import('../hvac/controller.ts'),
     ]).then(([{ HVACStateMachine }, { HVACController }]) => {
-      this.container.bind(TYPES.HVACStateMachine).to(HVACStateMachine).inSingletonScope();
-      this.container.bind(TYPES.HVACController).to(HVACController).inSingletonScope();
+      this.container.bind({ provide: TYPES.HVACStateMachine, useClass: HVACStateMachine });
+      this.container.bind({ provide: TYPES.HVACController, useClass: HVACController });
     });
 
     // Register AI agent if enabled
     if (this.settings?.appOptions.useAi) {
-      this.container.bind(TYPES.HVACAgent).to(HVACAgent).inSingletonScope();
+      this.container.bind({ provide: TYPES.HVACAgent, useClass: HVACAgent });
     }
   }
 
@@ -235,9 +235,9 @@ export class ApplicationContainer {
       { HVACControlTool },
       { SensorReaderTool },
     ]) => {
-      this.container.bind(TYPES.TemperatureMonitorTool).to(TemperatureMonitorTool).inSingletonScope();
-      this.container.bind(TYPES.HVACControlTool).to(HVACControlTool).inSingletonScope();
-      this.container.bind(TYPES.SensorReaderTool).to(SensorReaderTool).inSingletonScope();
+      this.container.bind({ provide: TYPES.TemperatureMonitorTool, useClass: TemperatureMonitorTool });
+      this.container.bind({ provide: TYPES.HVACControlTool, useClass: HVACControlTool });
+      this.container.bind({ provide: TYPES.SensorReaderTool, useClass: SensorReaderTool });
     });
   }
 
@@ -252,7 +252,7 @@ export class ApplicationContainer {
    * Check if service is bound
    */
   isBound(serviceIdentifier: symbol): boolean {
-    return this.container.isBound(serviceIdentifier);
+    return this.container.has(serviceIdentifier);
   }
 
   /**

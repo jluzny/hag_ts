@@ -5,9 +5,9 @@
  */
 
 import { injectable, inject } from '@needle-di/core';
-import { connectWebSocket, WebSocket } from '@std/ws';
+// Using native WebSocket API instead of deprecated @std/ws
 import { delay } from '@std/async';
-import { HassOptions } from '../config/settings.ts';
+import type { HassOptions } from '../config/settings.ts';
 import { TYPES, LoggerService } from '../core/container.ts';
 import { ConnectionError, StateError, ValidationError } from '../core/exceptions.ts';
 import { 
@@ -249,14 +249,25 @@ export class HomeAssistantClient {
    */
   private async establishConnection(): Promise<void> {
     try {
-      this.ws = await connectWebSocket(this.config.wsUrl);
+      this.ws = new WebSocket(this.config.wsUrl);
       
-      // Setup message handler
-      for await (const message of this.ws) {
-        if (typeof message === 'string') {
-          await this.handleMessage(JSON.parse(message));
+      this.ws.onopen = () => {
+        this.logger.info('WebSocket connection established');
+      };
+      
+      this.ws.onmessage = async (event) => {
+        if (typeof event.data === 'string') {
+          await this.handleMessage(JSON.parse(event.data));
         }
-      }
+      };
+      
+      this.ws.onerror = (error) => {
+        this.logger.error('WebSocket error', { error });
+      };
+      
+      this.ws.onclose = () => {
+        this.logger.info('WebSocket connection closed');
+      };
       
     } catch (error) {
       throw new ConnectionError(
