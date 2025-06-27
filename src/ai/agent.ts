@@ -15,7 +15,7 @@ import type { HvacOptions, ApplicationOptions } from '../config/settings.ts';
 import { HVACStateMachine } from '../hvac/state-machine.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
 import { HVACMode, OperationResult } from '../types/common.ts';
-import { AIError, StateError } from '../core/exceptions.ts';
+import { AIError, StateError as _StateError } from '../core/exceptions.ts';
 
 /**
  * HVAC status summary interface
@@ -52,7 +52,7 @@ class HVACControlTool extends Tool {
     super();
   }
 
-  async _call(input: string): Promise<string> {
+  _call(input: string): Promise<string> {
     try {
       const { action, temperature } = JSON.parse(input);
       
@@ -77,12 +77,12 @@ class HVACControlTool extends Tool {
       
       this.logger.debug('AI agent executed HVAC control', { action, temperature });
       
-      return `Successfully set HVAC to ${action}${temperature ? ` at ${temperature}°C` : ''}`;
+      return Promise.resolve(`Successfully set HVAC to ${action}${temperature ? ` at ${temperature}°C` : ''}`);
       
     } catch (error) {
       const errorMsg = `Failed to control HVAC: ${error instanceof Error ? error.message : String(error)}`;
       this.logger.error('AI HVAC control failed', error);
-      return errorMsg;
+      return Promise.resolve(errorMsg);
     }
   }
 }
@@ -149,7 +149,7 @@ class HVACStatusTool extends Tool {
     super();
   }
 
-  async _call(_input: string): Promise<string> {
+  _call(_input: string): Promise<string> {
     try {
       const status = this.stateMachine.getStatus();
       
@@ -161,12 +161,12 @@ class HVACStatusTool extends Tool {
 
       this.logger.debug('AI agent read HVAC status', result);
       
-      return JSON.stringify(result);
+      return Promise.resolve(JSON.stringify(result));
 
     } catch (error) {
       const errorMsg = `Failed to get HVAC status: ${error instanceof Error ? error.message : String(error)}`;
       this.logger.error('AI status reading failed', error);
-      return errorMsg;
+      return Promise.resolve(errorMsg);
     }
   }
 }
@@ -246,7 +246,7 @@ Respond concisely and provide actionable insights.`;
       ]);
 
       const agent = await createToolCallingAgent({
-        llm: this.llm as any,
+        llm: this.llm as never,
         tools: this.tools,
         prompt,
       });

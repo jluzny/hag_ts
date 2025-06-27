@@ -9,7 +9,7 @@ import { injectable, inject } from '@needle-di/core';
 import { delay } from '@std/async';
 import type { HassOptions } from '../config/settings.ts';
 import { TYPES, LoggerService } from '../core/container.ts';
-import { ConnectionError, StateError, ValidationError } from '../core/exceptions.ts';
+import { ConnectionError, StateError, ValidationError as _ValidationError } from '../core/exceptions.ts';
 import { 
   HassStateImpl, 
   HassEventImpl, 
@@ -98,7 +98,7 @@ export class HomeAssistantClient {
   /**
    * Disconnect from Home Assistant
    */
-  async disconnect(): Promise<void> {
+  disconnect(): Promise<void> {
     this.logger.info('Disconnecting from Home Assistant');
     
     this.clearTimers();
@@ -115,6 +115,7 @@ export class HomeAssistantClient {
     
     this.eventHandlers.clear();
     this.subscriptions.clear();
+    return Promise.resolve();
   }
 
   /**
@@ -247,7 +248,7 @@ export class HomeAssistantClient {
   /**
    * Establish WebSocket connection
    */
-  private async establishConnection(): Promise<void> {
+  private establishConnection(): Promise<void> {
     try {
       this.ws = new WebSocket(this.config.wsUrl);
       
@@ -275,6 +276,7 @@ export class HomeAssistantClient {
         this.config.wsUrl,
       );
     }
+    return Promise.resolve();
   }
 
   /**
@@ -349,7 +351,7 @@ export class HomeAssistantClient {
   /**
    * Handle event messages
    */
-  private async handleEvent(data: HagWebSocketMessage): Promise<void> {
+  private handleEvent(data: HagWebSocketMessage): Promise<void> {
     try {
       const event = HassEventImpl.fromWebSocketEvent(data);
       
@@ -368,12 +370,13 @@ export class HomeAssistantClient {
     } catch (error) {
       this.logger.error('Failed to process event', error);
     }
+    return Promise.resolve();
   }
 
   /**
    * Send message to WebSocket
    */
-  private async sendMessage(message: HagWebSocketMessage): Promise<void> {
+  private sendMessage(message: HagWebSocketMessage): Promise<void> {
     if (!this.ws) {
       throw new ConnectionError('WebSocket not connected');
     }
@@ -385,6 +388,7 @@ export class HomeAssistantClient {
         `Failed to send message: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+    return Promise.resolve();
   }
 
   /**

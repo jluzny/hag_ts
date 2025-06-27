@@ -8,7 +8,7 @@ import { injectable, inject } from '@needle-di/core';
 import { delay } from '@std/async';
 import { TYPES, LoggerService } from '../core/container.ts';
 import type { HvacOptions, ApplicationOptions } from '../config/settings.ts';
-import { HVACStateMachine, HVACEvent } from './state-machine.ts';
+import { HVACStateMachine } from './state-machine.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
 import { HassEventImpl, HassServiceCallImpl } from '../home-assistant/models.ts';
 import { HVACStatus, HVACMode, OperationResult } from '../types/common.ts';
@@ -26,7 +26,7 @@ export class HVACController {
     @inject(TYPES.HVACStateMachine) private stateMachine: HVACStateMachine,
     @inject(TYPES.HomeAssistantClient) private haClient: HomeAssistantClient,
     @inject(TYPES.Logger) private logger: LoggerService,
-    @inject(TYPES.HVACAgent) private hvacAgent?: any, // Optional AI agent
+    @inject(TYPES.HVACAgent) private hvacAgent?: unknown, // Optional AI agent
   ) {}
 
   /**
@@ -342,7 +342,7 @@ export class HVACController {
   /**
    * Process state change using direct state machine logic
    */
-  private async processStateChangeDirect(stateChange: any): Promise<void> {
+  private async processStateChangeDirect(stateChange: unknown): Promise<void> {
     try {
       const newTemp = parseFloat(stateChange.newState.state);
       if (isNaN(newTemp)) {

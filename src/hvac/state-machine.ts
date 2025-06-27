@@ -5,7 +5,7 @@
  */
 
 import { createMachine, assign, createActor, ActorRefFrom } from 'xstate';
-import { HvacOptions, TemperatureThresholds, DefrostOptions } from '../config/settings.ts';
+import { HvacOptions, TemperatureThresholds as _TemperatureThresholds, DefrostOptions as _DefrostOptions } from '../config/settings.ts';
 import { HVACContext, StateChangeData, SystemMode, HVACMode } from '../types/common.ts';
 import { StateError } from '../core/exceptions.ts';
 
@@ -279,7 +279,7 @@ export function createHVACMachine(hvacOptions: HvacOptions) {
   }, {
     actions: {
       logStateEntry: ({ context }, event) => {
-        const { type } = event as any;
+        const { type } = event as never;
         console.log(`[HVAC] Entering state: ${type}`, {
           indoorTemp: context.indoorTemp,
           outdoorTemp: context.outdoorTemp,
@@ -299,7 +299,7 @@ export function createHVACMachine(hvacOptions: HvacOptions) {
         });
       },
       logManualOverride: (_, event) => {
-        const { type, ...eventData } = event as any;
+        const { type: _type, ..._eventData } = event as never;
         console.log(`[HVAC] Manual override activated`, event);
       },
       updateConditions: assign(({ context, event }) => {

@@ -84,9 +84,11 @@ Required properties that must be included in `defaultSettings`:
 ## Development Guidelines
 
 ### Commit Messages
-- **Avoid mentioning Claude, AI assistants, or automated generation in commit messages**
+- **IMPORTANT: Never mention Claude, AI assistants, or automated generation in commit messages**
+- **Never include "Generated with Claude Code" footer or "Co-Authored-By: Claude" lines**
 - Use conventional commit format: `type: description`
 - Focus on technical changes and business value
+- Keep commit messages professional and focused on the technical implementation
 - Example: `feat: upgrade dependencies to latest versions` instead of `feat: Claude updated dependencies`
 
 ### Error Handling

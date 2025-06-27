@@ -5,11 +5,11 @@
  */
 
 import { assertEquals, assertExists, assertInstanceOf } from '@std/assert';
-import { createContainer, ApplicationContainer } from '../../src/core/container.ts';
+import { createContainer as _createContainer, ApplicationContainer } from '../../src/core/container.ts';
 import { TYPES } from '../../src/core/container.ts';
 import { HVACController } from '../../src/hvac/controller.ts';
 import { HVACStateMachine } from '../../src/hvac/state-machine.ts';
-import { HomeAssistantClient } from '../../src/home-assistant/client.ts';
+import { HomeAssistantClient as _HomeAssistantClient } from '../../src/home-assistant/client.ts';
 import { HVACMode, SystemMode, LogLevel } from '../../src/types/common.ts';
 import { Settings } from '../../src/config/settings.ts';
 
@@ -79,19 +79,21 @@ class MockHomeAssistantClient {
     });
   }
 
-  async connect(): Promise<void> {
+  connect(): Promise<void> {
     this._connected = true;
+    return Promise.resolve();
   }
 
-  async disconnect(): Promise<void> {
+  disconnect(): Promise<void> {
     this._connected = false;
+    return Promise.resolve();
   }
 
   get connected(): boolean {
     return this._connected;
   }
 
-  async getState(entityId: string) {
+  getState(entityId: string) {
     const mockState = this.mockStates.get(entityId);
     if (!mockState) {
       throw new Error(`Entity ${entityId} not found`);
@@ -105,12 +107,12 @@ class MockHomeAssistantClient {
     };
   }
 
-  async callService(): Promise<void> {
+  callService(): Promise<void> {
     // Mock service call - just resolve
     return Promise.resolve();
   }
 
-  async subscribeEvents(): Promise<void> {
+  subscribeEvents(): Promise<void> {
     return Promise.resolve();
   }
 
@@ -243,7 +245,7 @@ Deno.test('HVAC Integration Tests', async (t) => {
     assertExists(status.stateMachine.currentState);
   });
 
-  await t.step('should maintain connection statistics', async () => {
+  await t.step('should maintain connection statistics', () => {
     const stats = mockHaClient.getStats();
     
     assertEquals(stats.totalConnections, 1);
@@ -255,7 +257,7 @@ Deno.test('HVAC Integration Tests', async (t) => {
   await t.step('should handle state machine transitions', async () => {
     // Get initial state
     const initialStatus = await controller.getStatus();
-    const initialState = initialStatus.stateMachine.currentState;
+    const _initialState = initialStatus.stateMachine.currentState;
     
     // Trigger a manual override that should change state
     await controller.manualOverride('heat', { temperature: 22.0 });

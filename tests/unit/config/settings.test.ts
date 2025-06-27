@@ -11,8 +11,8 @@ import {
   SettingsSchema,
   SystemMode,
   LogLevel,
-  type Settings,
-  type HvacOptions,
+  type Settings as _Settings,
+  type HvacOptions as _HvacOptions,
 } from '../../../src/config/settings.ts';
 
 Deno.test('HassOptionsSchema', async (t) => {

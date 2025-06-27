@@ -154,17 +154,17 @@ export class ApplicationContainer {
     await setup({
       handlers: {
         console: {
-          level: logLevel.toUpperCase() as any,
-          formatter: '[{datetime}] {levelName} {msg}' as any,
+          level: logLevel.toUpperCase() as never,
+          formatter: '[{datetime}] {levelName} {msg}' as never,
         },
       },
       loggers: {
         default: {
-          level: logLevel.toUpperCase() as any,
+          level: logLevel.toUpperCase() as never,
           handlers: ['console'],
         },
         HAG: {
-          level: logLevel.toUpperCase() as any, 
+          level: logLevel.toUpperCase() as never, 
           handlers: ['console'],
         },
       },
@@ -279,14 +279,14 @@ export class ApplicationContainer {
     // Stop services that need cleanup
     try {
       if (this.isBound(TYPES.HVACController)) {
-        const controller = this.get<any>(TYPES.HVACController);
+        const controller = this.get<unknown>(TYPES.HVACController);
         if (controller.stop && typeof controller.stop === 'function') {
           await controller.stop();
         }
       }
       
       if (this.isBound(TYPES.HomeAssistantClient)) {
-        const client = this.get<any>(TYPES.HomeAssistantClient);
+        const client = this.get<unknown>(TYPES.HomeAssistantClient);
         if (client.disconnect && typeof client.disconnect === 'function') {
           await client.disconnect();
         }

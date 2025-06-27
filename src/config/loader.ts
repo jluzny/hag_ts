@@ -6,7 +6,7 @@
 
 import { parse } from 'yaml';
 import { load as loadEnv } from '@std/dotenv';
-import { join, dirname, fromFileUrl } from '@std/path';
+import { join, dirname as _dirname, fromFileUrl as _fromFileUrl } from '@std/path';
 import { getLogger } from '@std/log';
 import { SettingsSchema, Settings, defaultSettings } from './settings.ts';
 import { ConfigurationError } from '../core/exceptions.ts';
