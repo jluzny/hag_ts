@@ -2,7 +2,7 @@
 
 /**
  * Test Sensor Availability Script
- * 
+ *
  * Tests if specific temperature sensors exist in Home Assistant
  */
 
@@ -16,16 +16,16 @@ const client = container.get<HomeAssistantClient>(TYPES.HomeAssistantClient);
 try {
   await client.connect();
   console.log('Connected successfully');
-  
+
   // Try different sensor names
   const sensors = [
     'sensor.1st_floor_hall_multisensor_temperature',
     'sensor.openweathermap_temperature',
     'sensor.temperature',
     'sensor.indoor_temperature',
-    'sensor.outdoor_temperature'
+    'sensor.outdoor_temperature',
   ];
-  
+
   for (const sensor of sensors) {
     try {
       const state = await client.getState(sensor);
@@ -34,8 +34,9 @@ try {
       console.log(`❌ Sensor not found: ${sensor}`);
     }
   }
-  
+
   await client.disconnect();
 } catch (error) {
-  console.error('Failed:', error.message);
+  console.error('Failed:', (error as Error).message);
 }
+
