@@ -104,11 +104,12 @@ export const HvacOptionsSchema = z.object({
  * Application-level configuration schema
  */
 export const ApplicationOptionsSchema = z.object({
-  logLevel: z.nativeEnum(LogLevel).default(LogLevel.INFO).describe('Logging level'),
+  logLevel: z.nativeEnum(LogLevel).default(LogLevel.DEBUG).describe('Logging level'),
   useAi: z.boolean().default(false).describe('Enable AI agent for HVAC decisions'),
   aiModel: z.string().default('gpt-4o-mini').describe('AI model to use'),
   aiTemperature: z.number().min(0).max(2).default(0.1).describe('AI model temperature'),
   openaiApiKey: z.string().optional().describe('OpenAI API key for AI agent'),
+  dryRun: z.boolean().default(false).describe('Enable dry run mode (no actual HA calls)'),
 });
 
 /**

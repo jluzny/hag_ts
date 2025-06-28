@@ -23,6 +23,7 @@ const mockSettings: Settings = {
     useAi: false,
     aiModel: 'gpt-4o-mini',
     aiTemperature: 0.1,
+    dryRun: false,
   },
   hassOptions: {
     wsUrl: 'ws://localhost:8123/api/websocket',
@@ -292,8 +293,7 @@ Deno.test('HVAC Integration Tests', async (t) => {
 
   await t.step('should handle state machine transitions', async () => {
     // Get initial state
-    const initialStatus = await controller.getStatus();
-    const _initialState = initialStatus.stateMachine.currentState;
+    const _initialStatus = await controller.getStatus();
 
     // Trigger a manual override that should change state
     await controller.manualOverride('heat', { temperature: 22.0 });

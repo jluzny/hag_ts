@@ -20,30 +20,33 @@ const originalStatSync = Deno.statSync;
 const originalEnvGet = Deno.env.get;
 
 // Mock Deno.readTextFile
-function mockReadTextFile(path: string): Promise<string> {
+function mockReadTextFile(path: string | URL): Promise<string> {
   if (shouldFailFileRead) {
     return Promise.reject(new Deno.errors.NotFound(`File not found: ${path}`));
   }
   
-  const content = mockFileSystem.get(path);
+  const pathStr = typeof path === 'string' ? path : path.toString();
+  const content = mockFileSystem.get(pathStr);
   if (content === undefined) {
-    return Promise.reject(new Deno.errors.NotFound(`File not found: ${path}`));
+    return Promise.reject(new Deno.errors.NotFound(`File not found: ${pathStr}`));
   }
   
   return Promise.resolve(content);
 }
 
 // Mock Deno.statSync
-function mockStatSync(path: string): Deno.FileInfo {
-  if (mockFileSystem.has(path)) {
+function mockStatSync(path: string | URL): Deno.FileInfo {
+  const pathStr = typeof path === 'string' ? path : path.toString();
+  if (mockFileSystem.has(pathStr)) {
     return {
       isFile: true,
       isDirectory: false,
       isSymlink: false,
-      size: mockFileSystem.get(path)!.length,
+      size: mockFileSystem.get(pathStr)!.length,
       mtime: new Date(),
       atime: new Date(),
       birthtime: new Date(),
+      ctime: new Date(),
       dev: 1,
       ino: 1,
       mode: 0o644,
@@ -53,9 +56,13 @@ function mockStatSync(path: string): Deno.FileInfo {
       rdev: 0,
       blksize: 4096,
       blocks: 1,
+      isBlockDevice: false,
+      isCharDevice: false,
+      isFifo: false,
+      isSocket: false,
     };
   }
-  throw new Deno.errors.NotFound(`File not found: ${path}`);
+  throw new Deno.errors.NotFound(`File not found: ${pathStr}`);
 }
 
 // Mock Deno.env.get
@@ -64,10 +71,18 @@ function mockEnvGet(key: string): string | undefined {
 }
 
 // Test setup and teardown
+interface MockDeno {
+  readTextFile: typeof Deno.readTextFile;
+  statSync: (path: string | URL) => Deno.FileInfo;
+  env: {
+    get: typeof Deno.env.get;
+  };
+}
+
 function setupMocks() {
-  Deno.readTextFile = mockReadTextFile;
-  Deno.statSync = mockStatSync;
-  Deno.env.get = mockEnvGet;
+  (Deno as unknown as MockDeno).readTextFile = mockReadTextFile;
+  (Deno as unknown as MockDeno).statSync = mockStatSync;
+  (Deno as unknown as MockDeno).env.get = mockEnvGet;
 }
 
 function teardownMocks() {
@@ -77,13 +92,12 @@ function teardownMocks() {
   mockFileSystem.clear();
   mockEnvironment.clear();
   shouldFailFileRead = false;
-  shouldFailEnvLoad = false;
 }
 
 // Valid test configuration
 const validYamlConfig = `
 appOptions:
-  logLevel: INFO
+  logLevel: info
   useAi: false
   aiModel: gpt-4o-mini
 
@@ -97,7 +111,7 @@ hassOptions:
 hvacOptions:
   tempSensor: sensor.indoor_temperature
   outdoorSensor: sensor.outdoor_temperature
-  systemMode: AUTO
+  systemMode: auto
   hvacEntities:
     - entityId: climate.living_room
       enabled: true
@@ -191,8 +205,18 @@ Deno.test('Config Loader - Environment Variable Overrides', async (t) => {
     hvacOptions:
       tempSensor: sensor.temp
       hvacEntities: []
-      heating: {}
-      cooling: {}
+      heating:
+        temperatureThresholds:
+          indoorMin: 19.0
+          indoorMax: 22.0
+          outdoorMin: -10.0
+          outdoorMax: 15.0
+      cooling:
+        temperatureThresholds:
+          indoorMin: 23.0
+          indoorMax: 26.0
+          outdoorMin: 10.0
+          outdoorMax: 45.0
     `;
     
     mockFileSystem.set('config.yaml', baseConfig);
@@ -221,19 +245,29 @@ Deno.test('Config Loader - Environment Variable Overrides', async (t) => {
     hvacOptions:
       tempSensor: sensor.temp
       hvacEntities: []
-      heating: {}
-      cooling: {}
+      heating:
+        temperatureThresholds:
+          indoorMin: 19.0
+          indoorMax: 22.0
+          outdoorMin: -10.0
+          outdoorMax: 15.0
+      cooling:
+        temperatureThresholds:
+          indoorMin: 23.0
+          indoorMax: 26.0
+          outdoorMin: 10.0
+          outdoorMax: 45.0
     `;
     
     mockFileSystem.set('config.yaml', baseConfig);
-    mockEnvironment.set('HAG_LOG_LEVEL', 'DEBUG');
+    mockEnvironment.set('HAG_LOG_LEVEL', 'debug');
     mockEnvironment.set('HAG_USE_AI', 'true');
     mockEnvironment.set('HAG_AI_MODEL', 'gpt-4');
     mockEnvironment.set('OPENAI_API_KEY', 'sk-test-key');
     
     const settings = await ConfigLoader.loadSettings('config.yaml');
     
-    assertEquals(settings.appOptions.logLevel, 'DEBUG');
+    assertEquals(settings.appOptions.logLevel, 'debug');
     assertEquals(settings.appOptions.useAi, true);
     assertEquals(settings.appOptions.aiModel, 'gpt-4');
   });
@@ -247,25 +281,36 @@ Deno.test('Config Loader - Environment Variable Overrides', async (t) => {
     hvacOptions:
       tempSensor: sensor.original
       outdoorSensor: sensor.outdoor_original
-      systemMode: AUTO
+      systemMode: auto
       hvacEntities: []
-      heating: {}
-      cooling: {}
+      heating:
+        temperatureThresholds:
+          indoorMin: 19.0
+          indoorMax: 22.0
+          outdoorMin: -10.0
+          outdoorMax: 15.0
+      cooling:
+        temperatureThresholds:
+          indoorMin: 23.0
+          indoorMax: 26.0
+          outdoorMin: 10.0
+          outdoorMax: 45.0
     `;
     
     mockFileSystem.set('config.yaml', baseConfig);
     mockEnvironment.set('HAG_TEMP_SENSOR', 'sensor.new_temp');
     mockEnvironment.set('HAG_OUTDOOR_SENSOR', 'sensor.new_outdoor');
-    mockEnvironment.set('HAG_SYSTEM_MODE', 'HEAT_ONLY');
+    mockEnvironment.set('HAG_SYSTEM_MODE', 'heat_only');
     
     const settings = await ConfigLoader.loadSettings('config.yaml');
     
     assertEquals(settings.hvacOptions.tempSensor, 'sensor.new_temp');
     assertEquals(settings.hvacOptions.outdoorSensor, 'sensor.new_outdoor');
-    assertEquals(settings.hvacOptions.systemMode, 'HEAT_ONLY');
+    assertEquals(settings.hvacOptions.systemMode, 'heat_only');
   });
 
   await t.step('should handle missing environment variables gracefully', async () => {
+    mockEnvironment.clear();
     const baseConfig = `
     hassOptions:
       wsUrl: ws://localhost:8123/api/websocket
@@ -274,8 +319,18 @@ Deno.test('Config Loader - Environment Variable Overrides', async (t) => {
     hvacOptions:
       tempSensor: sensor.temp
       hvacEntities: []
-      heating: {}
-      cooling: {}
+      heating:
+        temperatureThresholds:
+          indoorMin: 19.0
+          indoorMax: 22.0
+          outdoorMin: -10.0
+          outdoorMax: 15.0
+      cooling:
+        temperatureThresholds:
+          indoorMin: 23.0
+          indoorMax: 26.0
+          outdoorMin: 10.0
+          outdoorMax: 45.0
     `;
     
     mockFileSystem.set('config.yaml', baseConfig);
@@ -409,7 +464,7 @@ Deno.test('Config Loader - Default Values', async (t) => {
     // Should have default values
     assertEquals(settings.appOptions.logLevel, LogLevel.INFO);
     assertEquals(settings.appOptions.useAi, false);
-    assertEquals(settings.hassOptions.maxRetries, 3);
+    assertEquals(settings.hassOptions.maxRetries, 5);
     assertEquals(settings.hassOptions.retryDelayMs, 1000);
     assertEquals(settings.hvacOptions.systemMode, SystemMode.AUTO);
     assertEquals(settings.hvacOptions.outdoorSensor, 'sensor.openweathermap_temperature');
@@ -418,7 +473,7 @@ Deno.test('Config Loader - Default Values', async (t) => {
   await t.step('should preserve provided values over defaults', async () => {
     const configWithValues = `
     appOptions:
-      logLevel: ERROR
+      logLevel: error
       useAi: true
     hassOptions:
       wsUrl: ws://localhost:8123/api/websocket
@@ -427,7 +482,7 @@ Deno.test('Config Loader - Default Values', async (t) => {
       maxRetries: 10
     hvacOptions:
       tempSensor: sensor.indoor_temperature
-      systemMode: COOL_ONLY
+      systemMode: cool_only
       hvacEntities: []
       heating: {}
       cooling: {}
@@ -550,9 +605,9 @@ Deno.test('Config Loader - Environment Information', async (t) => {
     assertExists(envInfo.platform);
     assertExists(envInfo.environment);
     
-    assertEquals(envInfo.environment.hasOpenAI, true);
-    assertEquals(envInfo.environment.hasLangSmith, true);
-    assertEquals(envInfo.environment.configFile, '/custom/config.yaml');
+    assertEquals((envInfo.environment as any).hasOpenAI, true);
+    assertEquals((envInfo.environment as any).hasLangSmith, true);
+    assertEquals((envInfo.environment as any).configFile, '/custom/config.yaml');
   });
 
   await t.step('should handle missing environment variables', () => {
@@ -560,9 +615,9 @@ Deno.test('Config Loader - Environment Information', async (t) => {
     
     const envInfo = ConfigLoader.getEnvironmentInfo();
     
-    assertEquals(envInfo.environment.hasOpenAI, false);
-    assertEquals(envInfo.environment.hasLangSmith, false);
-    assertEquals(envInfo.environment.configFile, undefined);
+    assertEquals((envInfo.environment as any).hasOpenAI, false);
+    assertEquals((envInfo.environment as any).hasLangSmith, false);
+    assertEquals((envInfo.environment as any).configFile, undefined);
   });
 
   teardownMocks();
@@ -574,7 +629,7 @@ Deno.test('Config Loader - Complex Configuration Scenarios', async (t) => {
   await t.step('should handle complete configuration with all options', async () => {
     const complexConfig = `
     appOptions:
-      logLevel: DEBUG
+      logLevel: debug
       useAi: true
       aiModel: gpt-4
       aiTemperature: 0.3
@@ -590,7 +645,7 @@ Deno.test('Config Loader - Complex Configuration Scenarios', async (t) => {
     hvacOptions:
       tempSensor: sensor.indoor_temperature
       outdoorSensor: sensor.outdoor_temperature
-      systemMode: AUTO
+      systemMode: auto
       hvacEntities:
         - entityId: climate.living_room
           enabled: true
@@ -653,10 +708,17 @@ Deno.test('Config Loader - Complex Configuration Scenarios', async (t) => {
         temperature: 19.0
         temperatureThresholds:
           indoorMin: 17.0
-          # Other threshold values should come from defaults
+          indoorMax: 22.0
+          outdoorMin: -10.0
+          outdoorMax: 15.0
       cooling:
+        temperature: 24.0
         presetMode: windFreeSleep
-        # Other cooling values should come from defaults
+        temperatureThresholds:
+          indoorMin: 23.0
+          indoorMax: 26.0
+          outdoorMin: 10.0
+          outdoorMax: 45.0
     `;
     
     mockFileSystem.set('partial.yaml', partialConfig);

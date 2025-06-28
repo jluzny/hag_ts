@@ -148,6 +148,7 @@ const mockAppOptions: ApplicationOptions = {
   useAi: true,
   aiModel: 'gpt-4o-mini',
   aiTemperature: 0.1,
+  dryRun: false,
   openaiApiKey: 'sk-test-key',
 };
 
@@ -691,9 +692,9 @@ Deno.test('AI Agent - Real-world Scenarios', async (t) => {
     const efficiency = await agent.evaluateEfficiency();
     assertExists(efficiency);
     
-    if (efficiency.success && efficiency.recommendations) {
+    if (efficiency.success && efficiency.data && typeof efficiency.data === 'object' && 'recommendations' in efficiency.data) {
       // Should provide energy-saving recommendations
-      assertEquals(Array.isArray(efficiency.recommendations), true);
+      assertEquals(Array.isArray(efficiency.data.recommendations), true);
     }
   });
 });

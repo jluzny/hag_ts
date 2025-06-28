@@ -47,8 +47,7 @@ class MockWebSocket {
   constructor(url: string) {
     this.url = url;
     
-    // Simulate async connection
-    setTimeout(() => {
+    queueMicrotask(() => {
       if (this.shouldFailConnection) {
         this.readyState = WebSocket.CLOSED;
         if (this.onerror) {
@@ -60,7 +59,7 @@ class MockWebSocket {
           this.onopen(new Event('open'));
         }
       }
-    }, 10);
+    });
   }
 
   send(data: string): void {
@@ -182,7 +181,7 @@ Deno.test('Home Assistant Client - Connection Management', async (t) => {
     await client.connect();
     
     // Give time for async connection
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await Promise.resolve();
     
     assertEquals(client.connected, true);
     
@@ -214,7 +213,7 @@ Deno.test('Home Assistant Client - Connection Management', async (t) => {
     );
 
     await client.connect();
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await Promise.resolve();
     
     assertEquals(client.connected, true);
     
@@ -230,7 +229,7 @@ Deno.test('Home Assistant Client - Connection Management', async (t) => {
 
     // First connection
     await client.connect();
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await Promise.resolve();
     assertEquals(client.connected, true);
 
     // Second connection attempt should be handled gracefully
@@ -254,7 +253,7 @@ Deno.test('Home Assistant Client - Message Handling', async (t) => {
     );
 
     await client.connect();
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await Promise.resolve();
 
     // Mock a service call
     const serviceCall = HassServiceCallImpl.climate('set_hvac_mode', 'climate.test', {
@@ -282,7 +281,7 @@ Deno.test('Home Assistant Client - Message Handling', async (t) => {
     );
 
     await client.connect();
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await Promise.resolve();
 
     // Make send fail
     if (mockWebSocketInstance) {
@@ -309,7 +308,7 @@ Deno.test('Home Assistant Client - Message Handling', async (t) => {
     );
 
     await client.connect();
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await Promise.resolve();
 
     // Simulate incoming state change message
     const stateChangeMessage = {
@@ -359,7 +358,7 @@ Deno.test('Home Assistant Client - Event Handling', async (t) => {
     );
 
     await client.connect();
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await Promise.resolve();
 
     await client.subscribeEvents('state_changed');
 
@@ -390,7 +389,7 @@ Deno.test('Home Assistant Client - Event Handling', async (t) => {
     });
 
     await client.connect();
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await Promise.resolve();
 
     // Simulate event
     const stateChangeMessage = {
@@ -433,7 +432,7 @@ Deno.test('Home Assistant Client - Event Handling', async (t) => {
     client.removeEventHandler('state_changed', handler);
 
     await client.connect();
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await Promise.resolve();
 
     // Simulate event
     const stateChangeMessage = {
@@ -468,7 +467,7 @@ Deno.test('Home Assistant Client - State Operations', async (t) => {
     );
 
     await client.connect();
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await Promise.resolve();
 
     // Mock state response
     const stateRequest = client.getState('sensor.temperature');
@@ -510,7 +509,7 @@ Deno.test('Home Assistant Client - State Operations', async (t) => {
     );
 
     await client.connect();
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await Promise.resolve();
 
     const stateRequest = client.getState('sensor.nonexistent');
 
@@ -550,7 +549,7 @@ Deno.test('Home Assistant Client - Service Calls', async (t) => {
     );
 
     await client.connect();
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await Promise.resolve();
 
     // Test different climate service calls
     const services = [
@@ -592,7 +591,7 @@ Deno.test('Home Assistant Client - Service Calls', async (t) => {
     );
 
     await client.connect();
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await Promise.resolve();
 
     const serviceCall = HassServiceCallImpl.climate('set_hvac_mode', 'climate.nonexistent', {
       hvac_mode: 'heat',
@@ -635,7 +634,7 @@ Deno.test('Home Assistant Client - Connection Recovery', async (t) => {
     );
 
     await client.connect();
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await Promise.resolve();
     assertEquals(client.connected, true);
 
     // Simulate connection drop
@@ -657,7 +656,7 @@ Deno.test('Home Assistant Client - Connection Recovery', async (t) => {
     assertEquals(initialStats.totalConnections, 0);
 
     await client.connect();
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await Promise.resolve();
 
     const connectedStats = client.getStats();
     assertEquals(connectedStats.totalConnections, 1);
@@ -679,7 +678,7 @@ Deno.test('Home Assistant Client - Error Scenarios', async (t) => {
     );
 
     await client.connect();
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await Promise.resolve();
 
     // Send malformed JSON
     mockWebSocketInstance?.simulateMessage('invalid json');

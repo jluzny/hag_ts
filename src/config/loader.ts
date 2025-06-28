@@ -10,38 +10,94 @@ import { join, dirname as _dirname, fromFileUrl as _fromFileUrl } from '@std/pat
 import { getLogger } from '@std/log';
 import { SettingsSchema, Settings } from './config.ts';
 import { ConfigurationError } from '../core/exceptions.ts';
+import { LoggerService } from '../core/logger.ts';
 
-const logger = getLogger('ConfigLoader');
+const logger = new LoggerService('ConfigLoader');
 
 export class ConfigLoader {
+  /**
+   * Helper method to check if file exists
+   */
+  private static async fileExists(path: string): Promise<boolean> {
+    try {
+      const stat = await Deno.stat(path);
+      return stat.isFile;
+    } catch {
+      return false;
+    }
+  }
   /**
    * Load configuration from file with environment variable overrides
    */
   static async loadSettings(configPath?: string): Promise<Settings> {
+    const loadStart = Date.now();
+    
     try {
+      logger.info('🚀 Starting configuration loading process', {
+        providedPath: configPath,
+        timestamp: new Date().toISOString()
+      });
+      
       // Load environment variables
+      logger.debug('🌍 Loading environment variables');
       await this.loadEnvironment();
+      logger.debug('✅ Environment variables loaded');
 
       // Determine config file path
       const resolvedPath = configPath || this.findConfigFile();
-      logger.info(`Loading configuration from: ${resolvedPath}`);
+      logger.info('📄 Configuration file path resolved', {
+        resolvedPath,
+        wasProvided: !!configPath,
+        fileExists: await this.fileExists(resolvedPath)
+      });
 
       // Load and parse configuration file
+      logger.debug('📋 Loading configuration file');
       const rawConfig = await this.loadConfigFile(resolvedPath);
+      logger.info('✅ Configuration file loaded and parsed', {
+        hasContent: !!rawConfig,
+        configType: typeof rawConfig,
+        topLevelKeys: rawConfig && typeof rawConfig === 'object' ? Object.keys(rawConfig as Record<string, unknown>) : []
+      });
       
       // Merge with defaults
+      logger.debug('🔄 Merging with default configuration');
       const mergedConfig = await this.mergeWithDefaults(rawConfig);
+      logger.debug('✅ Configuration merged with defaults');
       
       // Apply environment variable overrides
+      logger.debug('🌍 Applying environment variable overrides');
       const configWithEnv = this.applyEnvironmentOverrides(mergedConfig);
+      logger.debug('✅ Environment overrides applied');
       
       // Validate configuration
+      logger.debug('⚙️ Validating configuration schema');
       const validatedConfig = this.validateConfiguration(configWithEnv);
       
-      logger.info('Configuration loaded and validated successfully');
+      const loadTime = Date.now() - loadStart;
+      
+      logger.info('✅ Configuration loaded and validated successfully', {
+        configPath: resolvedPath,
+        loadTimeMs: loadTime,
+        systemMode: validatedConfig.hvacOptions.systemMode,
+        aiEnabled: validatedConfig.appOptions.useAi,
+        hvacEntities: validatedConfig.hvacOptions.hvacEntities.length,
+        logLevel: validatedConfig.appOptions.logLevel,
+        hasOpenaiKey: !!validatedConfig.appOptions.openaiApiKey
+      });
+      
       return validatedConfig;
       
     } catch (error) {
+      const loadTime = Date.now() - loadStart;
+      
+      logger.error('❌ Configuration loading failed', {
+        error,
+        configPath,
+        loadTimeMs: loadTime,
+        errorType: error instanceof Error ? error.name : 'Unknown'
+      });
+      
       if (error instanceof ConfigurationError) {
         throw error;
       }
@@ -58,12 +114,33 @@ export class ConfigLoader {
    */
   private static async loadEnvironment(): Promise<void> {
     try {
+      logger.debug('📄 Loading .env file');
       await loadEnv({
         export: true,
       });
+      
+      const relevantEnvVars = [
+        'HASS_WS_URL', 'HASS_REST_URL', 'HASS_TOKEN',
+        'HAG_LOG_LEVEL', 'HAG_USE_AI', 'OPENAI_API_KEY',
+        'HAG_TEMP_SENSOR', 'HAG_OUTDOOR_SENSOR', 'HAG_SYSTEM_MODE',
+        'HAG_CONFIG_FILE'
+      ];
+      
+      const foundVars = relevantEnvVars.filter(key => Deno.env.get(key));
+      
+      logger.info('✅ Environment file loaded', {
+        foundVariables: foundVars.length,
+        relevantVars: foundVars,
+        hasHassConfig: !!(Deno.env.get('HASS_WS_URL') || Deno.env.get('HASS_TOKEN')),
+        hasOpenaiKey: !!Deno.env.get('OPENAI_API_KEY')
+      });
+      
     } catch (error) {
       // .env file is optional, log warning but continue
-      logger.warn(`Could not load .env file: ${error instanceof Error ? error.message : String(error)}`);
+      logger.warning('⚠️ Could not load .env file (optional)', {
+        error: error instanceof Error ? error.message : String(error),
+        reason: 'file_not_found_or_invalid'
+      });
     }
   }
 
@@ -79,37 +156,102 @@ export class ConfigLoader {
       '/etc/hag/hvac_config.yaml',
     ].filter(Boolean) as string[];
 
+    logger.debug('🔍 Searching for configuration file', {
+      searchPaths: possiblePaths,
+      envConfigFile: Deno.env.get('HAG_CONFIG_FILE'),
+      homeDir: Deno.env.get('HOME')
+    });
+
     for (const path of possiblePaths) {
       try {
         const stat = Deno.statSync(path);
         if (stat.isFile) {
+          logger.info('✅ Configuration file found', {
+            path,
+            fileSize: stat.size,
+            modified: stat.mtime?.toISOString()
+          });
           return path;
         }
-      } catch {
-        // File doesn't exist, continue
+      } catch (error) {
+        logger.debug('❌ Configuration file not found', {
+          path,
+          error: error instanceof Error ? error.message : String(error)
+        });
       }
     }
 
     // Default to expected location
-    return 'config/hvac_config.yaml';
+    const defaultPath = 'config/hvac_config.yaml';
+    logger.warning('⚠️ No configuration file found, using default path', {
+      defaultPath,
+      searchedPaths: possiblePaths,
+      note: 'File may not exist at default location'
+    });
+    
+    return defaultPath;
   }
 
   /**
    * Load and parse YAML configuration file
    */
   private static async loadConfigFile(configPath: string): Promise<unknown> {
+    const readStart = Date.now();
+    
     try {
+      logger.debug('📄 Reading configuration file', {
+        path: configPath
+      });
+      
       const configText = await Deno.readTextFile(configPath);
+      
+      logger.debug('✅ Configuration file read', {
+        path: configPath,
+        contentLength: configText.length,
+        hasEnvironmentVariables: configText.includes('${')
+      });
+      
       const resolvedText = this.resolveEnvironmentVariables(configText);
-      return parse(resolvedText);
+      
+      logger.debug('🔄 Parsing YAML configuration');
+      const parsed = parse(resolvedText);
+      
+      const readTime = Date.now() - readStart;
+      
+      logger.info('✅ Configuration file parsed successfully', {
+        path: configPath,
+        readTimeMs: readTime,
+        configType: typeof parsed,
+        hasContent: !!parsed,
+        topLevelKeys: parsed && typeof parsed === 'object' ? Object.keys(parsed as Record<string, unknown>) : []
+      });
+      
+      return parsed;
+      
     } catch (error) {
+      const readTime = Date.now() - readStart;
+      
       if (error instanceof Deno.errors.NotFound) {
+        logger.error('❌ Configuration file not found', {
+          path: configPath,
+          readTimeMs: readTime,
+          errorType: 'file_not_found'
+        });
+        
         throw new ConfigurationError(
           `Configuration file not found: ${configPath}`,
           'config_file',
           configPath,
         );
       }
+      
+      logger.error('❌ Failed to read/parse configuration file', {
+        path: configPath,
+        readTimeMs: readTime,
+        error,
+        errorType: error instanceof Error ? error.name : 'Unknown'
+      });
+      
       throw new ConfigurationError(
         `Failed to read configuration file: ${error instanceof Error ? error.message : String(error)}`,
         'config_file',
@@ -122,15 +264,46 @@ export class ConfigLoader {
    * Resolve environment variable placeholders in configuration text
    */
   private static resolveEnvironmentVariables(configText: string): string {
-    return configText.replace(/\$\{([^}]+)\}/g, (match, envVarName) => {
+    const envVarPattern = /\$\{([^}]+)\}/g;
+    const foundVars: string[] = [];
+    const resolvedVars: Record<string, string> = {};
+    const unresolvedVars: string[] = [];
+    
+    const resolvedText = configText.replace(envVarPattern, (match, envVarName) => {
+      foundVars.push(envVarName);
       const envValue = Deno.env.get(envVarName);
+      
       if (envValue === undefined) {
-        logger.warn(`Environment variable ${envVarName} not found, keeping placeholder ${match}`);
+        unresolvedVars.push(envVarName);
+        logger.warn(`⚠️ Environment variable not found: ${envVarName}`, {
+          placeholder: match,
+          behavior: 'keeping_placeholder'
+        });
         return match;
       }
-      logger.debug(`Resolved ${match} to environment variable value`);
+      
+      resolvedVars[envVarName] = envValue;
+      logger.debug(`✅ Resolved environment variable: ${envVarName}`, {
+        placeholder: match,
+        hasValue: true
+      });
+      
       return envValue;
     });
+    
+    if (foundVars.length > 0) {
+      logger.info('🌍 Environment variable resolution completed', {
+        totalVariables: foundVars.length,
+        resolvedCount: Object.keys(resolvedVars).length,
+        unresolvedCount: unresolvedVars.length,
+        resolvedVars: Object.keys(resolvedVars),
+        unresolvedVars
+      });
+    } else {
+      logger.debug('🌍 No environment variables found in configuration');
+    }
+    
+    return resolvedText;
   }
 
   /**
@@ -141,9 +314,9 @@ export class ConfigLoader {
       // Try to load config.yaml as the default
       const defaultConfigPath = 'config.yaml';
       return await this.loadConfigFile(defaultConfigPath);
-    } catch (error) {
+    } catch (_error) {
       // If config.yaml doesn't exist, use basic minimal defaults
-      logger.warn('No default config.yaml found, using minimal defaults');
+      logger.warning('No default config.yaml found, using minimal defaults');
       return {
         appOptions: {
           logLevel: 'info',
@@ -236,31 +409,80 @@ export class ConfigLoader {
    */
   private static applyEnvironmentOverrides(config: unknown): unknown {
     const configObj = config as Record<string, unknown>;
+    const overrides: Record<string, unknown> = {};
+    
+    logger.debug('🌍 Applying environment variable overrides');
     
     // Home Assistant options
-    const hassOptions = configObj.hassOptions as Record<string, unknown> || {};
-    if (Deno.env.get('HASS_WS_URL')) hassOptions.wsUrl = Deno.env.get('HASS_WS_URL');
-    if (Deno.env.get('HASS_REST_URL')) hassOptions.restUrl = Deno.env.get('HASS_REST_URL');
-    if (Deno.env.get('HASS_TOKEN')) hassOptions.token = Deno.env.get('HASS_TOKEN');
+    const hassOptions = { ...(configObj.hassOptions as Record<string, unknown> || {}) };
+    const hassOverrides: string[] = [];
+    
+    if (Deno.env.get('HASS_WS_URL')) {
+      hassOptions.wsUrl = Deno.env.get('HASS_WS_URL');
+      hassOverrides.push('wsUrl');
+    }
+    if (Deno.env.get('HASS_REST_URL')) {
+      hassOptions.restUrl = Deno.env.get('HASS_REST_URL');
+      hassOverrides.push('restUrl');
+    }
+    if (Deno.env.get('HASS_TOKEN')) {
+      hassOptions.token = Deno.env.get('HASS_TOKEN');
+      hassOverrides.push('token');
+    }
     if (Deno.env.get('HASS_MAX_RETRIES')) {
       hassOptions.maxRetries = parseInt(Deno.env.get('HASS_MAX_RETRIES')!, 10);
+      hassOverrides.push('maxRetries');
     }
 
     // Application options
-    const appOptions = configObj.appOptions as Record<string, unknown> || {};
-    if (Deno.env.get('HAG_LOG_LEVEL')) appOptions.logLevel = Deno.env.get('HAG_LOG_LEVEL');
-    if (Deno.env.get('HAG_USE_AI')) appOptions.useAi = Deno.env.get('HAG_USE_AI') === 'true';
-    if (Deno.env.get('HAG_AI_MODEL')) appOptions.aiModel = Deno.env.get('HAG_AI_MODEL');
+    const appOptions = { ...(configObj.appOptions as Record<string, unknown> || {}) };
+    const appOverrides: string[] = [];
+    
+    if (Deno.env.get('HAG_LOG_LEVEL')) {
+      appOptions.logLevel = Deno.env.get('HAG_LOG_LEVEL');
+      appOverrides.push('logLevel');
+    }
+    if (Deno.env.get('HAG_USE_AI')) {
+      appOptions.useAi = Deno.env.get('HAG_USE_AI') === 'true';
+      appOverrides.push('useAi');
+    }
+    if (Deno.env.get('HAG_AI_MODEL')) {
+      appOptions.aiModel = Deno.env.get('HAG_AI_MODEL');
+      appOverrides.push('aiModel');
+    }
     if (Deno.env.get('OPENAI_API_KEY')) {
-      // Ensure OpenAI key is available for AI features
-      logger.info('OpenAI API key found in environment');
+      appOptions.openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+      appOverrides.push('openaiApiKey');
+      logger.debug('✅ OpenAI API key found in environment');
     }
 
     // HVAC options
-    const hvacOptions = configObj.hvacOptions as Record<string, unknown> || {};
-    if (Deno.env.get('HAG_TEMP_SENSOR')) hvacOptions.tempSensor = Deno.env.get('HAG_TEMP_SENSOR');
-    if (Deno.env.get('HAG_OUTDOOR_SENSOR')) hvacOptions.outdoorSensor = Deno.env.get('HAG_OUTDOOR_SENSOR');
-    if (Deno.env.get('HAG_SYSTEM_MODE')) hvacOptions.systemMode = Deno.env.get('HAG_SYSTEM_MODE');
+    const hvacOptions = { ...(configObj.hvacOptions as Record<string, unknown> || {}) };
+    const hvacOverrides: string[] = [];
+    
+    if (Deno.env.get('HAG_TEMP_SENSOR')) {
+      hvacOptions.tempSensor = Deno.env.get('HAG_TEMP_SENSOR');
+      hvacOverrides.push('tempSensor');
+    }
+    if (Deno.env.get('HAG_OUTDOOR_SENSOR')) {
+      hvacOptions.outdoorSensor = Deno.env.get('HAG_OUTDOOR_SENSOR');
+      hvacOverrides.push('outdoorSensor');
+    }
+    if (Deno.env.get('HAG_SYSTEM_MODE')) {
+      hvacOptions.systemMode = Deno.env.get('HAG_SYSTEM_MODE');
+      hvacOverrides.push('systemMode');
+    }
+    
+    const totalOverrides = hassOverrides.length + appOverrides.length + hvacOverrides.length;
+    
+    logger.info('✅ Environment overrides applied', {
+      totalOverrides,
+      hassOverrides,
+      appOverrides,
+      hvacOverrides,
+      hasOpenaiKey: !!Deno.env.get('OPENAI_API_KEY'),
+      hasHassToken: !!Deno.env.get('HASS_TOKEN')
+    });
 
     return {
       ...configObj,
@@ -274,14 +496,49 @@ export class ConfigLoader {
    * Validate configuration against schema
    */
   private static validateConfiguration(config: unknown): Settings {
+    const validationStart = Date.now();
+    
     try {
-      return SettingsSchema.parse(config);
+      logger.debug('⚙️ Starting configuration validation');
+      
+      const validatedConfig = SettingsSchema.parse(config);
+      
+      const validationTime = Date.now() - validationStart;
+      
+      logger.info('✅ Configuration validation successful', {
+        validationTimeMs: validationTime,
+        systemMode: validatedConfig.hvacOptions.systemMode,
+        aiEnabled: validatedConfig.appOptions.useAi,
+        hvacEntitiesCount: validatedConfig.hvacOptions.hvacEntities.length,
+        hasRequiredSensors: !!(validatedConfig.hvacOptions.tempSensor && validatedConfig.hvacOptions.outdoorSensor),
+        hasHassConnection: !!(validatedConfig.hassOptions.wsUrl && validatedConfig.hassOptions.token),
+        logLevel: validatedConfig.appOptions.logLevel
+      });
+      
+      return validatedConfig;
+      
     } catch (error) {
+      const validationTime = Date.now() - validationStart;
+      
       if (error && typeof error === 'object' && 'issues' in error) {
-        const issues = (error as { issues: Array<{ path: (string | number)[]; message: string }> }).issues;
-        const errorMessages = issues.map(issue => 
-          `${issue.path.join('.')}: ${issue.message}`
+        const issues = (error as { issues: Array<{ path: (string | number)[]; message: string; code: string }> }).issues;
+        
+        const errorDetails = issues.map(issue => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+          code: issue.code
+        }));
+        
+        const errorMessages = errorDetails.map(detail => 
+          `${detail.path}: ${detail.message}`
         ).join(', ');
+        
+        logger.error('❌ Configuration validation failed with schema errors', {
+          validationTimeMs: validationTime,
+          errorCount: issues.length,
+          errors: errorDetails,
+          configKeys: config && typeof config === 'object' ? Object.keys(config as Record<string, unknown>) : []
+        });
         
         throw new ConfigurationError(
           `Configuration validation failed: ${errorMessages}`,
@@ -289,6 +546,13 @@ export class ConfigLoader {
           config,
         );
       }
+      
+      logger.error('❌ Configuration validation failed with unknown error', {
+        validationTimeMs: validationTime,
+        error,
+        errorType: error instanceof Error ? error.name : 'Unknown',
+        configType: typeof config
+      });
       
       throw new ConfigurationError(
         `Configuration validation failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -306,11 +570,39 @@ export class ConfigLoader {
     errors?: string[];
     config?: Settings;
   }> {
+    const validationStart = Date.now();
+    
     try {
+      logger.info('⚙️ Validating configuration file', {
+        configPath,
+        timestamp: new Date().toISOString()
+      });
+      
       const config = await this.loadSettings(configPath);
+      
+      const validationTime = Date.now() - validationStart;
+      
+      logger.info('✅ Configuration file validation successful', {
+        configPath,
+        validationTimeMs: validationTime,
+        systemMode: config.hvacOptions.systemMode,
+        aiEnabled: config.appOptions.useAi,
+        hvacEntities: config.hvacOptions.hvacEntities.length
+      });
+      
       return { valid: true, config };
+      
     } catch (error) {
+      const validationTime = Date.now() - validationStart;
       const errorMessage = error instanceof Error ? error.message : String(error);
+      
+      logger.error('❌ Configuration file validation failed', {
+        configPath,
+        validationTimeMs: validationTime,
+        error,
+        errorType: error instanceof Error ? error.name : 'Unknown'
+      });
+      
       return { 
         valid: false, 
         errors: [errorMessage],

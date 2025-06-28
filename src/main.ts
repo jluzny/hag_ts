@@ -10,6 +10,13 @@ import { TYPES } from './core/types.ts';
 import { HVACController } from './hvac/controller.ts';
 import { ConfigLoader } from './config/loader.ts';
 import { extractErrorDetails } from './core/exceptions.ts';
+import { type Logger, type LevelName } from '@std/log';
+import { setupLogging, getAppLogger } from './core/logging.ts';
+import { LoggerService } from './core/logger.ts';
+
+let logger: Logger;
+
+
 
 /**
  * Global container instance
@@ -31,26 +38,26 @@ async function cleanup(): Promise<void> {
 function setupCleanup(): void {
   // Handle process termination
   Deno.addSignalListener('SIGINT', async () => {
-    console.log('\n🛑 Received SIGINT, shutting down gracefully...');
+    logger.info('🛑 Received SIGINT, shutting down gracefully...');
     await cleanup();
     Deno.exit(0);
   });
 
   Deno.addSignalListener('SIGTERM', async () => {
-    console.log('\n🛑 Received SIGTERM, shutting down gracefully...');
+    logger.info('🛑 Received SIGTERM, shutting down gracefully...');
     await cleanup();
     Deno.exit(0);
   });
 
   // Handle unhandled errors
   globalThis.addEventListener('unhandledrejection', async (event) => {
-    console.error('❌ Unhandled promise rejection:', event.reason);
+    logger.error('❌ Unhandled promise rejection:', event.reason);
     await cleanup();
     Deno.exit(1);
   });
 
   globalThis.addEventListener('error', async (event) => {
-    console.error('❌ Unhandled error:', event.error);
+    logger.error('❌ Unhandled error:', event.error);
     await cleanup();
     Deno.exit(1);
   });
@@ -59,10 +66,15 @@ function setupCleanup(): void {
 /**
  * Run HAG application
  */
-async function runApplication(configPath?: string): Promise<void> {
+async function runApplication(configPath?: string, logLevel?: string): Promise<void> {
   try {
     // Create and initialize container
     container = await createContainer(configPath);
+    const appOptions = container.get<ApplicationOptions>(TYPES.ApplicationOptions);
+    if (logLevel) {
+      appOptions.logLevel = logLevel as LevelName;
+    }
+    setupLogging(appOptions.logLevel);
     
     // Get HVAC controller
     const controller = container.get<HVACController>(TYPES.HVACController);
@@ -70,8 +82,8 @@ async function runApplication(configPath?: string): Promise<void> {
     // Start the controller
     await controller.start();
     
-    console.log('🏠 HAG HVAC automation is running...');
-    console.log('📊 Press Ctrl+C to stop gracefully');
+    logger.info('🏠 HAG HVAC automation is running...');
+    logger.info('📊 Press Ctrl+C to stop gracefully');
     
     // Keep the application running
     while (true) {
@@ -80,7 +92,7 @@ async function runApplication(configPath?: string): Promise<void> {
     
   } catch (error) {
     const details = extractErrorDetails(error);
-    console.error('❌ Application failed:', details.message);
+    logger.error('❌ Application failed:', error, { message: details.message });
     throw error;
   }
 }
@@ -93,23 +105,19 @@ async function validateConfig(configPath: string): Promise<void> {
     const result = await ConfigLoader.validateConfigFile(configPath);
     
     if (result.valid && result.config) {
-      console.log(`✅ Configuration is valid: ${configPath}`);
-      console.log(`   Log level: ${result.config.appOptions.logLevel}`);
-      console.log(`   AI enabled: ${result.config.appOptions.useAi}`);
-      console.log(`   Temperature sensor: ${result.config.hvacOptions.tempSensor}`);
-      console.log(`   System mode: ${result.config.hvacOptions.systemMode}`);
-      console.log(`   HVAC entities: ${result.config.hvacOptions.hvacEntities.length}`);
+      logger.info(`✅ Configuration is valid: ${configPath}`, {
+        logLevel: result.config.appOptions.logLevel,
+        aiEnabled: result.config.appOptions.useAi,
+        tempSensor: result.config.hvacOptions.tempSensor,
+        systemMode: result.config.hvacOptions.systemMode,
+        hvacEntities: result.config.hvacOptions.hvacEntities.length,
+      });
     } else {
-      console.log(`❌ Configuration validation failed: ${configPath}`);
-      if (result.errors) {
-        for (const error of result.errors) {
-          console.log(`   Error: ${error}`);
-        }
-      }
+      logger.error(`❌ Configuration validation failed: ${configPath}`, result.errors ? { errors: result.errors } : undefined);
       Deno.exit(1);
     }
   } catch (error) {
-    console.error('❌ Configuration validation error:', error);
+    logger.error('❌ Configuration validation error:', error);
     Deno.exit(1);
   }
 }
@@ -127,37 +135,37 @@ async function getStatus(configPath?: string): Promise<void> {
     const status = await controller.getStatus();
     await controller.stop();
     
-    console.log('\n📊 HAG System Status');
-    console.log('=' + '='.repeat(29));
-    console.log(`Controller Running: ${status.controller.running}`);
-    console.log(`HA Connected: ${status.controller.haConnected}`);
-    console.log(`Temperature Sensor: ${status.controller.tempSensor}`);
-    console.log(`System Mode: ${status.controller.systemMode}`);
-    console.log(`AI Enabled: ${status.controller.aiEnabled}`);
+    logger.info('📊 HAG System Status');
+    logger.info('=' + '='.repeat(29));
+    logger.info(`Controller Running: ${status.controller.running}`);
+    logger.info(`HA Connected: ${status.controller.haConnected}`);
+    logger.info(`Temperature Sensor: ${status.controller.tempSensor}`);
+    logger.info(`System Mode: ${status.controller.systemMode}`);
+    logger.info(`AI Enabled: ${status.controller.aiEnabled}`);
     
     if (status.stateMachine) {
-      console.log(`\nState Machine: ${status.stateMachine.currentState}`);
+      logger.info(`State Machine: ${status.stateMachine.currentState}`);
       if (status.stateMachine.hvacMode) {
-        console.log(`HVAC Mode: ${status.stateMachine.hvacMode}`);
+        logger.info(`HVAC Mode: ${status.stateMachine.hvacMode}`);
       }
       
       if (status.stateMachine.conditions) {
         const conditions = status.stateMachine.conditions;
         if (conditions.indoorTemp) {
-          console.log(`Indoor Temp: ${conditions.indoorTemp}°C`);
+          logger.info(`Indoor Temp: ${conditions.indoorTemp}°C`);
         }
         if (conditions.outdoorTemp) {
-          console.log(`Outdoor Temp: ${conditions.outdoorTemp}°C`);
+          logger.info(`Outdoor Temp: ${conditions.outdoorTemp}°C`);
         }
       }
     }
     
     if (status.aiAnalysis) {
-      console.log(`\nAI Analysis:\n${status.aiAnalysis}`);
+      logger.info(`AI Analysis:\n${status.aiAnalysis}`);
     }
     
   } catch (error) {
-    console.error('❌ Failed to get status:', error);
+    logger.error('❌ Failed to get status:', error);
     Deno.exit(1);
   }
 }
@@ -184,19 +192,16 @@ async function manualOverride(
     const result = await controller.manualOverride(action, options);
     
     if (result.success) {
-      console.log(`✅ Manual override successful: ${action}`);
-      if (temperature) {
-        console.log(`   Target temperature: ${temperature}°C`);
-      }
+      logger.info(`✅ Manual override successful: ${action}`, temperature ? { temperature } : undefined);
     } else {
-      console.log(`❌ Manual override failed: ${result.error}`);
+      logger.error(`❌ Manual override failed: ${result.error}`);
       Deno.exit(1);
     }
     
     await controller.stop();
     
   } catch (error) {
-    console.error('❌ Manual override error:', error);
+    logger.error('❌ Manual override error:', error);
     Deno.exit(1);
   }
 }
@@ -207,73 +212,69 @@ async function manualOverride(
 function showEnvironment(): void {
   const envInfo = ConfigLoader.getEnvironmentInfo();
   
-  console.log('\n🌍 Environment Information');
-  console.log('=' + '='.repeat(26));
-  console.log('Deno:', JSON.stringify(envInfo.deno, null, 2));
-  console.log('Platform:', JSON.stringify(envInfo.platform, null, 2));
-  console.log('Environment:', JSON.stringify(envInfo.environment, null, 2));
+  logger.info('🌍 Environment Information');
+  logger.info('=' + '='.repeat(26));
+  logger.info('Deno:', { deno: envInfo.deno });
+  logger.info('Platform:', { platform: envInfo.platform });
+  logger.info('Environment:', { environment: envInfo.environment });
 }
 
 /**
  * Main CLI setup
  */
 async function main(): Promise<void> {
-  setupCleanup();
-  
   const cli = new Command()
     .name('hag')
     .description('🏠 HAG - Home Assistant aGentic HVAC Automation')
-    .version('1.0.0');
-
-  // Main run command
-  cli
+    .version('1.0.0')
     .option('-c, --config <file>', 'Configuration file path')
-    .option('--log-level <level>', 'Log level (debug, info, warning, error)', { default: 'info' })
+    .option('--log-level <level>', 'Log level (debug, info, warning, error)', {
+      default: 'info',
+      global: true,
+    })
     .action(async (options) => {
-      await runApplication(options.config);
-    });
-
-  // Validate configuration command
-  cli
-    .command('validate')
-    .description('Validate configuration file')
+      setupLogging(options.logLevel as LevelName);
+      logger = getAppLogger();
+      logger.debug("Starting HAG application main function...");
+      await runApplication(options.config, options.logLevel);
+    })
+    .command('validate', 'Validate configuration file')
     .option('-c, --config <file>', 'Configuration file path', { required: true })
     .action(async (options) => {
+      setupLogging(options.logLevel as LevelName);
+      logger = getAppLogger();
       await validateConfig(options.config);
-    });
-
-  // Status command
-  cli
-    .command('status')
-    .description('Get system status')
-    .option('-c, --config <file>', 'Configuration file path')
+    })
+    .command('status', 'Get system status')
     .action(async (options) => {
+      setupLogging(options.logLevel as LevelName);
+      logger = getAppLogger();
       await getStatus(options.config);
-    });
-
-  // Manual override command
-  cli
-    .command('override <action>')
-    .description('Manual HVAC override (heat, cool, off)')
-    .option('-c, --config <file>', 'Configuration file path')
+    })
+    .command('override <action>', 'Manual HVAC override (heat, cool, off)')
     .option('-t, --temperature <temp:number>', 'Target temperature')
     .action(async (options, action) => {
+      setupLogging(options.logLevel as LevelName);
+      logger = getAppLogger();
       await manualOverride(action, options.config, options.temperature);
-    });
-
-  // Environment info command
-  cli
-    .command('env')
-    .description('Show environment information')
+    })
+    .command('env', 'Show environment information')
     .action(() => {
+      setupLogging('info' as LevelName);
+      logger = getAppLogger();
       showEnvironment();
     });
 
-  // Parse and execute
+  setupCleanup();
+
   try {
     await cli.parse(Deno.args);
   } catch (error) {
-    console.error('❌ CLI error:', error);
+    if (!logger) {
+      setupLogging('error' as LevelName);
+      logger = getAppLogger();
+    }
+    logger.error('❌ CLI error:', error);
     await cleanup();
     Deno.exit(1);
   }
@@ -283,6 +284,9 @@ async function main(): Promise<void> {
 if (import.meta.main) {
   main().catch(async (error) => {
     console.error('❌ Application error:', error);
+    if (logger) {
+      logger.error('❌ Application error:', error);
+    }
     await cleanup();
     Deno.exit(1);
   });

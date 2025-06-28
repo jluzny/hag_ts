@@ -63,7 +63,7 @@ import { SystemMode, LogLevel } from '../../../src/types/common.ts';
 // Mock config file for testing
 const mockConfigYaml = `
 appOptions:
-  logLevel: ERROR
+  logLevel: error
   useAi: false
 
 hassOptions:
@@ -74,7 +74,7 @@ hassOptions:
 hvacOptions:
   tempSensor: sensor.indoor_temp
   outdoorSensor: sensor.outdoor_temp
-  systemMode: AUTO
+  systemMode: auto
   hvacEntities:
     - entityId: climate.test
       enabled: true
@@ -102,27 +102,35 @@ const mockFileSystem = new Map<string, string>();
 const originalReadTextFile = Deno.readTextFile;
 const originalStatSync = Deno.statSync;
 
+interface MockDeno {
+  readTextFile: typeof Deno.readTextFile;
+  statSync: typeof Deno.statSync;
+}
+
 function setupConfigMocks() {
   mockFileSystem.set('test-config.yaml', mockConfigYaml);
   
-  Deno.readTextFile = (path: string): Promise<string> => {
-    const content = mockFileSystem.get(path);
+  (Deno as unknown as MockDeno).readTextFile = (path: string | URL): Promise<string> => {
+    const pathStr = typeof path === 'string' ? path : path.toString();
+    const content = mockFileSystem.get(pathStr);
     if (content === undefined) {
-      throw new Deno.errors.NotFound(`File not found: ${path}`);
+      throw new Deno.errors.NotFound(`File not found: ${pathStr}`);
     }
-    return content;
+    return Promise.resolve(content);
   };
 
-  Deno.statSync = (path: string): Deno.FileInfo => {
-    if (mockFileSystem.has(path)) {
+  (Deno as unknown as MockDeno).statSync = (path: string | URL): Deno.FileInfo => {
+    const pathStr = typeof path === 'string' ? path : path.toString();
+    if (mockFileSystem.has(pathStr)) {
       return {
         isFile: true,
         isDirectory: false,
         isSymlink: false,
-        size: mockFileSystem.get(path)!.length,
+        size: mockFileSystem.get(pathStr)!.length,
         mtime: new Date(),
         atime: new Date(),
         birthtime: new Date(),
+        ctime: new Date(),
         dev: 1,
         ino: 1,
         mode: 0o644,
@@ -132,9 +140,13 @@ function setupConfigMocks() {
         rdev: 0,
         blksize: 4096,
         blocks: 1,
+        isBlockDevice: false,
+        isCharDevice: false,
+        isFifo: false,
+        isSocket: false,
       };
     }
-    throw new Deno.errors.NotFound(`File not found: ${path}`);
+    throw new Deno.errors.NotFound(`File not found: ${pathStr}`);
   };
 }
 
@@ -158,7 +170,7 @@ Deno.test('Application Container - Basic Operations', async (t) => {
     
     const settings = container.getSettings();
     assertExists(settings);
-    assertEquals(settings.appOptions.logLevel, LogLevel.ERROR);
+    assertEquals(settings.appOptions.logLevel, 'error');
     assertEquals(settings.hassOptions.wsUrl, 'ws://localhost:8123/api/websocket');
   });
 
@@ -181,7 +193,7 @@ Deno.test('Application Container - Basic Operations', async (t) => {
     const settings = container.get(TYPES.Settings);
     assertExists(settings);
     
-    const hvacOptions = container.get(TYPES.HvacOptions);
+    const hvacOptions = container.get(TYPES.HvacOptions) as any;
     assertExists(hvacOptions);
     assertEquals(hvacOptions.tempSensor, 'sensor.indoor_temp');
     
@@ -240,7 +252,7 @@ Deno.test('Application Container - Service Registration', async (t) => {
     assertEquals(container.isBound(TYPES.Logger), true);
     assertEquals(container.isBound(TYPES.ConfigLoader), true);
     
-    const logger = container.get(TYPES.Logger);
+    const logger = container.get(TYPES.Logger) as any;
     assertExists(logger);
     
     // Logger should have expected methods
@@ -287,7 +299,7 @@ Deno.test('Application Container - AI Integration', async (t) => {
     const container = new ApplicationContainer();
     await container.initialize('ai-config.yaml');
     
-    const appOptions = container.get(TYPES.ApplicationOptions);
+    const appOptions = container.get(TYPES.ApplicationOptions) as any;
     assertEquals(appOptions.useAi, true);
     
     // Should register AI-related services
@@ -299,7 +311,7 @@ Deno.test('Application Container - AI Integration', async (t) => {
     const container = new ApplicationContainer();
     await container.initialize('test-config.yaml');
     
-    const appOptions = container.get(TYPES.ApplicationOptions);
+    const appOptions = container.get(TYPES.ApplicationOptions) as any;
     assertEquals(appOptions.useAi, false);
   });
 
@@ -402,7 +414,7 @@ Deno.test('Application Container - Logging Setup', async (t) => {
   setupConfigMocks();
 
   await t.step('should setup logging with INFO level', async () => {
-    const infoConfigYaml = mockConfigYaml.replace('logLevel: ERROR', 'logLevel: INFO');
+    const infoConfigYaml = mockConfigYaml.replace('logLevel: error', 'logLevel: info');
     mockFileSystem.set('info-config.yaml', infoConfigYaml);
     
     const container = new ApplicationContainer();
@@ -413,7 +425,7 @@ Deno.test('Application Container - Logging Setup', async (t) => {
   });
 
   await t.step('should setup logging with DEBUG level', async () => {
-    const debugConfigYaml = mockConfigYaml.replace('logLevel: ERROR', 'logLevel: DEBUG');
+    const debugConfigYaml = mockConfigYaml.replace('logLevel: error', 'logLevel: debug');
     mockFileSystem.set('debug-config.yaml', debugConfigYaml);
     
     const container = new ApplicationContainer();

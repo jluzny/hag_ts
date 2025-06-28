@@ -41,7 +41,7 @@ Deno.test('HassOptionsSchema', async (t) => {
     };
 
     const result = HassOptionsSchema.parse(minimalConfig);
-    assertEquals(result.maxRetries, 3);
+    assertEquals(result.maxRetries, 5);
     assertEquals(result.retryDelayMs, 1000);
   });
 
@@ -126,13 +126,26 @@ Deno.test('HvacOptionsSchema', async (t) => {
       tempSensor: 'sensor.indoor_temperature',
       hvacEntities: [],
       heating: {
+        temperatureThresholds: {
+          indoorMin: 19.0,
+          indoorMax: 22.0,
+          outdoorMin: -10.0,
+          outdoorMax: 15.0,
+        },
         defrost: {
           temperatureThreshold: 0.0,
           periodSeconds: 3600,
           durationSeconds: 300,
         },
       },
-      cooling: {},
+      cooling: {
+        temperatureThresholds: {
+          indoorMin: 23.0,
+          indoorMax: 26.0,
+          outdoorMin: 10.0,
+          outdoorMax: 45.0,
+        },
+      },
     };
 
     const result = HvacOptionsSchema.parse(configWithDefrost);
@@ -145,8 +158,22 @@ Deno.test('HvacOptionsSchema', async (t) => {
     const configWithActiveHours = {
       tempSensor: 'sensor.indoor_temperature',
       hvacEntities: [],
-      heating: {},
-      cooling: {},
+      heating: {
+        temperatureThresholds: {
+          indoorMin: 19.0,
+          indoorMax: 22.0,
+          outdoorMin: -10.0,
+          outdoorMax: 15.0,
+        },
+      },
+      cooling: {
+        temperatureThresholds: {
+          indoorMin: 23.0,
+          indoorMax: 26.0,
+          outdoorMin: 10.0,
+          outdoorMax: 45.0,
+        },
+      },
       activeHours: {
         start: 8,
         startWeekday: 7,
@@ -164,7 +191,7 @@ Deno.test('HvacOptionsSchema', async (t) => {
 Deno.test('ApplicationOptionsSchema', async (t) => {
   await t.step('should validate application options with defaults', () => {
     const result = ApplicationOptionsSchema.parse({});
-    assertEquals(result.logLevel, LogLevel.INFO);
+    assertEquals(result.logLevel, LogLevel.DEBUG);
     assertEquals(result.useAi, false);
     assertEquals(result.aiModel, 'gpt-4o-mini');
     assertEquals(result.aiTemperature, 0.1);
@@ -257,13 +284,27 @@ Deno.test('SettingsSchema', async (t) => {
       hvacOptions: {
         tempSensor: 'sensor.indoor_temperature',
         hvacEntities: [],
-        heating: {},
-        cooling: {},
+        heating: {
+          temperatureThresholds: {
+            indoorMin: 19.0,
+            indoorMax: 22.0,
+            outdoorMin: -10.0,
+            outdoorMax: 15.0,
+          },
+        },
+        cooling: {
+          temperatureThresholds: {
+            indoorMin: 23.0,
+            indoorMax: 26.0,
+            outdoorMin: 10.0,
+            outdoorMax: 45.0,
+          },
+        },
       },
     };
 
     const result = SettingsSchema.parse(minimalSettings);
-    assertEquals(result.appOptions.logLevel, LogLevel.INFO);
+    assertEquals(result.appOptions.logLevel, LogLevel.DEBUG);
     assertEquals(result.appOptions.useAi, false);
     assertEquals(result.hvacOptions.systemMode, SystemMode.AUTO);
     assertEquals(result.hvacOptions.outdoorSensor, 'sensor.openweathermap_temperature');
@@ -314,8 +355,22 @@ Deno.test('Entity validation', async (t) => {
           defrost: true,
         },
       ],
-      heating: {},
-      cooling: {},
+      heating: {
+        temperatureThresholds: {
+          indoorMin: 19.0,
+          indoorMax: 22.0,
+          outdoorMin: -10.0,
+          outdoorMax: 15.0,
+        },
+      },
+      cooling: {
+        temperatureThresholds: {
+          indoorMin: 23.0,
+          indoorMax: 26.0,
+          outdoorMin: 10.0,
+          outdoorMax: 45.0,
+        },
+      },
     };
 
     const result = HvacOptionsSchema.parse(validEntity);

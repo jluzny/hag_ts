@@ -41,9 +41,6 @@ export class ApplicationContainer {
       // Load configuration
       this.settings = await ConfigLoader.loadSettings(configPath);
 
-      // Setup logging based on configuration
-      await this.setupLogging(this.settings.appOptions.logLevel);
-
       // Register configuration
       this.registerConfiguration();
 
@@ -62,9 +59,9 @@ export class ApplicationContainer {
         // this.registerTools();
       }
 
-      console.log('✅ Container initialized successfully');
+      
     } catch (error) {
-      console.error('❌ Failed to initialize container:', error);
+      
       throw error;
     }
   }
@@ -79,9 +76,6 @@ export class ApplicationContainer {
     try {
       // Use provided settings
       this.settings = settings;
-
-      // Setup logging based on configuration
-      await this.setupLogging(this.settings.appOptions.logLevel);
 
       // Register configuration
       this.registerConfiguration();
@@ -107,54 +101,14 @@ export class ApplicationContainer {
         // this.registerTools();
       }
 
-      console.log(
-        '✅ Container initialized successfully with provided settings',
-      );
+      
     } catch (error) {
-      console.error('❌ Failed to initialize container with settings:', error);
+      
       throw error;
     }
   }
 
-  /**
-   * Setup logging configuration
-   */
-  private async setupLogging(logLevel: string): Promise<void> {
-    const { setup, ConsoleHandler } = await import('@std/log');
-
-    setup({
-      handlers: {
-        console: new ConsoleHandler(
-          logLevel.toUpperCase() as unknown as
-            | 'DEBUG'
-            | 'INFO'
-            | 'WARN'
-            | 'ERROR'
-            | 'CRITICAL',
-        ),
-      },
-      loggers: {
-        default: {
-          level: logLevel.toUpperCase() as unknown as
-            | 'DEBUG'
-            | 'INFO'
-            | 'WARN'
-            | 'ERROR'
-            | 'CRITICAL',
-          handlers: ['console'],
-        },
-        HAG: {
-          level: logLevel.toUpperCase() as unknown as
-            | 'DEBUG'
-            | 'INFO'
-            | 'WARN'
-            | 'ERROR'
-            | 'CRITICAL',
-          handlers: ['console'],
-        },
-      },
-    });
-  }
+  
 
   /**
    * Register configuration objects
@@ -183,7 +137,7 @@ export class ApplicationContainer {
    * Register core services
    */
   private registerCoreServices(): void {
-    this.container.bind({ provide: TYPES.Logger, useClass: LoggerService });
+    this.container.bind({ provide: TYPES.Logger, useFactory: () => new LoggerService('HAG.core') });
     this.container.bind({
       provide: TYPES.ConfigLoader,
       useClass: ConfigLoader,
@@ -198,7 +152,7 @@ export class ApplicationContainer {
       provide: TYPES.HomeAssistantClient,
       useFactory: () => {
         const config = this.container.get<HassOptions>(TYPES.HassOptions);
-        const logger = this.container.get<LoggerService>(TYPES.Logger);
+        const logger = new LoggerService('HAG.home-assistant.client');
         return new HomeAssistantClient(config, logger);
       },
     });
@@ -212,7 +166,10 @@ export class ApplicationContainer {
       provide: TYPES.HVACStateMachine,
       useFactory: () => {
         const hvacOptions = this.container.get<HvacOptions>(TYPES.HvacOptions);
-        return new HVACStateMachine(hvacOptions);
+        const appOptions = this.container.get<ApplicationOptions>(
+          TYPES.ApplicationOptions,
+        );
+        return new HVACStateMachine(hvacOptions, appOptions);
       },
     });
     this.container.bind({
@@ -230,7 +187,7 @@ export class ApplicationContainer {
         const haClient = this.container.get<HomeAssistantClient>(
           TYPES.HomeAssistantClient,
         );
-        const logger = this.container.get<LoggerService>(TYPES.Logger);
+        const _logger = new LoggerService('HAG.hvac');
         const hvacAgent = this.settings?.appOptions.useAi
           ? this.container.get(
             TYPES.HVACAgent,
@@ -241,7 +198,6 @@ export class ApplicationContainer {
           appOptions,
           stateMachine,
           haClient,
-          logger,
           hvacAgent,
         );
       },
@@ -264,13 +220,13 @@ export class ApplicationContainer {
           const haClient = this.container.get<HomeAssistantClient>(
             TYPES.HomeAssistantClient,
           );
-          const logger = this.container.get<LoggerService>(TYPES.Logger);
+          const _logger = new LoggerService('HAG.ai');
           return new HVACAgent(
             hvacOptions,
             appOptions,
             stateMachine,
             haClient,
-            logger,
+            _logger,
           );
         },
       });
@@ -348,9 +304,9 @@ export class ApplicationContainer {
         }
       }
 
-      console.log('✅ Container disposed successfully');
+      
     } catch (error) {
-      console.error('❌ Error during container disposal:', error);
+      
     }
   }
 }
