@@ -120,6 +120,9 @@ export const SettingsSchema = z.object({
   hvacOptions: HvacOptionsSchema,
 });
 
+// Re-export enum types for convenience
+export { SystemMode, LogLevel } from '../types/common.ts';
+
 // Export types inferred from schemas
 export type HassOptions = z.infer<typeof HassOptionsSchema>;
 export type TemperatureThresholds = z.infer<typeof TemperatureThresholdsSchema>;
@@ -132,53 +135,3 @@ export type HvacOptions = z.infer<typeof HvacOptionsSchema>;
 export type ApplicationOptions = z.infer<typeof ApplicationOptionsSchema>;
 export type Settings = z.infer<typeof SettingsSchema>;
 
-/**
- * Default configuration values
- */
-export const defaultSettings: Partial<Settings> = {
-  appOptions: {
-    logLevel: LogLevel.INFO,
-    useAi: false,
-    aiModel: 'gpt-3.5-turbo',
-    aiTemperature: 0.1,
-  },
-  hassOptions: {
-    wsUrl: 'ws://localhost:8123/api/websocket',
-    restUrl: 'http://localhost:8123/api',
-    token: 'your-token-here',
-    maxRetries: 5,
-    retryDelayMs: 1000,
-    stateCheckInterval: 300000,
-  },
-  hvacOptions: {
-    tempSensor: 'sensor.temperature',
-    outdoorSensor: 'sensor.openweathermap_temperature',
-    systemMode: SystemMode.AUTO,
-    hvacEntities: [],
-    heating: {
-      temperature: 21.0,
-      presetMode: 'comfort',
-      temperatureThresholds: {
-        indoorMin: 18.0,
-        indoorMax: 28.0,
-        outdoorMin: -20.0,
-        outdoorMax: 40.0,
-      },
-    },
-    cooling: {
-      temperature: 24.0,
-      presetMode: 'eco',
-      temperatureThresholds: {
-        indoorMin: 18.0,
-        indoorMax: 28.0,
-        outdoorMin: -20.0,
-        outdoorMax: 40.0,
-      },
-    },
-    activeHours: {
-      start: 8,
-      startWeekday: 7,
-      end: 22,
-    },
-  },
-};

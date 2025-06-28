@@ -4,11 +4,11 @@
  * Traditional async/await implementation with retry logic and connection management.
  */
 
-import { injectable, inject } from '@needle-di/core';
+import { injectable } from '@needle-di/core';
 // Using native WebSocket API instead of deprecated @std/ws
 import { delay } from '@std/async';
-import type { HassOptions } from '../config/settings.ts';
-import { TYPES, LoggerService } from '../core/container.ts';
+import type { HassOptions } from '../config/config.ts';
+import { LoggerService } from '../core/logger.ts';
 import { ConnectionError, StateError, ValidationError as _ValidationError } from '../core/exceptions.ts';
 import { 
   HassStateImpl, 
@@ -35,11 +35,16 @@ export class HomeAssistantClient {
   };
   private reconnectTimer?: number;
   private pingTimer?: number;
+  private config: HassOptions;
+  private logger: LoggerService;
 
   constructor(
-    @inject(TYPES.HassOptions) private config: HassOptions,
-    @inject(TYPES.Logger) private logger: LoggerService,
-  ) {}
+    config?: HassOptions,
+    logger?: LoggerService,
+  ) {
+    this.config = config!;
+    this.logger = logger!;
+  }
 
   /**
    * Connect to Home Assistant WebSocket API
@@ -64,7 +69,7 @@ export class HomeAssistantClient {
         await this.authenticate();
         await this.subscribeToEvents();
         
-        this.connectionState = WebSocketState.CONNECTED;
+        // connectionState is set to CONNECTED in authenticate() method
         this.stats.totalConnections++;
         this.stats.lastConnected = new Date();
         
@@ -249,34 +254,86 @@ export class HomeAssistantClient {
    * Establish WebSocket connection
    */
   private establishConnection(): Promise<void> {
-    try {
-      this.ws = new WebSocket(this.config.wsUrl);
-      
-      this.ws.onopen = () => {
-        this.logger.info('WebSocket connection established');
-      };
-      
-      this.ws.onmessage = async (event) => {
-        if (typeof event.data === 'string') {
-          await this.handleMessage(JSON.parse(event.data));
-        }
-      };
-      
-      this.ws.onerror = (error) => {
-        this.logger.error('WebSocket error', { error });
-      };
-      
-      this.ws.onclose = () => {
-        this.logger.info('WebSocket connection closed');
-      };
-      
-    } catch (error) {
-      throw new ConnectionError(
-        `WebSocket connection failed: ${error instanceof Error ? error.message : String(error)}`,
-        this.config.wsUrl,
-      );
-    }
-    return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      try {
+        this.logger.debug('Creating WebSocket connection...', {
+          url: this.config.wsUrl,
+          currentTime: new Date().toISOString(),
+        });
+        
+        this.ws = new WebSocket(this.config.wsUrl);
+        
+        this.logger.debug('WebSocket object created', {
+          readyState: this.ws.readyState,
+          readyStateString: this.getReadyStateString(this.ws.readyState),
+          url: this.ws.url,
+        });
+        
+        this.ws.onopen = () => {
+          this.logger.info('WebSocket connection established');
+          this.logger.debug('WebSocket opened successfully', {
+            readyState: this.ws?.readyState,
+            readyStateString: this.ws ? this.getReadyStateString(this.ws.readyState) : 'undefined',
+            protocol: this.ws?.protocol,
+            extensions: this.ws?.extensions,
+          });
+          resolve();
+        };
+        
+        this.ws.onmessage = async (event) => {
+          this.logger.debug('WebSocket message received', {
+            dataType: typeof event.data,
+            dataLength: event.data?.length,
+            timestamp: new Date().toISOString(),
+          });
+          
+          if (typeof event.data === 'string') {
+            await this.handleMessage(JSON.parse(event.data));
+          }
+        };
+        
+        this.ws.onerror = (error) => {
+          this.logger.error('WebSocket error', {
+            error,
+            readyState: this.ws?.readyState,
+            readyStateString: this.ws ? this.getReadyStateString(this.ws.readyState) : 'undefined',
+            url: this.config.wsUrl,
+            timestamp: new Date().toISOString(),
+          });
+          reject(new ConnectionError(
+            `WebSocket connection error: ${error}`,
+            this.config.wsUrl,
+          ));
+        };
+        
+        this.ws.onclose = (event) => {
+          this.logger.info('WebSocket connection closed', {
+            code: event.code,
+            reason: event.reason,
+            wasClean: event.wasClean,
+            timestamp: new Date().toISOString(),
+          });
+          
+          if (event.code !== 1000 && this.connectionState === WebSocketState.CONNECTING) {
+            reject(new ConnectionError(
+              `WebSocket closed unexpectedly: ${event.code} - ${event.reason}`,
+              this.config.wsUrl,
+            ));
+          }
+        };
+        
+      } catch (error) {
+        this.logger.error('Failed to create WebSocket', {
+          error,
+          url: this.config.wsUrl,
+          timestamp: new Date().toISOString(),
+        });
+        reject(new ConnectionError(
+          `WebSocket connection failed: ${error instanceof Error ? error.message : String(error)}`,
+          this.config.wsUrl,
+        ));
+      }
+    });
   }
 
   /**
@@ -284,17 +341,64 @@ export class HomeAssistantClient {
    */
   private async authenticate(): Promise<void> {
     this.connectionState = WebSocketState.AUTHENTICATING;
+    this.logger.debug('Starting Home Assistant authentication');
 
-    // Wait for auth_required message
-    // Send auth message
-    const authMessage: HagWebSocketMessage = {
-      type: HassCommandType.AUTH,
-      access_token: this.config.token,
-    };
+    return new Promise((resolve, reject) => {
+      let authTimeout: number | undefined;
+      let authRequired = false;
 
-    await this.sendMessage(authMessage);
-    
-    // Authentication success is handled in handleMessage
+      const cleanup = () => {
+        if (authTimeout) {
+          clearTimeout(authTimeout);
+        }
+      };
+
+      // Set timeout for authentication
+      authTimeout = setTimeout(() => {
+        cleanup();
+        reject(new ConnectionError('Authentication timeout - no auth_required message received'));
+      }, 10000); // 10 second timeout
+
+      // Handle auth_required and auth responses
+      const originalHandleMessage = this.handleMessage.bind(this);
+      this.handleMessage = async (data: HagWebSocketMessage) => {
+        try {
+          if (data.type === 'auth_required') {
+            this.logger.debug('Received auth_required message');
+            authRequired = true;
+            
+            // Send authentication
+            const authMessage: HagWebSocketMessage = {
+              type: HassCommandType.AUTH,
+              access_token: this.config.token,
+            };
+            
+            this.logger.debug('Sending authentication token');
+            await this.sendMessage(authMessage);
+            
+          } else if (data.type === 'auth_ok') {
+            this.logger.info('Authentication successful');
+            this.connectionState = WebSocketState.CONNECTED;
+            cleanup();
+            this.handleMessage = originalHandleMessage;
+            resolve();
+            
+          } else if (data.type === 'auth_invalid') {
+            cleanup();
+            this.handleMessage = originalHandleMessage;
+            reject(new ConnectionError('Authentication failed - invalid token'));
+            
+          } else {
+            // Pass other messages to original handler
+            await originalHandleMessage(data);
+          }
+        } catch (error) {
+          cleanup();
+          this.handleMessage = originalHandleMessage;
+          reject(error);
+        }
+      };
+    });
   }
 
   /**
@@ -313,17 +417,6 @@ export class HomeAssistantClient {
       this.stats.totalMessages++;
 
       switch (data.type) {
-        case 'auth_required':
-          // Authentication will be handled by authenticate method
-          break;
-
-        case 'auth_ok':
-          this.logger.info('Authentication successful');
-          break;
-
-        case 'auth_invalid':
-          throw new ConnectionError('Authentication failed - invalid token');
-
         case 'event':
           await this.handleEvent(data);
           break;
@@ -377,13 +470,53 @@ export class HomeAssistantClient {
    * Send message to WebSocket
    */
   private sendMessage(message: HagWebSocketMessage): Promise<void> {
+    this.logger.debug('Attempting to send WebSocket message', {
+      messageType: message.type,
+      messageId: message.id,
+      hasWebSocket: !!this.ws,
+      readyState: this.ws?.readyState,
+      readyStateString: this.ws ? this.getReadyStateString(this.ws.readyState) : 'undefined',
+      timestamp: new Date().toISOString(),
+    });
+
     if (!this.ws) {
+      this.logger.error('Cannot send message: WebSocket not initialized');
       throw new ConnectionError('WebSocket not connected');
     }
 
+    if (this.ws.readyState !== WebSocket.OPEN) {
+      this.logger.error('Cannot send message: WebSocket not in OPEN state', {
+        currentState: this.ws.readyState,
+        currentStateString: this.getReadyStateString(this.ws.readyState),
+        expectedState: WebSocket.OPEN,
+        expectedStateString: 'OPEN',
+        url: this.config.wsUrl,
+      });
+      throw new ConnectionError(
+        `Failed to send message: WebSocket readyState is ${this.getReadyStateString(this.ws.readyState)} (${this.ws.readyState}), expected OPEN (${WebSocket.OPEN})`,
+      );
+    }
+
     try {
-      this.ws.send(JSON.stringify(message));
+      const messageString = JSON.stringify(message);
+      this.logger.debug('Sending WebSocket message', {
+        messageLength: messageString.length,
+        messagePreview: messageString.substring(0, 100),
+      });
+      
+      this.ws.send(messageString);
+      
+      this.logger.debug('WebSocket message sent successfully', {
+        messageType: message.type,
+        messageId: message.id,
+      });
     } catch (error) {
+      this.logger.error('Failed to send WebSocket message', {
+        error,
+        messageType: message.type,
+        readyState: this.ws.readyState,
+        readyStateString: this.getReadyStateString(this.ws.readyState),
+      });
       throw new ConnectionError(
         `Failed to send message: ${error instanceof Error ? error.message : String(error)}`,
       );
@@ -447,6 +580,24 @@ export class HomeAssistantClient {
           this.connectionState = WebSocketState.ERROR;
         });
       }, this.config.retryDelayMs);
+    }
+  }
+
+  /**
+   * Convert WebSocket readyState number to human-readable string
+   */
+  private getReadyStateString(readyState: number): string {
+    switch (readyState) {
+      case WebSocket.CONNECTING:
+        return 'CONNECTING';
+      case WebSocket.OPEN:
+        return 'OPEN';
+      case WebSocket.CLOSING:
+        return 'CLOSING';
+      case WebSocket.CLOSED:
+        return 'CLOSED';
+      default:
+        return `UNKNOWN(${readyState})`;
     }
   }
 }

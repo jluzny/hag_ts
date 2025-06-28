@@ -1,9 +1,11 @@
 {
   "compilerOptions": {
     "strict": true,
-    "lib": ["dom", "deno.ns", "esnext"],
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+    "lib": [
+      "dom",
+      "deno.ns",
+      "esnext"
+    ]
   },
   "imports": {
     "@needle-di/core": "npm:@needle-di/core@^1.0.0",
@@ -25,6 +27,7 @@
   },
   "tasks": {
     "dev": "deno run --allow-net --allow-read --allow-env --allow-write src/main.ts",
+    "dev:watch": "deno run --watch --allow-net --allow-read --allow-env --allow-write src/main.ts",
     "test": "deno test --allow-net --allow-read --allow-env --allow-write tests/",
     "test:unit": "deno test --allow-net --allow-read --allow-env --allow-write tests/unit/",
     "test:integration": "deno test --allow-net --allow-read --allow-env --allow-write tests/integration/",
@@ -42,7 +45,9 @@
   },
   "lint": {
     "rules": {
-      "tags": ["recommended"]
+      "tags": [
+        "recommended"
+      ]
     }
   },
   "exclude": [

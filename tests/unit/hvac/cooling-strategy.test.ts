@@ -6,7 +6,7 @@
 
 import { assertEquals } from '@std/assert';
 import { CoolingStrategy } from '../../../src/hvac/state-machine.ts';
-import { HvacOptions } from '../../../src/config/settings.ts';
+import { HvacOptions } from '../../../src/config/config.ts';
 import { StateChangeData, SystemMode } from '../../../src/types/common.ts';
 
 // Base HVAC options for testing

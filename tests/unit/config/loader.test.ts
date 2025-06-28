@@ -4,17 +4,15 @@
  * Tests YAML file loading, environment variable substitution, and validation.
  */
 
-import { assertEquals, assertExists, assertRejects, assertThrows } from '@std/assert';
+import { assertEquals, assertExists, assertRejects } from '@std/assert';
 import { ConfigLoader } from '../../../src/config/loader.ts';
 import { ConfigurationError } from '../../../src/core/exceptions.ts';
-import { Settings } from '../../../src/config/settings.ts';
 import { SystemMode, LogLevel } from '../../../src/types/common.ts';
 
 // Mock file system operations
-let mockFileSystem = new Map<string, string>();
-let mockEnvironment = new Map<string, string>();
+const mockFileSystem = new Map<string, string>();
+const mockEnvironment = new Map<string, string>();
 let shouldFailFileRead = false;
-let shouldFailEnvLoad = false;
 
 // Store original functions
 const originalReadTextFile = Deno.readTextFile;

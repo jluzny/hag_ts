@@ -6,7 +6,7 @@
 
 import { Command } from '@cliffy/command';
 import { createContainer, disposeContainer, ApplicationContainer } from './core/container.ts';
-import { TYPES } from './core/container.ts';
+import { TYPES } from './core/types.ts';
 import { HVACController } from './hvac/controller.ts';
 import { ConfigLoader } from './config/loader.ts';
 import { extractErrorDetails } from './core/exceptions.ts';

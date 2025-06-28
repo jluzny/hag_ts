@@ -4,9 +4,9 @@
  * Tests heating decisions, defrost cycle logic, and preset mode behavior.
  */
 
-import { assertEquals, assertExists } from '@std/assert';
+import { assertEquals } from '@std/assert';
 import { HeatingStrategy } from '../../../src/hvac/state-machine.ts';
-import { HvacOptions } from '../../../src/config/settings.ts';
+import { HvacOptions } from '../../../src/config/config.ts';
 import { StateChangeData, SystemMode } from '../../../src/types/common.ts';
 
 // Base HVAC options for testing
@@ -301,7 +301,7 @@ Deno.test('Heating Strategy - Defrost Logic', async (t) => {
     assertEquals(strategy.needsDefrost(data), false);
   });
 
-  await t.step('should need defrost after period has elapsed', async () => {
+  await t.step('should need defrost after period has elapsed', () => {
     const data = createStateChangeData({
       currentTemp: 18.0,
       weatherTemp: -5.0,
@@ -344,9 +344,9 @@ Deno.test('Heating Strategy - Defrost Logic', async (t) => {
   });
 
   await t.step('should start defrost and update timestamp', () => {
-    const beforeTime = Date.now();
+    const _beforeTime = Date.now();
     strategy.startDefrost();
-    const afterTime = Date.now();
+    const _afterTime = Date.now();
     
     // Verify defrost was started by checking it prevents immediate defrost
     const data = createStateChangeData({

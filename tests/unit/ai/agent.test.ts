@@ -4,29 +4,41 @@
  * Tests LangChain integration, tool usage, and AI decision making.
  */
 
-import { assertEquals, assertExists, assertRejects, assertThrows } from '@std/assert';
+import { assertEquals, assertExists } from '@std/assert';
 import { HVACAgent } from '../../../src/ai/agent.ts';
 import { HVACStateMachine } from '../../../src/hvac/state-machine.ts';
 import { HomeAssistantClient } from '../../../src/home-assistant/client.ts';
-import { HvacOptions, ApplicationOptions } from '../../../src/config/settings.ts';
-import { HVACMode, OperationResult, SystemMode, LogLevel } from '../../../src/types/common.ts';
-import { AIError } from '../../../src/core/exceptions.ts';
+import { HvacOptions, ApplicationOptions } from '../../../src/config/config.ts';
+import { HVACMode, SystemMode, LogLevel } from '../../../src/types/common.ts';
+// import { AIError } from '../../../src/core/exceptions.ts'; // Unused
+import type { LoggerService } from '../../../src/core/logger.ts';
+
+// Mock type interfaces
+interface MockHVACStateMachine {
+  getCurrentState(): string;
+  manualOverride(mode: HVACMode, temperature?: number): void;
+  getStatus(): { currentState: string };
+}
+
+interface MockHomeAssistantClient {
+  getState(entityId: string): { getNumericState(): number | null };
+}
 
 // Mock logger service
 class MockLoggerService {
-  info(message: string, _data?: Record<string, unknown>): void {
+  info(_message: string, _data?: Record<string, unknown>): void {
     // console.log(`INFO: ${message}`);
   }
 
-  error(message: string, _error?: unknown): void {
+  error(_message: string, _error?: unknown): void {
     // console.log(`ERROR: ${message}`);
   }
 
-  debug(message: string, _data?: Record<string, unknown>): void {
+  debug(_message: string, _data?: Record<string, unknown>): void {
     // console.log(`DEBUG: ${message}`);
   }
 
-  warning(message: string, _data?: Record<string, unknown>): void {
+  warning(_message: string, _data?: Record<string, unknown>): void {
     // console.log(`WARNING: ${message}`);
   }
 }
@@ -51,7 +63,7 @@ class MockHVACStateMachine {
     };
   }
 
-  manualOverride(mode: HVACMode, temperature?: number): void {
+  manualOverride(_mode: HVACMode, _temperature?: number): void {
     this.currentState = 'manualOverride';
     // Mock implementation
   }
@@ -78,7 +90,7 @@ class MockHomeAssistantClient {
     });
   }
 
-  async getState(entityId: string) {
+  getState(entityId: string) {
     const mockState = this.mockStates.get(entityId);
     if (!mockState) {
       throw new Error(`Entity ${entityId} not found`);
@@ -156,9 +168,9 @@ Deno.test('AI Agent - Initialization', async (t) => {
     const agent = new HVACAgent(
       mockHvacOptions,
       mockAppOptions,
-      mockStateMachine as any,
-      mockHaClient as any,
-      mockLogger as any,
+      mockStateMachine as unknown as HVACStateMachine,
+      mockHaClient as unknown as HomeAssistantClient,
+      mockLogger as unknown as LoggerService,
     );
 
     assertExists(agent);
@@ -171,9 +183,9 @@ Deno.test('AI Agent - Initialization', async (t) => {
     const agent = new HVACAgent(
       mockHvacOptions,
       optionsWithoutKey,
-      mockStateMachine as any,
-      mockHaClient as any,
-      mockLogger as any,
+      mockStateMachine as unknown as HVACStateMachine,
+      mockHaClient as unknown as HomeAssistantClient,
+      mockLogger as unknown as LoggerService,
     );
 
     assertExists(agent);
@@ -193,9 +205,9 @@ Deno.test('AI Agent - Status Summary', async (t) => {
   const agent = new HVACAgent(
     mockHvacOptions,
     mockAppOptions,
-    mockStateMachine as any,
-    mockHaClient as any,
-    mockLogger as any,
+    mockStateMachine as unknown as HVACStateMachine,
+    mockHaClient as unknown as HomeAssistantClient,
+    mockLogger as unknown as LoggerService,
   );
 
   await t.step('should provide status summary', async () => {
@@ -221,9 +233,9 @@ Deno.test('AI Agent - Status Summary', async (t) => {
     const failingAgent = new HVACAgent(
       mockHvacOptions,
       mockAppOptions,
-      failingStateMachine as any,
-      mockHaClient as any,
-      mockLogger as any,
+      failingStateMachine as unknown as HVACStateMachine,
+      mockHaClient as unknown as HomeAssistantClient,
+      mockLogger as unknown as LoggerService,
     );
 
     const summary = await failingAgent.getStatusSummary();
@@ -245,9 +257,9 @@ Deno.test('AI Agent - Temperature Change Processing', async (t) => {
   const agent = new HVACAgent(
     mockHvacOptions,
     mockAppOptions,
-    mockStateMachine as any,
-    mockHaClient as any,
-    mockLogger as any,
+    mockStateMachine as unknown as HVACStateMachine,
+    mockHaClient as unknown as HomeAssistantClient,
+    mockLogger as unknown as LoggerService,
   );
 
   await t.step('should process temperature changes', async () => {
@@ -308,9 +320,9 @@ Deno.test('AI Agent - Manual Override', async (t) => {
   const agent = new HVACAgent(
     mockHvacOptions,
     mockAppOptions,
-    mockStateMachine as any,
-    mockHaClient as any,
-    mockLogger as any,
+    mockStateMachine as unknown as HVACStateMachine,
+    mockHaClient as unknown as HomeAssistantClient,
+    mockLogger as unknown as LoggerService,
   );
 
   await t.step('should handle manual override - heat', async () => {
@@ -320,8 +332,8 @@ Deno.test('AI Agent - Manual Override', async (t) => {
     assertEquals(typeof result.success, 'boolean');
     
     if (result.success) {
-      assertExists(result.action);
-      assertEquals(result.action, 'heat');
+      assertExists((result.data as unknown as { action?: string })?.action);
+      assertEquals((result.data as unknown as { action?: string })?.action, 'heat');
     }
   });
 
@@ -332,8 +344,8 @@ Deno.test('AI Agent - Manual Override', async (t) => {
     assertEquals(typeof result.success, 'boolean');
     
     if (result.success) {
-      assertExists(result.action);
-      assertEquals(result.action, 'cool');
+      assertExists((result.data as unknown as { action?: string })?.action);
+      assertEquals((result.data as unknown as { action?: string })?.action, 'cool');
     }
   });
 
@@ -344,8 +356,8 @@ Deno.test('AI Agent - Manual Override', async (t) => {
     assertEquals(typeof result.success, 'boolean');
     
     if (result.success) {
-      assertExists(result.action);
-      assertEquals(result.action, 'off');
+      assertExists((result.data as unknown as { action?: string })?.action);
+      assertEquals((result.data as unknown as { action?: string })?.action, 'off');
     }
   });
 
@@ -361,7 +373,7 @@ Deno.test('AI Agent - Manual Override', async (t) => {
     
     assertExists(result);
     if (result.success) {
-      assertEquals(result.temperature, 20.5);
+      assertEquals((result.data as unknown as { temperature?: number })?.temperature, 20.5);
     }
   });
 });
@@ -379,9 +391,9 @@ Deno.test('AI Agent - Efficiency Evaluation', async (t) => {
   const agent = new HVACAgent(
     mockHvacOptions,
     mockAppOptions,
-    mockStateMachine as any,
-    mockHaClient as any,
-    mockLogger as any,
+    mockStateMachine as unknown as HVACStateMachine,
+    mockHaClient as unknown as HomeAssistantClient,
+    mockLogger as unknown as LoggerService,
   );
 
   await t.step('should evaluate system efficiency', async () => {
@@ -391,9 +403,9 @@ Deno.test('AI Agent - Efficiency Evaluation', async (t) => {
     assertEquals(typeof result.success, 'boolean');
     
     if (result.success) {
-      assertExists(result.analysis);
-      assertExists(result.recommendations);
-      assertEquals(Array.isArray(result.recommendations), true);
+      assertExists((result.data as unknown as { analysis?: unknown })?.analysis);
+      assertExists((result.data as unknown as { recommendations?: unknown[] })?.recommendations);
+      assertEquals(Array.isArray((result.data as unknown as { recommendations?: unknown[] })?.recommendations), true);
     }
   });
 
@@ -405,8 +417,9 @@ Deno.test('AI Agent - Efficiency Evaluation', async (t) => {
     const result = await agent.evaluateEfficiency();
     
     assertExists(result);
-    if (result.success && result.recommendations) {
-      assertEquals(result.recommendations.length > 0, true);
+    const recommendations = (result.data as unknown as { recommendations?: unknown[] })?.recommendations;
+    if (result.success && recommendations) {
+      assertEquals(recommendations.length > 0, true);
     }
   });
 
@@ -419,9 +432,9 @@ Deno.test('AI Agent - Efficiency Evaluation', async (t) => {
     const failingAgent = new HVACAgent(
       mockHvacOptions,
       mockAppOptions,
-      mockStateMachine as any,
-      failingHaClient as any,
-      mockLogger as any,
+      mockStateMachine as unknown as HVACStateMachine,
+      failingHaClient as unknown as HomeAssistantClient,
+      mockLogger as unknown as LoggerService,
     );
 
     const result = await failingAgent.evaluateEfficiency();
@@ -444,9 +457,9 @@ Deno.test('AI Agent - Tool Integration', async (t) => {
     const agent = new HVACAgent(
       mockHvacOptions,
       mockAppOptions,
-      mockStateMachine as any,
-      mockHaClient as any,
-      mockLogger as any,
+      mockStateMachine as unknown as HVACStateMachine,
+      mockHaClient as unknown as HomeAssistantClient,
+      mockLogger as unknown as LoggerService,
     );
 
     // Test that tools are accessible and functional
@@ -460,9 +473,9 @@ Deno.test('AI Agent - Tool Integration', async (t) => {
     const agent = new HVACAgent(
       mockHvacOptions,
       mockAppOptions,
-      mockStateMachine as any,
-      mockHaClient as any,
-      mockLogger as any,
+      mockStateMachine as unknown as HVACStateMachine,
+      mockHaClient as unknown as HomeAssistantClient,
+      mockLogger as unknown as LoggerService,
     );
 
     // Set up specific temperature conditions
@@ -479,9 +492,9 @@ Deno.test('AI Agent - Tool Integration', async (t) => {
     const agent = new HVACAgent(
       mockHvacOptions,
       mockAppOptions,
-      mockStateMachine as any,
-      mockHaClient as any,
-      mockLogger as any,
+      mockStateMachine as unknown as HVACStateMachine,
+      mockHaClient as unknown as HomeAssistantClient,
+      mockLogger as unknown as LoggerService,
     );
 
     const summary = await agent.getStatusSummary();
@@ -511,9 +524,9 @@ Deno.test('AI Agent - Error Handling', async (t) => {
     const agent = new HVACAgent(
       mockHvacOptions,
       invalidOptions,
-      mockStateMachine as any,
-      mockHaClient as any,
-      mockLogger as any,
+      mockStateMachine as unknown as HVACStateMachine,
+      mockHaClient as unknown as HomeAssistantClient,
+      mockLogger as unknown as LoggerService,
     );
 
     const result = await agent.getStatusSummary();
@@ -535,9 +548,9 @@ Deno.test('AI Agent - Error Handling', async (t) => {
     const agent = new HVACAgent(
       mockHvacOptions,
       mockAppOptions,
-      failingStateMachine as any,
-      mockHaClient as any,
-      mockLogger as any,
+      failingStateMachine as unknown as HVACStateMachine,
+      mockHaClient as unknown as HomeAssistantClient,
+      mockLogger as unknown as LoggerService,
     );
 
     const result = await agent.manualOverride('heat', {});
@@ -553,9 +566,9 @@ Deno.test('AI Agent - Error Handling', async (t) => {
     const agent = new HVACAgent(
       mockHvacOptions,
       mockAppOptions,
-      mockStateMachine as any,
-      mockHaClient as any,
-      mockLogger as any,
+      mockStateMachine as unknown as HVACStateMachine,
+      mockHaClient as unknown as HomeAssistantClient,
+      mockLogger as unknown as LoggerService,
     );
 
     // Test with a very complex request that might timeout
@@ -587,9 +600,9 @@ Deno.test('AI Agent - Configuration Scenarios', async (t) => {
     const agent = new HVACAgent(
       mockHvacOptions,
       gpt4Options,
-      mockStateMachine as any,
-      mockHaClient as any,
-      mockLogger as any,
+      mockStateMachine as unknown as HVACStateMachine,
+      mockHaClient as unknown as HomeAssistantClient,
+      mockLogger as unknown as LoggerService,
     );
 
     const result = await agent.getStatusSummary();
@@ -602,9 +615,9 @@ Deno.test('AI Agent - Configuration Scenarios', async (t) => {
     const agent = new HVACAgent(
       mockHvacOptions,
       highTempOptions,
-      mockStateMachine as any,
-      mockHaClient as any,
-      mockLogger as any,
+      mockStateMachine as unknown as HVACStateMachine,
+      mockHaClient as unknown as HomeAssistantClient,
+      mockLogger as unknown as LoggerService,
     );
 
     const result = await agent.getStatusSummary();
@@ -617,9 +630,9 @@ Deno.test('AI Agent - Configuration Scenarios', async (t) => {
     const agent = new HVACAgent(
       heatOnlyOptions,
       mockAppOptions,
-      mockStateMachine as any,
-      mockHaClient as any,
-      mockLogger as any,
+      mockStateMachine as unknown as HVACStateMachine,
+      mockHaClient as unknown as HomeAssistantClient,
+      mockLogger as unknown as LoggerService,
     );
 
     const result = await agent.manualOverride('heat', { temperature: 22.0 });
@@ -640,9 +653,9 @@ Deno.test('AI Agent - Real-world Scenarios', async (t) => {
   const agent = new HVACAgent(
     mockHvacOptions,
     mockAppOptions,
-    mockStateMachine as any,
-    mockHaClient as any,
-    mockLogger as any,
+    mockStateMachine as unknown as HVACStateMachine,
+    mockHaClient as unknown as HomeAssistantClient,
+    mockLogger as unknown as LoggerService,
   );
 
   await t.step('should handle morning warmup scenario', async () => {

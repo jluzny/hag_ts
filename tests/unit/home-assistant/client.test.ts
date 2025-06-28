@@ -4,28 +4,29 @@
  * Tests WebSocket connection, REST API calls, and event handling.
  */
 
-import { assertEquals, assertExists, assertRejects, assertThrows } from '@std/assert';
+import { assertEquals, assertExists, assertRejects } from '@std/assert';
 import { HomeAssistantClient } from '../../../src/home-assistant/client.ts';
-import { HassOptions } from '../../../src/config/settings.ts';
+import { HassOptions } from '../../../src/config/config.ts';
 import { ConnectionError, StateError } from '../../../src/core/exceptions.ts';
 import { HassStateImpl, HassServiceCallImpl } from '../../../src/home-assistant/models.ts';
 import { HVACMode } from '../../../src/types/common.ts';
+import type { LoggerService } from '../../../src/core/logger.ts';
 
 // Mock logger service
 class MockLoggerService {
-  info(message: string, _data?: Record<string, unknown>): void {
+  info(_message: string, _data?: Record<string, unknown>): void {
     // console.log(`INFO: ${message}`);
   }
 
-  error(message: string, _error?: unknown): void {
+  error(_message: string, _error?: unknown): void {
     // console.log(`ERROR: ${message}`);
   }
 
-  debug(message: string, _data?: Record<string, unknown>): void {
+  debug(_message: string, _data?: Record<string, unknown>): void {
     // console.log(`DEBUG: ${message}`);
   }
 
-  warning(message: string, _data?: Record<string, unknown>): void {
+  warning(_message: string, _data?: Record<string, unknown>): void {
     // console.log(`WARNING: ${message}`);
   }
 }
@@ -112,14 +113,14 @@ function setupWebSocketMock() {
     constructor(url: string) {
       super();
       mockWebSocketInstance = new MockWebSocket(url);
-      return mockWebSocketInstance as any;
+      return mockWebSocketInstance as unknown as WebSocket;
     }
     
     static get CONNECTING() { return 0; }
     static get OPEN() { return 1; }
     static get CLOSING() { return 2; }
     static get CLOSED() { return 3; }
-  } as any;
+  } as unknown as typeof WebSocket;
 }
 
 function teardownWebSocketMock() {
@@ -134,6 +135,7 @@ const mockHassOptions: HassOptions = {
   token: 'test_token',
   maxRetries: 3,
   retryDelayMs: 100, // Short delay for tests
+  stateCheckInterval: 300000, // Required property
 };
 
 Deno.test('Home Assistant Client - Initialization', async (t) => {
@@ -143,7 +145,7 @@ Deno.test('Home Assistant Client - Initialization', async (t) => {
   await t.step('should initialize with configuration', () => {
     const client = new HomeAssistantClient(
       mockHassOptions,
-      logger as any,
+      logger as unknown as LoggerService,
     );
 
     assertExists(client);
@@ -153,7 +155,7 @@ Deno.test('Home Assistant Client - Initialization', async (t) => {
   await t.step('should provide connection stats', () => {
     const client = new HomeAssistantClient(
       mockHassOptions,
-      logger as any,
+      logger as unknown as LoggerService,
     );
 
     const stats = client.getStats();
@@ -174,7 +176,7 @@ Deno.test('Home Assistant Client - Connection Management', async (t) => {
   await t.step('should connect successfully', async () => {
     const client = new HomeAssistantClient(
       mockHassOptions,
-      logger as any,
+      logger as unknown as LoggerService,
     );
 
     await client.connect();
@@ -190,7 +192,7 @@ Deno.test('Home Assistant Client - Connection Management', async (t) => {
   await t.step('should handle connection failure', async () => {
     const client = new HomeAssistantClient(
       mockHassOptions,
-      logger as any,
+      logger as unknown as LoggerService,
     );
 
     // Make WebSocket connection fail
@@ -208,7 +210,7 @@ Deno.test('Home Assistant Client - Connection Management', async (t) => {
   await t.step('should disconnect gracefully', async () => {
     const client = new HomeAssistantClient(
       mockHassOptions,
-      logger as any,
+      logger as unknown as LoggerService,
     );
 
     await client.connect();
@@ -223,7 +225,7 @@ Deno.test('Home Assistant Client - Connection Management', async (t) => {
   await t.step('should handle multiple connection attempts', async () => {
     const client = new HomeAssistantClient(
       mockHassOptions,
-      logger as any,
+      logger as unknown as LoggerService,
     );
 
     // First connection
@@ -248,7 +250,7 @@ Deno.test('Home Assistant Client - Message Handling', async (t) => {
   await t.step('should send messages', async () => {
     const client = new HomeAssistantClient(
       mockHassOptions,
-      logger as any,
+      logger as unknown as LoggerService,
     );
 
     await client.connect();
@@ -276,7 +278,7 @@ Deno.test('Home Assistant Client - Message Handling', async (t) => {
   await t.step('should handle send failures', async () => {
     const client = new HomeAssistantClient(
       mockHassOptions,
-      logger as any,
+      logger as unknown as LoggerService,
     );
 
     await client.connect();
@@ -303,7 +305,7 @@ Deno.test('Home Assistant Client - Message Handling', async (t) => {
   await t.step('should handle incoming messages', async () => {
     const client = new HomeAssistantClient(
       mockHassOptions,
-      logger as any,
+      logger as unknown as LoggerService,
     );
 
     await client.connect();
@@ -353,7 +355,7 @@ Deno.test('Home Assistant Client - Event Handling', async (t) => {
   await t.step('should subscribe to events', async () => {
     const client = new HomeAssistantClient(
       mockHassOptions,
-      logger as any,
+      logger as unknown as LoggerService,
     );
 
     await client.connect();
@@ -375,11 +377,11 @@ Deno.test('Home Assistant Client - Event Handling', async (t) => {
   await t.step('should handle event handlers', async () => {
     const client = new HomeAssistantClient(
       mockHassOptions,
-      logger as any,
+      logger as unknown as LoggerService,
     );
 
     let eventReceived = false;
-    let receivedEvent: any = null;
+    let receivedEvent: unknown = null;
 
     // Add event handler
     client.addEventHandler('state_changed', (event) => {
@@ -421,7 +423,7 @@ Deno.test('Home Assistant Client - Event Handling', async (t) => {
   await t.step('should remove event handlers', async () => {
     const client = new HomeAssistantClient(
       mockHassOptions,
-      logger as any,
+      logger as unknown as LoggerService,
     );
 
     let eventCount = 0;
@@ -462,7 +464,7 @@ Deno.test('Home Assistant Client - State Operations', async (t) => {
   await t.step('should get entity state', async () => {
     const client = new HomeAssistantClient(
       mockHassOptions,
-      logger as any,
+      logger as unknown as LoggerService,
     );
 
     await client.connect();
@@ -504,7 +506,7 @@ Deno.test('Home Assistant Client - State Operations', async (t) => {
   await t.step('should handle state fetch errors', async () => {
     const client = new HomeAssistantClient(
       mockHassOptions,
-      logger as any,
+      logger as unknown as LoggerService,
     );
 
     await client.connect();
@@ -544,7 +546,7 @@ Deno.test('Home Assistant Client - Service Calls', async (t) => {
   await t.step('should call climate services', async () => {
     const client = new HomeAssistantClient(
       mockHassOptions,
-      logger as any,
+      logger as unknown as LoggerService,
     );
 
     await client.connect();
@@ -586,7 +588,7 @@ Deno.test('Home Assistant Client - Service Calls', async (t) => {
   await t.step('should handle service call failures', async () => {
     const client = new HomeAssistantClient(
       mockHassOptions,
-      logger as any,
+      logger as unknown as LoggerService,
     );
 
     await client.connect();
@@ -629,7 +631,7 @@ Deno.test('Home Assistant Client - Connection Recovery', async (t) => {
   await t.step('should handle connection drops', async () => {
     const client = new HomeAssistantClient(
       mockHassOptions,
-      logger as any,
+      logger as unknown as LoggerService,
     );
 
     await client.connect();
@@ -648,7 +650,7 @@ Deno.test('Home Assistant Client - Connection Recovery', async (t) => {
   await t.step('should track connection statistics', async () => {
     const client = new HomeAssistantClient(
       mockHassOptions,
-      logger as any,
+      logger as unknown as LoggerService,
     );
 
     const initialStats = client.getStats();
@@ -673,7 +675,7 @@ Deno.test('Home Assistant Client - Error Scenarios', async (t) => {
   await t.step('should handle malformed messages', async () => {
     const client = new HomeAssistantClient(
       mockHassOptions,
-      logger as any,
+      logger as unknown as LoggerService,
     );
 
     await client.connect();
@@ -691,7 +693,7 @@ Deno.test('Home Assistant Client - Error Scenarios', async (t) => {
   await t.step('should handle operation when not connected', async () => {
     const client = new HomeAssistantClient(
       mockHassOptions,
-      logger as any,
+      logger as unknown as LoggerService,
     );
 
     // Try to call service without connection
@@ -715,7 +717,7 @@ Deno.test('Home Assistant Client - Error Scenarios', async (t) => {
     // Should still create client but connection will fail
     const client = new HomeAssistantClient(
       invalidOptions,
-      logger as any,
+      logger as unknown as LoggerService,
     );
     
     assertExists(client);
@@ -732,8 +734,8 @@ Deno.test('Home Assistant Client - Models Integration', async (t) => {
 
     assertEquals(serviceCall.domain, 'climate');
     assertEquals(serviceCall.service, 'set_hvac_mode');
-    assertEquals(serviceCall.target.entity_id, 'climate.test');
-    assertEquals(serviceCall.service_data.hvac_mode, HVACMode.HEAT);
+    assertEquals(serviceCall.target?.entityId, 'climate.test');
+    assertEquals(serviceCall.serviceData.hvac_mode, HVACMode.HEAT);
   });
 
   await t.step('should create state objects correctly', () => {

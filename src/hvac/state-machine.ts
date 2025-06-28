@@ -5,7 +5,8 @@
  */
 
 import { createMachine, assign, createActor, ActorRefFrom } from 'xstate';
-import { HvacOptions, TemperatureThresholds as _TemperatureThresholds, DefrostOptions as _DefrostOptions } from '../config/settings.ts';
+import { injectable } from '@needle-di/core';
+import { type HvacOptions, type TemperatureThresholds as _TemperatureThresholds, type DefrostOptions as _DefrostOptions } from '../config/config.ts';
 import { HVACContext, StateChangeData, SystemMode, HVACMode } from '../types/common.ts';
 import { StateError } from '../core/exceptions.ts';
 
@@ -279,8 +280,8 @@ export function createHVACMachine(hvacOptions: HvacOptions) {
   }, {
     actions: {
       logStateEntry: ({ context }, event) => {
-        const { type } = event as never;
-        console.log(`[HVAC] Entering state: ${type}`, {
+        const eventType = (event as unknown as { type?: string })?.type || 'unknown';
+        console.log(`[HVAC] Entering state: ${eventType}`, {
           indoorTemp: context.indoorTemp,
           outdoorTemp: context.outdoorTemp,
           systemMode: context.systemMode,
@@ -299,7 +300,8 @@ export function createHVACMachine(hvacOptions: HvacOptions) {
         });
       },
       logManualOverride: (_, event) => {
-        const { type: _type, ..._eventData } = event as never;
+        const eventData = event as unknown as Record<string, unknown>;
+        const { type: _type, ..._eventData } = eventData || {};
         console.log(`[HVAC] Manual override activated`, event);
       },
       updateConditions: assign(({ context, event }) => {
@@ -404,12 +406,13 @@ export function createHVACMachine(hvacOptions: HvacOptions) {
 /**
  * HVAC state machine service
  */
+@injectable()
 export class HVACStateMachine {
   private machine: HVACMachine;
   private actor?: HVACMachineActor;
 
-  constructor(private hvacOptions: HvacOptions) {
-    this.machine = createHVACMachine(hvacOptions);
+  constructor(hvacOptions?: HvacOptions) {
+    this.machine = createHVACMachine(hvacOptions!);
   }
 
   /**

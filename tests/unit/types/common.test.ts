@@ -13,6 +13,18 @@ import {
   type ConnectionStats,
 } from '../../../src/types/common.ts';
 
+// Test-specific interfaces
+interface TestActionData {
+  action: string;
+  temperature?: number;
+}
+
+interface TestEntityData {
+  attemptedAction: string;
+  entitiesProcessed: number;
+  entitiesFailed: number;
+}
+
 Deno.test('HVACMode enum', async (t) => {
   await t.step('should have correct HVAC mode values', () => {
     assertEquals(HVACMode.HEAT, 'heat');
@@ -24,10 +36,10 @@ Deno.test('HVACMode enum', async (t) => {
   await t.step('should have all expected modes', () => {
     const modes = Object.values(HVACMode);
     assertEquals(modes.length, 4);
-    assertEquals(modes.includes('heat'), true);
-    assertEquals(modes.includes('cool'), true);
-    assertEquals(modes.includes('off'), true);
-    assertEquals(modes.includes('auto'), true);
+    assertEquals(modes.includes(HVACMode.HEAT), true);
+    assertEquals(modes.includes(HVACMode.COOL), true);
+    assertEquals(modes.includes(HVACMode.OFF), true);
+    assertEquals(modes.includes(HVACMode.AUTO), true);
   });
 });
 
@@ -42,10 +54,10 @@ Deno.test('SystemMode enum', async (t) => {
   await t.step('should have all expected system modes', () => {
     const modes = Object.values(SystemMode);
     assertEquals(modes.length, 4);
-    assertEquals(modes.includes('auto'), true);
-    assertEquals(modes.includes('heat_only'), true);
-    assertEquals(modes.includes('cool_only'), true);
-    assertEquals(modes.includes('off'), true);
+    assertEquals(modes.includes(SystemMode.AUTO), true);
+    assertEquals(modes.includes(SystemMode.HEAT_ONLY), true);
+    assertEquals(modes.includes(SystemMode.COOL_ONLY), true);
+    assertEquals(modes.includes(SystemMode.OFF), true);
   });
 });
 
@@ -82,12 +94,12 @@ Deno.test('WebSocketState enum', async (t) => {
   await t.step('should have all connection states', () => {
     const states = Object.values(WebSocketState);
     assertEquals(states.length, 6);
-    assertEquals(states.includes('connecting'), true);
-    assertEquals(states.includes('connected'), true);
-    assertEquals(states.includes('disconnected'), true);
-    assertEquals(states.includes('reconnecting'), true);
-    assertEquals(states.includes('authenticating'), true);
-    assertEquals(states.includes('error'), true);
+    assertEquals(states.includes(WebSocketState.CONNECTING), true);
+    assertEquals(states.includes(WebSocketState.CONNECTED), true);
+    assertEquals(states.includes(WebSocketState.DISCONNECTED), true);
+    assertEquals(states.includes(WebSocketState.RECONNECTING), true);
+    assertEquals(states.includes(WebSocketState.AUTHENTICATING), true);
+    assertEquals(states.includes(WebSocketState.ERROR), true);
   });
 });
 
@@ -107,6 +119,9 @@ Deno.test('HVACStatus type structure', async (t) => {
         conditions: {
           indoorTemp: 22.5,
           outdoorTemp: 15.0,
+          currentHour: 14,
+          isWeekday: true,
+          systemMode: SystemMode.AUTO,
         },
       },
       timestamp: new Date().toISOString(),
@@ -144,7 +159,7 @@ Deno.test('HVACStatus type structure', async (t) => {
 
 Deno.test('OperationResult type structure', async (t) => {
   await t.step('should accept successful operation result', () => {
-    const successResult: OperationResult = {
+    const successResult: OperationResult<TestActionData> = {
       success: true,
       timestamp: new Date().toISOString(),
       data: {
@@ -172,7 +187,7 @@ Deno.test('OperationResult type structure', async (t) => {
   });
 
   await t.step('should accept result with both data and error', () => {
-    const partialResult: OperationResult = {
+    const partialResult: OperationResult<TestEntityData> = {
       success: false,
       timestamp: new Date().toISOString(),
       error: 'Partial failure',

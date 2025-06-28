@@ -8,7 +8,7 @@ import { parse } from 'yaml';
 import { load as loadEnv } from '@std/dotenv';
 import { join, dirname as _dirname, fromFileUrl as _fromFileUrl } from '@std/path';
 import { getLogger } from '@std/log';
-import { SettingsSchema, Settings, defaultSettings } from './settings.ts';
+import { SettingsSchema, Settings } from './config.ts';
 import { ConfigurationError } from '../core/exceptions.ts';
 
 const logger = getLogger('ConfigLoader');
@@ -30,7 +30,7 @@ export class ConfigLoader {
       const rawConfig = await this.loadConfigFile(resolvedPath);
       
       // Merge with defaults
-      const mergedConfig = this.mergeWithDefaults(rawConfig);
+      const mergedConfig = await this.mergeWithDefaults(rawConfig);
       
       // Apply environment variable overrides
       const configWithEnv = this.applyEnvironmentOverrides(mergedConfig);
@@ -100,7 +100,8 @@ export class ConfigLoader {
   private static async loadConfigFile(configPath: string): Promise<unknown> {
     try {
       const configText = await Deno.readTextFile(configPath);
-      return parse(configText);
+      const resolvedText = this.resolveEnvironmentVariables(configText);
+      return parse(resolvedText);
     } catch (error) {
       if (error instanceof Deno.errors.NotFound) {
         throw new ConfigurationError(
@@ -118,34 +119,113 @@ export class ConfigLoader {
   }
 
   /**
-   * Merge configuration with default values
+   * Resolve environment variable placeholders in configuration text
    */
-  private static mergeWithDefaults(config: unknown): unknown {
+  private static resolveEnvironmentVariables(configText: string): string {
+    return configText.replace(/\$\{([^}]+)\}/g, (match, envVarName) => {
+      const envValue = Deno.env.get(envVarName);
+      if (envValue === undefined) {
+        logger.warn(`Environment variable ${envVarName} not found, keeping placeholder ${match}`);
+        return match;
+      }
+      logger.debug(`Resolved ${match} to environment variable value`);
+      return envValue;
+    });
+  }
+
+  /**
+   * Load default configuration from YAML file
+   */
+  private static async loadDefaultConfig(): Promise<unknown> {
+    try {
+      // Try to load config.yaml as the default
+      const defaultConfigPath = 'config.yaml';
+      return await this.loadConfigFile(defaultConfigPath);
+    } catch (error) {
+      // If config.yaml doesn't exist, use basic minimal defaults
+      logger.warn('No default config.yaml found, using minimal defaults');
+      return {
+        appOptions: {
+          logLevel: 'info',
+          useAi: false,
+          aiModel: 'gpt-3.5-turbo',
+          aiTemperature: 0.1,
+        },
+        hassOptions: {
+          wsUrl: 'ws://localhost:8123/api/websocket',
+          restUrl: 'http://localhost:8123/api',
+          token: 'your_long_lived_access_token_here',
+          maxRetries: 5,
+          retryDelayMs: 1000,
+          stateCheckInterval: 300000,
+        },
+        hvacOptions: {
+          tempSensor: 'sensor.indoor_temperature',
+          outdoorSensor: 'sensor.openweathermap_temperature',
+          systemMode: 'auto',
+          hvacEntities: [],
+          heating: {
+            temperature: 21.0,
+            presetMode: 'comfort',
+            temperatureThresholds: {
+              indoorMin: 18.0,
+              indoorMax: 28.0,
+              outdoorMin: -20.0,
+              outdoorMax: 40.0,
+            },
+          },
+          cooling: {
+            temperature: 24.0,
+            presetMode: 'eco',
+            temperatureThresholds: {
+              indoorMin: 18.0,
+              indoorMax: 28.0,
+              outdoorMin: -20.0,
+              outdoorMax: 40.0,
+            },
+          },
+          activeHours: {
+            start: 8,
+            startWeekday: 7,
+            end: 22,
+          },
+        },
+      };
+    }
+  }
+
+  /**
+   * Merge configuration with default values from YAML file
+   */
+  private static async mergeWithDefaults(config: unknown): Promise<unknown> {
+    const defaultConfig = await this.loadDefaultConfig();
+    
     if (typeof config !== 'object' || config === null) {
-      return { ...defaultSettings };
+      return defaultConfig;
     }
 
     const configObj = config as Record<string, unknown>;
+    const defaultObj = defaultConfig as Record<string, unknown>;
     
     return {
       appOptions: {
-        ...defaultSettings.appOptions,
+        ...(defaultObj.appOptions as Record<string, unknown> || {}),
         ...(configObj.appOptions as Record<string, unknown> || {}),
       },
       hassOptions: {
-        ...defaultSettings.hassOptions,
+        ...(defaultObj.hassOptions as Record<string, unknown> || {}),
         ...(configObj.hassOptions as Record<string, unknown> || {}),
       },
       hvacOptions: {
-        ...defaultSettings.hvacOptions,
+        ...(defaultObj.hvacOptions as Record<string, unknown> || {}),
         ...(configObj.hvacOptions as Record<string, unknown> || {}),
         heating: {
-          ...defaultSettings.hvacOptions?.heating,
-          ...(configObj.hvacOptions as Record<string, unknown>)?.heating as Record<string, unknown> || {},
+          ...((defaultObj.hvacOptions as Record<string, unknown>)?.heating as Record<string, unknown> || {}),
+          ...((configObj.hvacOptions as Record<string, unknown>)?.heating as Record<string, unknown> || {}),
         },
         cooling: {
-          ...defaultSettings.hvacOptions?.cooling,
-          ...(configObj.hvacOptions as Record<string, unknown>)?.cooling as Record<string, unknown> || {},
+          ...((defaultObj.hvacOptions as Record<string, unknown>)?.cooling as Record<string, unknown> || {}),
+          ...((configObj.hvacOptions as Record<string, unknown>)?.cooling as Record<string, unknown> || {}),
         },
       },
     };

@@ -1,63 +1,67 @@
-# HAG JavaScript Variant - Example Configuration
-# Home Assistant aGentic HVAC automation configuration
+# HAG HVAC Configuration
+# Direct port from Python configuration with TypeScript-specific enhancements
 
-# Application-level settings
 appOptions:
-  logLevel: info
-  useAi: false  # Set to true to enable AI agent (requires OpenAI API key)
-  aiModel: gpt-3.5-turbo
-  aiTemperature: 0.1
+  logLevel: "debug" # debug, info, warn, error, critical
+  useAi: false # Enable AI agent for intelligent decisions
+  aiModel: "gpt-3.5-turbo" # AI model to use
+  aiTemperature: 0.1 # AI model temperature
 
-# Home Assistant connection settings
 hassOptions:
-  wsUrl: ws://localhost:8123/api/websocket
-  restUrl: http://localhost:8123
-  token: your_long_lived_access_token_here
+  wsUrl: "ws://192.168.0.204:8123/api/websocket"
+  restUrl: "http://192.168.0.204:8123/api"
+  token: "${HASS_HassOptions__Token}" # Environment variable for security
   maxRetries: 5
   retryDelayMs: 1000
-  stateCheckInterval: 300000  # 5 minutes
+  stateCheckInterval: 300000
 
-# HVAC system configuration
 hvacOptions:
-  tempSensor: sensor.indoor_temperature
-  outdoorSensor: sensor.openweathermap_temperature
-  systemMode: auto  # auto, heat_only, cool_only, off
+  tempSensor: "sensor.1st_floor_hall_multisensor_temperature"
+  outdoorSensor: "sensor.openweathermap_temperature"
+  systemMode: "auto" # auto, heat_only, cool_only, off
 
-  # HVAC entities to control
   hvacEntities:
-    - entityId: climate.living_room_ac
+    - entityId: "climate.living_room_ac"
       enabled: true
       defrost: true
-    - entityId: climate.bedroom_ac
+    - entityId: "climate.bedroom_ac"
+      enabled: true
+      defrost: false
+    - entityId: "climate.matej_ac"
+      enabled: true
+      defrost: false
+    - entityId: "climate.anicka_ac"
+      enabled: true
+      defrost: false
+    - entityId: "climate.radek_ac"
       enabled: true
       defrost: false
 
-  # Heating configuration
   heating:
     temperature: 21.0
-    presetMode: comfort
+    presetMode: "windFreeSleep"
     temperatureThresholds:
       indoorMin: 19.7
       indoorMax: 20.2
-      outdoorMin: -10.0
+      outdoorMin: -5.0
       outdoorMax: 15.0
     defrost:
+      enabled: true
+      intervalHours: 2
+      durationMinutes: 5
       temperatureThreshold: 0.0
-      periodSeconds: 3600    # 1 hour
-      durationSeconds: 300   # 5 minutes
 
-  # Cooling configuration
   cooling:
     temperature: 24.0
-    presetMode: windFree
+    presetMode: "windFree"
     temperatureThresholds:
-      indoorMin: 23.5
-      indoorMax: 25.0
-      outdoorMin: 10.0
+      indoorMin: 23.0
+      indoorMax: 23.5
+      outdoorMin: 22.0
       outdoorMax: 45.0
 
-  # Active hours (when HVAC can operate)
   activeHours:
-    start: 8        # 8 AM
-    startWeekday: 7 # 7 AM on weekdays
-    end: 21         # 9 PM
+    start: 8
+    startWeekday: 7
+    end: 20
+

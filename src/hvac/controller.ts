@@ -4,15 +4,31 @@
  * Main orchestrator for HVAC operations using traditional async/await patterns.
  */
 
-import { injectable, inject } from '@needle-di/core';
+import { injectable } from '@needle-di/core';
 import { delay } from '@std/async';
-import { TYPES, LoggerService } from '../core/container.ts';
-import type { HvacOptions, ApplicationOptions } from '../config/settings.ts';
+import { LoggerService } from '../core/logger.ts';
+import type { HvacOptions, ApplicationOptions } from '../config/config.ts';
 import { HVACStateMachine } from './state-machine.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
 import { HassEventImpl, HassServiceCallImpl } from '../home-assistant/models.ts';
-import { HVACStatus, HVACMode, OperationResult } from '../types/common.ts';
+import { HVACStatus, HVACMode, OperationResult, HassStateChangeData } from '../types/common.ts';
 import { StateError, HVACOperationError, ValidationError } from '../core/exceptions.ts';
+
+/**
+ * Interface for AI Agent methods used by controller
+ */
+export interface HVACAgentInterface {
+  getStatusSummary(): Promise<{ success: boolean; aiSummary?: string; error?: string }>;
+  manualOverride(action: string, options: Record<string, unknown>): Promise<OperationResult>;
+  evaluateEfficiency(): Promise<OperationResult>;
+  processTemperatureChange(event: {
+    entityId: string;
+    newState: string;
+    oldState?: string;
+    timestamp: string;
+    attributes?: Record<string, unknown>;
+  }): Promise<OperationResult>;
+}
 
 @injectable()
 export class HVACController {
@@ -20,14 +36,28 @@ export class HVACController {
   private monitoringTask?: Promise<void>;
   private abortController?: AbortController;
 
+  private hvacOptions: HvacOptions;
+  private appOptions: ApplicationOptions;
+  private stateMachine: HVACStateMachine;
+  private haClient: HomeAssistantClient;
+  private logger: LoggerService;
+  private hvacAgent?: HVACAgentInterface; // Optional AI agent
+
   constructor(
-    @inject(TYPES.HvacOptions) private hvacOptions: HvacOptions,
-    @inject(TYPES.ApplicationOptions) private appOptions: ApplicationOptions,
-    @inject(TYPES.HVACStateMachine) private stateMachine: HVACStateMachine,
-    @inject(TYPES.HomeAssistantClient) private haClient: HomeAssistantClient,
-    @inject(TYPES.Logger) private logger: LoggerService,
-    @inject(TYPES.HVACAgent) private hvacAgent?: unknown, // Optional AI agent
-  ) {}
+    hvacOptions?: HvacOptions,
+    appOptions?: ApplicationOptions,
+    stateMachine?: HVACStateMachine,
+    haClient?: HomeAssistantClient,
+    logger?: LoggerService,
+    hvacAgent?: HVACAgentInterface,
+  ) {
+    this.hvacOptions = hvacOptions!;
+    this.appOptions = appOptions!;
+    this.stateMachine = stateMachine!;
+    this.haClient = haClient!;
+    this.logger = logger!;
+    this.hvacAgent = hvacAgent;
+  }
 
   /**
    * Start the HVAC controller
@@ -46,26 +76,43 @@ export class HVACController {
 
     try {
       // Connect to Home Assistant
+      this.logger.debug('Step 1: Connecting to Home Assistant...');
       await this.haClient.connect();
+      this.logger.debug('✅ Step 1 completed: Home Assistant connected');
 
       // Start state machine
+      this.logger.debug('Step 2: Starting state machine...');
       this.stateMachine.start();
+      this.logger.debug('✅ Step 2 completed: State machine started');
 
       // Setup event subscriptions
+      this.logger.debug('Step 3: Setting up event subscriptions...');
       await this.setupEventSubscriptions();
+      this.logger.debug('✅ Step 3 completed: Event subscriptions set up');
 
       // Start monitoring loop
+      this.logger.debug('Step 4: Starting monitoring loop...');
       this.abortController = new AbortController();
       this.monitoringTask = this.monitoringLoop();
+      this.logger.debug('✅ Step 4 completed: Monitoring loop started');
 
       // Trigger initial evaluation
+      this.logger.debug('Step 5: Triggering initial evaluation...');
       await this.triggerInitialEvaluation();
+      this.logger.debug('✅ Step 5 completed: Initial evaluation triggered');
 
       this.running = true;
       this.logger.info('✅ HVAC controller started successfully');
 
     } catch (error) {
       this.logger.error('Failed to start HVAC controller', error);
+      this.logger.debug('Controller startup failed, details:', {
+        errorName: error instanceof Error ? error.name : 'Unknown',
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        haClientConnected: this.haClient?.connected,
+        runningState: this.running,
+      });
       await this.stop();
       throw new StateError('Failed to start HVAC controller');
     }
@@ -137,7 +184,7 @@ export class HVACController {
       if (this.appOptions.useAi && this.hvacAgent) {
         try {
           const aiStatus = await this.hvacAgent.getStatusSummary();
-          status.aiAnalysis = aiStatus.success ? aiStatus.aiSummary : undefined;
+          status.aiAnalysis = aiStatus?.success ? aiStatus.aiSummary : undefined;
         } catch (error) {
           this.logger.warning('Failed to get AI status', { error });
         }
@@ -212,7 +259,7 @@ export class HVACController {
         // Use AI agent for validation and execution
         const result = await this.hvacAgent.manualOverride(action, options);
         return {
-          success: result.success,
+          success: result?.success ?? false,
           data: result,
           timestamp: new Date().toISOString(),
         };
@@ -249,7 +296,7 @@ export class HVACController {
       if (this.appOptions.useAi && this.hvacAgent) {
         const result = await this.hvacAgent.evaluateEfficiency();
         return {
-          success: result.success,
+          success: result?.success ?? false,
           data: result,
           timestamp: new Date().toISOString(),
         };
@@ -342,13 +389,13 @@ export class HVACController {
   /**
    * Process state change using direct state machine logic
    */
-  private async processStateChangeDirect(stateChange: unknown): Promise<void> {
+  private async processStateChangeDirect(stateChange: HassStateChangeData): Promise<void> {
     try {
-      const newTemp = parseFloat(stateChange.newState.state);
+      const newTemp = parseFloat(stateChange?.newState?.state || '0');
       if (isNaN(newTemp)) {
         this.logger.warning('Invalid temperature value', {
-          entityId: stateChange.entityId,
-          state: stateChange.newState.state,
+          entityId: stateChange?.entityId,
+          state: stateChange?.newState?.state,
         });
         return;
       }
@@ -443,7 +490,7 @@ export class HVACController {
         const initialEvent = {
           entityId: this.hvacOptions.tempSensor,
           newState: 'initial_check',
-          oldState: null,
+          oldState: undefined,
           timestamp: new Date().toISOString(),
         };
 

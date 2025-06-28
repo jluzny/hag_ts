@@ -4,28 +4,30 @@
  * Tests controller lifecycle, state management, and HVAC operations.
  */
 
-import { assertEquals, assertExists, assertRejects, assertThrows } from '@std/assert';
+import { assertEquals, assertExists, assertRejects } from '@std/assert';
 import { HVACController } from '../../../src/hvac/controller.ts';
 import { HVACStateMachine } from '../../../src/hvac/state-machine.ts';
-import { HvacOptions, ApplicationOptions } from '../../../src/config/settings.ts';
-import { HVACMode, HVACStatus, OperationResult, SystemMode, LogLevel } from '../../../src/types/common.ts';
+import { HvacOptions, ApplicationOptions } from '../../../src/config/config.ts';
+import { HVACMode, SystemMode, LogLevel } from '../../../src/types/common.ts';
 import { StateError, HVACOperationError } from '../../../src/core/exceptions.ts';
+import type { HomeAssistantClient } from '../../../src/home-assistant/client.ts';
+import type { LoggerService } from '../../../src/core/logger.ts';
 
 // Mock logger service
 class MockLoggerService {
-  info(message: string, _data?: Record<string, unknown>): void {
+  info(_message: string, _data?: Record<string, unknown>): void {
     // console.log(`INFO: ${message}`);
   }
 
-  error(message: string, _error?: unknown): void {
+  error(_message: string, _error?: unknown): void {
     // console.log(`ERROR: ${message}`);
   }
 
-  debug(message: string, _data?: Record<string, unknown>): void {
+  debug(_message: string, _data?: Record<string, unknown>): void {
     // console.log(`DEBUG: ${message}`);
   }
 
-  warning(message: string, _data?: Record<string, unknown>): void {
+  warning(_message: string, _data?: Record<string, unknown>): void {
     // console.log(`WARNING: ${message}`);
   }
 }
@@ -62,18 +64,18 @@ class MockHomeAssistantClient {
     return this._connected;
   }
 
-  async getState(entityId: string) {
+  getState(entityId: string) {
     const mockState = this.mockStates.get(entityId);
     if (!mockState) {
-      throw new Error(`Entity ${entityId} not found`);
+      return Promise.reject(new Error(`Entity ${entityId} not found`));
     }
     
-    return {
+    return Promise.resolve({
       entityId,
       state: mockState.state,
       attributes: mockState.attributes,
       getNumericState: () => parseFloat(mockState.state),
-    };
+    });
   }
 
   callService(_serviceCall: unknown): Promise<void> {
@@ -151,7 +153,7 @@ class MockHVACStateMachine {
     }
   }
 
-  manualOverride(mode: HVACMode, _temperature?: number): void {
+  manualOverride(_mode: HVACMode, _temperature?: number): void {
     this.currentState = 'manualOverride';
   }
 
@@ -217,8 +219,8 @@ Deno.test('HVAC Controller - Initialization and Lifecycle', async (t) => {
       mockHvacOptions,
       mockAppOptions,
       mockStateMachine as unknown as HVACStateMachine,
-      mockHaClient as unknown as any,
-      mockLogger as unknown as any,
+      mockHaClient as unknown as HomeAssistantClient,
+      mockLogger as unknown as LoggerService,
     );
 
     assertExists(controller);
@@ -260,8 +262,8 @@ Deno.test('HVAC Controller - Initialization and Lifecycle', async (t) => {
       mockHvacOptions,
       mockAppOptions,
       mockStateMachine as unknown as HVACStateMachine,
-      failingHaClient as unknown as any,
-      mockLogger as unknown as any,
+      failingHaClient as unknown as HomeAssistantClient,
+      mockLogger as unknown as LoggerService,
     );
 
     await assertRejects(
@@ -281,8 +283,8 @@ Deno.test('HVAC Controller - Status and Monitoring', async (t) => {
     mockHvacOptions,
     mockAppOptions,
     mockStateMachine as unknown as HVACStateMachine,
-    mockHaClient as unknown as any,
-    mockLogger as unknown as any,
+    mockHaClient as unknown as HomeAssistantClient,
+    mockLogger as unknown as LoggerService,
   );
 
   await t.step('should provide status when stopped', async () => {
@@ -320,8 +322,8 @@ Deno.test('HVAC Controller - Status and Monitoring', async (t) => {
       mockHvacOptions,
       mockAppOptions,
       failingStateMachine as unknown as HVACStateMachine,
-      mockHaClient as unknown as any,
-      mockLogger as unknown as any,
+      mockHaClient as unknown as HomeAssistantClient,
+      mockLogger as unknown as LoggerService,
     );
 
     const status = await errorController.getStatus();
@@ -343,8 +345,8 @@ Deno.test('HVAC Controller - Manual Operations', async (t) => {
     mockHvacOptions,
     mockAppOptions,
     mockStateMachine as unknown as HVACStateMachine,
-    mockHaClient as unknown as any,
-    mockLogger as unknown as any,
+    mockHaClient as unknown as HomeAssistantClient,
+    mockLogger as unknown as LoggerService,
   );
 
   await controller.start();
@@ -413,8 +415,8 @@ Deno.test('HVAC Controller - Efficiency Evaluation', async (t) => {
     mockHvacOptions,
     mockAppOptions,
     mockStateMachine as unknown as HVACStateMachine,
-    mockHaClient as unknown as any,
-    mockLogger as unknown as any,
+    mockHaClient as unknown as HomeAssistantClient,
+    mockLogger as unknown as LoggerService,
   );
 
   await controller.start();
@@ -427,7 +429,7 @@ Deno.test('HVAC Controller - Efficiency Evaluation', async (t) => {
     assertExists(result.timestamp);
     
     // Should contain basic analysis
-    const data = result.data as any;
+    const data = result.data as Record<string, unknown>;
     assertExists(data.analysis);
     assertExists(data.recommendations);
   });
@@ -454,8 +456,8 @@ Deno.test('HVAC Controller - Temperature Change Handling', async (t) => {
     mockHvacOptions,
     mockAppOptions,
     mockStateMachine as unknown as HVACStateMachine,
-    mockHaClient as unknown as any,
-    mockLogger as unknown as any,
+    mockHaClient as unknown as HomeAssistantClient,
+    mockLogger as unknown as LoggerService,
   );
 
   await controller.start();
@@ -547,8 +549,8 @@ Deno.test('HVAC Controller - Error Handling', async (t) => {
       mockHvacOptions,
       mockAppOptions,
       failingStateMachine as unknown as HVACStateMachine,
-      mockHaClient as unknown as any,
-      mockLogger as unknown as any,
+      mockHaClient as unknown as HomeAssistantClient,
+      mockLogger as unknown as LoggerService,
     );
 
     await assertRejects(
@@ -568,8 +570,8 @@ Deno.test('HVAC Controller - Error Handling', async (t) => {
       mockHvacOptions,
       mockAppOptions,
       mockStateMachine as unknown as HVACStateMachine,
-      failingHaClient as unknown as any,
-      mockLogger as unknown as any,
+      failingHaClient as unknown as HomeAssistantClient,
+      mockLogger as unknown as LoggerService,
     );
 
     await assertRejects(
@@ -583,8 +585,8 @@ Deno.test('HVAC Controller - Error Handling', async (t) => {
       mockHvacOptions,
       mockAppOptions,
       mockStateMachine as unknown as HVACStateMachine,
-      mockHaClient as unknown as any,
-      mockLogger as unknown as any,
+      mockHaClient as unknown as HomeAssistantClient,
+      mockLogger as unknown as LoggerService,
     );
 
     await controller.start();
@@ -612,8 +614,8 @@ Deno.test('HVAC Controller - HVAC Mode Parsing', async (t) => {
     mockHvacOptions,
     mockAppOptions,
     mockStateMachine as unknown as HVACStateMachine,
-    mockHaClient as unknown as any,
-    mockLogger as unknown as any,
+    mockHaClient as unknown as HomeAssistantClient,
+    mockLogger as unknown as LoggerService,
   );
 
   await controller.start();
@@ -651,16 +653,22 @@ Deno.test('HVAC Controller - AI Integration', async (t) => {
       aiSummary: 'System operating normally',
       recommendations: ['Maintain current schedule'],
     }),
-    processTemperatureChange: () => Promise.resolve(),
+    processTemperatureChange: () => Promise.resolve({
+      success: true,
+      timestamp: new Date().toISOString(),
+    }),
     manualOverride: (action: string, options: Record<string, unknown>) => Promise.resolve({
       success: true,
-      action,
-      options,
+      data: { action, options },
+      timestamp: new Date().toISOString(),
     }),
     evaluateEfficiency: () => Promise.resolve({
       success: true,
-      analysis: 'Efficiency is optimal',
-      recommendations: ['Continue current settings'],
+      data: { 
+        analysis: 'Efficiency is optimal',
+        recommendations: ['Continue current settings'],
+      },
+      timestamp: new Date().toISOString(),
     }),
   };
 
@@ -674,8 +682,8 @@ Deno.test('HVAC Controller - AI Integration', async (t) => {
       mockHvacOptions,
       aiAppOptions,
       mockStateMachine as unknown as HVACStateMachine,
-      mockHaClient as unknown as any,
-      mockLogger as unknown as any,
+      mockHaClient as unknown as HomeAssistantClient,
+      mockLogger as unknown as LoggerService,
       mockAIAgent,
     );
 
@@ -693,8 +701,8 @@ Deno.test('HVAC Controller - AI Integration', async (t) => {
       mockHvacOptions,
       aiAppOptions,
       mockStateMachine as unknown as HVACStateMachine,
-      mockHaClient as unknown as any,
-      mockLogger as unknown as any,
+      mockHaClient as unknown as HomeAssistantClient,
+      mockLogger as unknown as LoggerService,
       mockAIAgent,
     );
 
@@ -712,8 +720,8 @@ Deno.test('HVAC Controller - AI Integration', async (t) => {
       mockHvacOptions,
       aiAppOptions,
       mockStateMachine as unknown as HVACStateMachine,
-      mockHaClient as unknown as any,
-      mockLogger as unknown as any,
+      mockHaClient as unknown as HomeAssistantClient,
+      mockLogger as unknown as LoggerService,
       mockAIAgent,
     );
 

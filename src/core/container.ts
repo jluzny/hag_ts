@@ -1,102 +1,26 @@
 /**
  * Dependency injection container for HAG JavaScript variant.
- * 
+ *
  * Uses @needle-di/core for type-safe dependency injection with decorators.
  */
 
-import { Container, injectable, inject } from '@needle-di/core';
-import { getLogger, Logger } from '@std/log';
-import type { Settings, HvacOptions, HassOptions, ApplicationOptions } from '../config/settings.ts';
+import { Container } from '@needle-di/core';
+import type {
+  ApplicationOptions,
+  HassOptions,
+  HvacOptions,
+  Settings,
+} from '../config/config.ts';
+import { type HVACAgentInterface, HVACController } from '../hvac/controller.ts';
 import { ConfigLoader } from '../config/loader.ts';
 import { HVACAgent } from '../ai/agent.ts';
+import { TYPES } from './types.ts';
+import { LoggerService } from './logger.ts';
+import { HVACStateMachine } from '../hvac/state-machine.ts';
+import { HomeAssistantClient } from '../home-assistant/client.ts';
 
-/**
- * Dependency injection tokens
- */
-export const TYPES = {
-  // Configuration
-  Settings: Symbol.for('Settings'),
-  HvacOptions: Symbol.for('HvacOptions'),
-  HassOptions: Symbol.for('HassOptions'),
-  ApplicationOptions: Symbol.for('ApplicationOptions'),
-  
-  // Core services
-  Logger: Symbol.for('Logger'),
-  ConfigLoader: Symbol.for('ConfigLoader'),
-  
-  // Home Assistant
-  HomeAssistantClient: Symbol.for('HomeAssistantClient'),
-  
-  // HVAC
-  HVACStateMachine: Symbol.for('HVACStateMachine'),
-  HVACController: Symbol.for('HVACController'),
-  HVACAgent: Symbol.for('HVACAgent'),
-  
-  // Tools
-  TemperatureMonitorTool: Symbol.for('TemperatureMonitorTool'),
-  HVACControlTool: Symbol.for('HVACControlTool'),
-  SensorReaderTool: Symbol.for('SensorReaderTool'),
-} as const;
-
-/**
- * Logger service wrapper
- */
-@injectable()
-export class LoggerService {
-  private logger: Logger;
-
-  constructor() {
-    this.logger = getLogger('HAG');
-  }
-
-  info(message: string, data?: Record<string, unknown>): void {
-    this.logger.info(data ? `${message} ${JSON.stringify(data)}` : message);
-  }
-
-  error(message: string, error?: unknown): void {
-    this.logger.error(`${message} ${error instanceof Error ? error.message : String(error)}`);
-  }
-
-  debug(message: string, data?: Record<string, unknown>): void {
-    this.logger.debug(data ? `${message} ${JSON.stringify(data)}` : message);
-  }
-
-  warning(message: string, data?: Record<string, unknown>): void {
-    this.logger.warn(data ? `${message} ${JSON.stringify(data)}` : message);
-  }
-}
-
-/**
- * Configuration service
- */
-@injectable()
-export class ConfigService {
-  constructor(
-    @inject(TYPES.Settings) private settings: Settings,
-    @inject(TYPES.Logger) private logger: LoggerService,
-  ) {}
-
-  getSettings(): Settings {
-    return this.settings;
-  }
-
-  getHvacOptions(): HvacOptions {
-    return this.settings.hvacOptions;
-  }
-
-  getHassOptions(): HassOptions {
-    return this.settings.hassOptions;
-  }
-
-  getApplicationOptions(): ApplicationOptions {
-    return this.settings.appOptions;
-  }
-
-  updateSettings(newSettings: Partial<Settings>): void {
-    Object.assign(this.settings, newSettings);
-    this.logger.info('Settings updated', { updated: Object.keys(newSettings) });
-  }
-}
+// Re-export for backward compatibility
+export { LoggerService, TYPES };
 
 /**
  * Application container setup
@@ -110,37 +34,84 @@ export class ApplicationContainer {
   }
 
   /**
-   * Initialize container with configuration
+   * Initialize container with configuration from file
    */
   async initialize(configPath?: string): Promise<void> {
     try {
       // Load configuration
       this.settings = await ConfigLoader.loadSettings(configPath);
-      
+
       // Setup logging based on configuration
       await this.setupLogging(this.settings.appOptions.logLevel);
-      
+
       // Register configuration
       this.registerConfiguration();
-      
+
       // Register core services
       this.registerCoreServices();
-      
+
       // Register Home Assistant services
       this.registerHomeAssistantServices();
-      
+
       // Register HVAC services
       this.registerHVACServices();
-      
+
       // Register tools (if AI is enabled)
       if (this.settings.appOptions.useAi) {
-        this.registerTools();
+        // TODO : Uncomment when tools are implemented
+        // this.registerTools();
       }
-      
+
       console.log('✅ Container initialized successfully');
-      
     } catch (error) {
       console.error('❌ Failed to initialize container:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Initialize container with settings object (for testing)
+   */
+  async initializeWithSettings(
+    settings: Settings,
+    skipRegistrations: string[] = [],
+  ): Promise<void> {
+    try {
+      // Use provided settings
+      this.settings = settings;
+
+      // Setup logging based on configuration
+      await this.setupLogging(this.settings.appOptions.logLevel);
+
+      // Register configuration
+      this.registerConfiguration();
+
+      // Register core services
+      if (!skipRegistrations.includes('core')) {
+        this.registerCoreServices();
+      }
+
+      // Register Home Assistant services
+      if (!skipRegistrations.includes('homeassistant')) {
+        this.registerHomeAssistantServices();
+      }
+
+      // Register HVAC services
+      if (!skipRegistrations.includes('hvac')) {
+        this.registerHVACServices();
+      }
+
+      // Register tools (if AI is enabled)
+      if (this.settings.appOptions.useAi) {
+        // TODO : Uncomment when tools are implemented
+        // this.registerTools();
+      }
+
+      console.log(
+        '✅ Container initialized successfully with provided settings',
+      );
+    } catch (error) {
+      console.error('❌ Failed to initialize container with settings:', error);
       throw error;
     }
   }
@@ -149,22 +120,36 @@ export class ApplicationContainer {
    * Setup logging configuration
    */
   private async setupLogging(logLevel: string): Promise<void> {
-    const { setup } = await import('@std/log');
-    
-    await setup({
+    const { setup, ConsoleHandler } = await import('@std/log');
+
+    setup({
       handlers: {
-        console: {
-          level: logLevel.toUpperCase() as never,
-          formatter: '[{datetime}] {levelName} {msg}' as never,
-        },
+        console: new ConsoleHandler(
+          logLevel.toUpperCase() as unknown as
+            | 'DEBUG'
+            | 'INFO'
+            | 'WARN'
+            | 'ERROR'
+            | 'CRITICAL',
+        ),
       },
       loggers: {
         default: {
-          level: logLevel.toUpperCase() as never,
+          level: logLevel.toUpperCase() as unknown as
+            | 'DEBUG'
+            | 'INFO'
+            | 'WARN'
+            | 'ERROR'
+            | 'CRITICAL',
           handlers: ['console'],
         },
         HAG: {
-          level: logLevel.toUpperCase() as never, 
+          level: logLevel.toUpperCase() as unknown as
+            | 'DEBUG'
+            | 'INFO'
+            | 'WARN'
+            | 'ERROR'
+            | 'CRITICAL',
           handlers: ['console'],
         },
       },
@@ -180,9 +165,18 @@ export class ApplicationContainer {
     }
 
     this.container.bind({ provide: TYPES.Settings, useValue: this.settings });
-    this.container.bind({ provide: TYPES.HvacOptions, useValue: this.settings.hvacOptions });
-    this.container.bind({ provide: TYPES.HassOptions, useValue: this.settings.hassOptions });
-    this.container.bind({ provide: TYPES.ApplicationOptions, useValue: this.settings.appOptions });
+    this.container.bind({
+      provide: TYPES.HvacOptions,
+      useValue: this.settings.hvacOptions,
+    });
+    this.container.bind({
+      provide: TYPES.HassOptions,
+      useValue: this.settings.hassOptions,
+    });
+    this.container.bind({
+      provide: TYPES.ApplicationOptions,
+      useValue: this.settings.appOptions,
+    });
   }
 
   /**
@@ -190,56 +184,118 @@ export class ApplicationContainer {
    */
   private registerCoreServices(): void {
     this.container.bind({ provide: TYPES.Logger, useClass: LoggerService });
-    this.container.bind({ provide: TYPES.ConfigLoader, useClass: ConfigLoader });
+    this.container.bind({
+      provide: TYPES.ConfigLoader,
+      useClass: ConfigLoader,
+    });
   }
 
   /**
    * Register Home Assistant services
    */
   private registerHomeAssistantServices(): void {
-    // Lazy import to avoid circular dependencies
-    import('../home-assistant/client.ts').then(({ HomeAssistantClient }) => {
-      this.container.bind({ provide: TYPES.HomeAssistantClient, useClass: HomeAssistantClient });
+    this.container.bind({
+      provide: TYPES.HomeAssistantClient,
+      useFactory: () => {
+        const config = this.container.get<HassOptions>(TYPES.HassOptions);
+        const logger = this.container.get<LoggerService>(TYPES.Logger);
+        return new HomeAssistantClient(config, logger);
+      },
     });
   }
 
   /**
    * Register HVAC services
    */
-  private registerHVACServices(): void {
-    // Lazy import to avoid circular dependencies
-    Promise.all([
-      import('../hvac/state-machine.ts'),
-      import('../hvac/controller.ts'),
-    ]).then(([{ HVACStateMachine }, { HVACController }]) => {
-      this.container.bind({ provide: TYPES.HVACStateMachine, useClass: HVACStateMachine });
-      this.container.bind({ provide: TYPES.HVACController, useClass: HVACController });
+  public registerHVACServices(): void {
+    this.container.bind({
+      provide: TYPES.HVACStateMachine,
+      useFactory: () => {
+        const hvacOptions = this.container.get<HvacOptions>(TYPES.HvacOptions);
+        return new HVACStateMachine(hvacOptions);
+      },
+    });
+    this.container.bind({
+      provide: TYPES.HVACController,
+      useFactory: () => {
+        const hvacOptions = this.container.get<HvacOptions>(
+          TYPES.HvacOptions,
+        );
+        const appOptions = this.container.get<ApplicationOptions>(
+          TYPES.ApplicationOptions,
+        );
+        const stateMachine = this.container.get<HVACStateMachine>(
+          TYPES.HVACStateMachine,
+        );
+        const haClient = this.container.get<HomeAssistantClient>(
+          TYPES.HomeAssistantClient,
+        );
+        const logger = this.container.get<LoggerService>(TYPES.Logger);
+        const hvacAgent = this.settings?.appOptions.useAi
+          ? this.container.get(
+            TYPES.HVACAgent,
+          ) as unknown as HVACAgentInterface
+          : undefined;
+        return new HVACController(
+          hvacOptions,
+          appOptions,
+          stateMachine,
+          haClient,
+          logger,
+          hvacAgent,
+        );
+      },
     });
 
     // Register AI agent if enabled
     if (this.settings?.appOptions.useAi) {
-      this.container.bind({ provide: TYPES.HVACAgent, useClass: HVACAgent });
+      this.container.bind({
+        provide: TYPES.HVACAgent,
+        useFactory: () => {
+          const hvacOptions = this.container.get<HvacOptions>(
+            TYPES.HvacOptions,
+          );
+          const appOptions = this.container.get<ApplicationOptions>(
+            TYPES.ApplicationOptions,
+          );
+          const stateMachine = this.container.get<HVACStateMachine>(
+            TYPES.HVACStateMachine,
+          );
+          const haClient = this.container.get<HomeAssistantClient>(
+            TYPES.HomeAssistantClient,
+          );
+          const logger = this.container.get<LoggerService>(TYPES.Logger);
+          return new HVACAgent(
+            hvacOptions,
+            appOptions,
+            stateMachine,
+            haClient,
+            logger,
+          );
+        },
+      });
     }
   }
 
   /**
    * Register LangChain tools
    */
-  private registerTools(): void {
-    Promise.all([
-      import('../hvac/tools/temperature-monitor.ts'),
-      import('../hvac/tools/hvac-control.ts'),
-      import('../hvac/tools/sensor-reader.ts'),
-    ]).then(([
-      { TemperatureMonitorTool },
-      { HVACControlTool },
-      { SensorReaderTool },
-    ]) => {
-      this.container.bind({ provide: TYPES.TemperatureMonitorTool, useClass: TemperatureMonitorTool });
-      this.container.bind({ provide: TYPES.HVACControlTool, useClass: HVACControlTool });
-      this.container.bind({ provide: TYPES.SensorReaderTool, useClass: SensorReaderTool });
-    });
-  }
+  // TODO: Uncomment when tools are implemented
+  // private registerTools(): void {
+  //   Promise.all([
+  //     import('../hvac/tools/temperature-monitor.ts'),
+  //     import('../hvac/tools/hvac-control.ts'),
+  //     import('../hvac/tools/sensor-reader.ts'),
+  //   ]).then(([
+  //     { TemperatureMonitorTool },
+  //     { HVACControlTool },
+  //     { SensorReaderTool },
+  //   ]) => {
+  //     this.container.bind({ provide: TYPES.TemperatureMonitorTool, useClass: TemperatureMonitorTool });
+  //     this.container.bind({ provide: TYPES.HVACControlTool, useClass: HVACControlTool });
+  //     this.container.bind({ provide: TYPES.SensorReaderTool, useClass: SensorReaderTool });
+  //   });
+  // }
 
   /**
    * Get service from container
@@ -279,19 +335,19 @@ export class ApplicationContainer {
     // Stop services that need cleanup
     try {
       if (this.isBound(TYPES.HVACController)) {
-        const controller = this.get<unknown>(TYPES.HVACController);
-        if (controller.stop && typeof controller.stop === 'function') {
+        const controller = this.get<HVACController>(TYPES.HVACController);
+        if (controller?.stop && typeof controller.stop === 'function') {
           await controller.stop();
         }
       }
-      
+
       if (this.isBound(TYPES.HomeAssistantClient)) {
-        const client = this.get<unknown>(TYPES.HomeAssistantClient);
-        if (client.disconnect && typeof client.disconnect === 'function') {
+        const client = this.get<HomeAssistantClient>(TYPES.HomeAssistantClient);
+        if (client?.disconnect && typeof client.disconnect === 'function') {
           await client.disconnect();
         }
       }
-      
+
       console.log('✅ Container disposed successfully');
     } catch (error) {
       console.error('❌ Error during container disposal:', error);
@@ -307,14 +363,16 @@ let globalContainer: ApplicationContainer | undefined;
 /**
  * Create and initialize application container
  */
-export async function createContainer(configPath?: string): Promise<ApplicationContainer> {
+export async function createContainer(
+  configPath?: string,
+): Promise<ApplicationContainer> {
   if (globalContainer) {
     await globalContainer.dispose();
   }
-  
+
   globalContainer = new ApplicationContainer();
   await globalContainer.initialize(configPath);
-  
+
   return globalContainer;
 }
 

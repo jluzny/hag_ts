@@ -5,59 +5,60 @@
  */
 
 import { assertEquals, assertExists, assertRejects, assertThrows } from '@std/assert';
-import { ApplicationContainer, createContainer, getContainer, disposeContainer, TYPES } from '../../../src/core/container.ts';
-import { Settings } from '../../../src/config/settings.ts';
+import { ApplicationContainer, createContainer, getContainer, disposeContainer } from '../../../src/core/container.ts';
+import { TYPES } from '../../../src/core/types.ts';
+import { Settings } from '../../../src/config/config.ts';
 import { SystemMode, LogLevel } from '../../../src/types/common.ts';
 
-// Mock configuration for testing
-const mockSettings: Settings = {
-  appOptions: {
-    logLevel: LogLevel.ERROR, // Use ERROR to minimize test output
-    useAi: false,
-    aiModel: 'gpt-4o-mini',
-    aiTemperature: 0.1,
-    openaiApiKey: undefined,
-  },
-  hassOptions: {
-    wsUrl: 'ws://localhost:8123/api/websocket',
-    restUrl: 'http://localhost:8123',
-    token: 'test_token',
-    maxRetries: 3,
-    retryDelayMs: 1000,
-  },
-  hvacOptions: {
-    tempSensor: 'sensor.indoor_temp',
-    outdoorSensor: 'sensor.outdoor_temp',
-    systemMode: SystemMode.AUTO,
-    hvacEntities: [
-      {
-        entityId: 'climate.test',
-        enabled: true,
-        defrost: false,
-      },
-    ],
-    heating: {
-      temperature: 21.0,
-      presetMode: 'comfort',
-      temperatureThresholds: {
-        indoorMin: 19.0,
-        indoorMax: 22.0,
-        outdoorMin: -10.0,
-        outdoorMax: 15.0,
-      },
-    },
-    cooling: {
-      temperature: 24.0,
-      presetMode: 'eco',
-      temperatureThresholds: {
-        indoorMin: 23.0,
-        indoorMax: 26.0,
-        outdoorMin: 10.0,
-        outdoorMax: 45.0,
-      },
-    },
-  },
-};
+// Mock configuration for testing - commented out as unused
+// const _mockSettings: Settings = {
+//   appOptions: {
+//     logLevel: LogLevel.ERROR, // Use ERROR to minimize test output
+//     useAi: false,
+//     aiModel: 'gpt-4o-mini',
+//     aiTemperature: 0.1,
+//     openaiApiKey: undefined,
+//   },
+//   hassOptions: {
+//     wsUrl: 'ws://localhost:8123/api/websocket',
+//     restUrl: 'http://localhost:8123',
+//     token: 'test_token',
+//     maxRetries: 3,
+//     retryDelayMs: 1000,
+//   },
+//   hvacOptions: {
+//     tempSensor: 'sensor.indoor_temp',
+//     outdoorSensor: 'sensor.outdoor_temp',
+//     systemMode: SystemMode.AUTO,
+//     hvacEntities: [
+//       {
+//         entityId: 'climate.test',
+//         enabled: true,
+//         defrost: false,
+//       },
+//     ],
+//     heating: {
+//       temperature: 21.0,
+//       presetMode: 'comfort',
+//       temperatureThresholds: {
+//         indoorMin: 19.0,
+//         indoorMax: 22.0,
+//         outdoorMin: -10.0,
+//         outdoorMax: 15.0,
+//       },
+//     },
+//     cooling: {
+//       temperature: 24.0,
+//       presetMode: 'eco',
+//       temperatureThresholds: {
+//         indoorMin: 23.0,
+//         indoorMax: 26.0,
+//         outdoorMin: 10.0,
+//         outdoorMax: 45.0,
+//       },
+//     },
+//   },
+// };
 
 // Mock config file for testing
 const mockConfigYaml = `
@@ -97,14 +98,14 @@ hvacOptions:
 `;
 
 // Mock file system for config loading
-let mockFileSystem = new Map<string, string>();
+const mockFileSystem = new Map<string, string>();
 const originalReadTextFile = Deno.readTextFile;
 const originalStatSync = Deno.statSync;
 
 function setupConfigMocks() {
   mockFileSystem.set('test-config.yaml', mockConfigYaml);
   
-  Deno.readTextFile = async (path: string): Promise<string> => {
+  Deno.readTextFile = (path: string): Promise<string> => {
     const content = mockFileSystem.get(path);
     if (content === undefined) {
       throw new Deno.errors.NotFound(`File not found: ${path}`);

@@ -4,14 +4,14 @@
  * LangChain-powered agent for intelligent HVAC decision making using traditional patterns.
  */
 
-import { injectable, inject } from '@needle-di/core';
+import { injectable } from '@needle-di/core';
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage, AIMessage } from '@langchain/core/messages';
 import { Tool } from '@langchain/core/tools';
 import { AgentExecutor, createToolCallingAgent } from 'langchain/agents';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
-import { TYPES, LoggerService } from '../core/container.ts';
-import type { HvacOptions, ApplicationOptions } from '../config/settings.ts';
+import { LoggerService } from '../core/logger.ts';
+import type { HvacOptions, ApplicationOptions } from '../config/config.ts';
 import { HVACStateMachine } from '../hvac/state-machine.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
 import { HVACMode, OperationResult } from '../types/common.ts';
@@ -69,7 +69,7 @@ class HVACControlTool extends Tool {
           mode = HVACMode.OFF;
           break;
         default:
-          return `Error: Invalid action '${action}'. Use 'heat', 'cool', or 'off'.`;
+          return Promise.resolve(`Error: Invalid action '${action}'. Use 'heat', 'cool', or 'off'.`);
       }
 
       // Execute manual override
@@ -178,13 +178,24 @@ export class HVACAgent {
   private agent?: AgentExecutor;
   private conversationHistory: (HumanMessage | AIMessage | SystemMessage)[] = [];
 
+  private hvacOptions: HvacOptions;
+  private appOptions: ApplicationOptions;
+  private stateMachine: HVACStateMachine;
+  private haClient: HomeAssistantClient;
+  private logger: LoggerService;
+
   constructor(
-    @inject(TYPES.HvacOptions) private hvacOptions: HvacOptions,
-    @inject(TYPES.ApplicationOptions) private appOptions: ApplicationOptions,
-    @inject(TYPES.HVACStateMachine) private stateMachine: HVACStateMachine,
-    @inject(TYPES.HomeAssistantClient) private haClient: HomeAssistantClient,
-    @inject(TYPES.Logger) private logger: LoggerService,
+    hvacOptions?: HvacOptions,
+    appOptions?: ApplicationOptions,
+    stateMachine?: HVACStateMachine,
+    haClient?: HomeAssistantClient,
+    logger?: LoggerService,
   ) {
+    this.hvacOptions = hvacOptions!;
+    this.appOptions = appOptions!;
+    this.stateMachine = stateMachine!;
+    this.haClient = haClient!;
+    this.logger = logger!;
     // Initialize OpenAI LLM
     this.llm = new ChatOpenAI({
       modelName: 'gpt-4o-mini',

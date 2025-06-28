@@ -13,7 +13,7 @@ import {
   LogLevel,
   type Settings as _Settings,
   type HvacOptions as _HvacOptions,
-} from '../../../src/config/settings.ts';
+} from '../../../src/config/config.ts';
 
 Deno.test('HassOptionsSchema', async (t) => {
   await t.step('should validate valid Home Assistant config', () => {

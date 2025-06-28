@@ -21,6 +21,7 @@ export enum HVACMode {
   HEAT = 'heat',
   COOL = 'cool',
   OFF = 'off',
+  AUTO = 'auto',
 }
 
 /**
@@ -163,6 +164,30 @@ export interface HVACStatus {
   };
   timestamp: string;
   aiAnalysis?: string;
+}
+
+/**
+ * WebSocket connection states
+ */
+export enum WebSocketState {
+  CONNECTING = 'connecting',
+  CONNECTED = 'connected',
+  DISCONNECTED = 'disconnected',
+  RECONNECTING = 'reconnecting',
+  AUTHENTICATING = 'authenticating',
+  ERROR = 'error',
+}
+
+/**
+ * Connection statistics
+ */
+export interface ConnectionStats {
+  totalConnections: number;
+  totalReconnections: number;
+  totalMessages: number;
+  totalErrors: number;
+  lastConnected?: Date;
+  lastError?: Date;
 }
 
 /**
