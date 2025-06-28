@@ -11,5 +11,5 @@ This file contains a collection of prompts used to test the HAG HVAC automation 
 **Prompt:**
 
 ```
-turn off all Hvac units; wait 10 sec.; now run the app, set 10 sec timeout to stop the app; based on the log describe app logic behavior step by step, and validate if the reported result corresponds to live state in hass (using rest api and configuration from ./config dir)
+turn off all Hvac units; wait 10 sec.; now run the app, set 10 sec timeout to stop the app with KILL signal; based on the log describe app logic behavior step by step, and validate if the reported result corresponds to live state in hass (using rest api and configuration from ./config dir)
 ```
