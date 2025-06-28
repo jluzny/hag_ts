@@ -5,9 +5,10 @@
  */
 
 import { assertEquals, assertExists } from '@std/assert';
-import { HVACStateMachine, createHVACMachine } from '../../../src/hvac/state-machine.ts';
+import { createHVACMachine, HVACStateMachine } from '../../../src/hvac/state-machine.ts';
 import { HvacOptions } from '../../../src/config/config.ts';
 import { HVACMode, SystemMode } from '../../../src/types/common.ts';
+import { LoggerService } from '../../../src/core/logger.ts';
 
 // Mock HVAC options for testing
 const mockHvacOptions: HvacOptions = {
@@ -286,7 +287,7 @@ Deno.test('HVAC State Machine', async (t) => {
 
 Deno.test('HVAC State Machine Creation', async (t) => {
   await t.step('should create machine with valid options', () => {
-    const machine = createHVACMachine(mockHvacOptions);
+    const machine = createHVACMachine(mockHvacOptions, new LoggerService());
     assertExists(machine);
   });
 
@@ -318,7 +319,7 @@ Deno.test('HVAC State Machine Creation', async (t) => {
       },
     };
     
-    const machine = createHVACMachine(minimalOptions);
+    const machine = createHVACMachine(minimalOptions, new LoggerService());
     assertExists(machine);
   });
 });

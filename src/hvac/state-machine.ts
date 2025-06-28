@@ -419,14 +419,13 @@ export function createHVACMachine(hvacOptions: HvacOptions, logger: LoggerServic
     },
   }, {
     actions: {
-      logStateEntry: ({ context, event }, from) => {
+      logStateEntry: ({ context, event }) => {
         const eventType = (event as unknown as { type?: string })?.type;
         let message = '🔄 [HVAC] State transition';
         if (eventType) {
           message += ` triggered by: ${eventType}`;
         }
         logger.info(message, {
-          fromState: from?.value,
           toState: event.type,
           event, // Log the entire event object for debugging
           indoorTemp: context.indoorTemp,

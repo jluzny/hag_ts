@@ -166,10 +166,7 @@ export class ApplicationContainer {
       provide: TYPES.HVACStateMachine,
       useFactory: () => {
         const hvacOptions = this.container.get<HvacOptions>(TYPES.HvacOptions);
-        const appOptions = this.container.get<ApplicationOptions>(
-          TYPES.ApplicationOptions,
-        );
-        return new HVACStateMachine(hvacOptions, appOptions);
+        return new HVACStateMachine(hvacOptions);
       },
     });
     this.container.bind({

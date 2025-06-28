@@ -275,7 +275,7 @@ export class ConfigLoader {
       
       if (envValue === undefined) {
         unresolvedVars.push(envVarName);
-        logger.warn(`⚠️ Environment variable not found: ${envVarName}`, {
+        logger.warning(`⚠️ Environment variable not found: ${envVarName}`, {
           placeholder: match,
           behavior: 'keeping_placeholder'
         });
