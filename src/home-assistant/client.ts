@@ -146,7 +146,7 @@ export class HomeAssistantClient {
     }
 
     try {
-      const url = `${this.config.restUrl}/api/states/${entityId}`;
+      const url = `${this.config.restUrl}/states/${entityId}`;
       const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${this.config.token}`,

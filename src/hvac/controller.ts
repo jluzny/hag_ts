@@ -509,6 +509,11 @@ export class HVACController {
   private async evaluateStateMachineDirect(): Promise<void> {
     try {
       // Get current temperatures
+      this.logger.debug('Getting indoor temperature state', {
+        sensor: this.hvacOptions.tempSensor,
+        haConnected: this.haClient.connected,
+      });
+      
       const indoorState = await this.haClient.getState(this.hvacOptions.tempSensor);
       const indoorTemp = indoorState.getNumericState();
 
