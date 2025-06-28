@@ -673,7 +673,7 @@ export class HVACController {
             nextEvaluationIn: interval / 1000 + 's'
           });
           
-          await delay(interval);
+          await delay(interval, { signal: this.abortController!.signal });
           
         } catch (error) {
           if (error instanceof Error && error.name === 'AbortError') {
@@ -693,7 +693,7 @@ export class HVACController {
             retryIn: '1 minute'
           });
           
-          await delay(60000); // Wait 1 minute before retry
+          await delay(60000, { signal: this.abortController!.signal }); // Wait 1 minute before retry
         }
       }
     } catch (error) {
@@ -1207,6 +1207,7 @@ export class HVACController {
       case 'cooling':
         return HVACMode.COOL;
       case 'idle':
+      case 'off':
         return HVACMode.OFF;
       default:
         return undefined;

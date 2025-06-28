@@ -13,6 +13,9 @@ import { HVACMode, SystemMode, LogLevel } from '../../../src/types/common.ts';
 // import { AIError } from '../../../src/core/exceptions.ts'; // Unused
 import type { LoggerService } from '../../../src/core/logger.ts';
 
+// Force disable AI tests for fast testing by removing API key
+Deno.env.delete('OPENAI_API_KEY');
+
 // Mock type interfaces
 interface MockHVACStateMachine {
   getCurrentState(): string;
@@ -149,7 +152,7 @@ const mockAppOptions: ApplicationOptions = {
   aiModel: 'gpt-4o-mini',
   aiTemperature: 0.1,
   dryRun: false,
-  openaiApiKey: 'sk-test-key',
+  openaiApiKey: undefined, // Disabled for fast testing
 };
 
 // Skip AI tests if no OpenAI key available (for CI/CD)

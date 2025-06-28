@@ -41,6 +41,7 @@ export class HomeAssistantClient {
   constructor(
     config?: HassOptions,
     logger?: LoggerService,
+    private webSocketFactory?: (url: string) => WebSocket,
   ) {
     this.config = config!;
     this.logger = logger!;
@@ -394,7 +395,9 @@ export class HomeAssistantClient {
           currentTime: new Date().toISOString(),
         });
         
-        this.ws = new WebSocket(this.config.wsUrl);
+        this.ws = this.webSocketFactory 
+          ? this.webSocketFactory(this.config.wsUrl) 
+          : new WebSocket(this.config.wsUrl);
         
         this.logger.debug('WebSocket object created', {
           readyState: this.ws.readyState,

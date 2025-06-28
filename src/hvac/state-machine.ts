@@ -323,9 +323,34 @@ export function createHVACMachine(hvacOptions: HvacOptions, logger: LoggerServic
             guard: 'shouldAutoCool',
           },
           {
-            target: 'idle',
+            target: 'off',
           },
         ],
+      },
+      off: {
+        entry: 'logStateEntry',
+        on: {
+          AUTO_EVALUATE: {
+            target: 'evaluating',
+          },
+          UPDATE_CONDITIONS: {
+            actions: 'updateConditions',
+          },
+          UPDATE_TEMPERATURES: {
+            actions: 'updateTemperatures',
+          },
+          HEAT: {
+            target: 'heating',
+            guard: 'canHeat',
+          },
+          COOL: {
+            target: 'cooling',
+            guard: 'canCool',
+          },
+          MANUAL_OVERRIDE: {
+            target: 'manualOverride',
+          },
+        },
       },
       heating: {
         entry: ['logStateEntry', 'logHeatingStart'],
