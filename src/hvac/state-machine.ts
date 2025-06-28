@@ -9,6 +9,7 @@ import { injectable } from '@needle-di/core';
 import { type HvacOptions, type TemperatureThresholds as _TemperatureThresholds, type DefrostOptions as _DefrostOptions } from '../config/config.ts';
 import { HVACContext, StateChangeData, SystemMode, HVACMode } from '../types/common.ts';
 import { StateError } from '../core/exceptions.ts';
+import { LoggerService } from '../core/logger.ts';
 
 /**
  * HVAC events that can trigger state transitions
@@ -281,6 +282,8 @@ export function createHVACMachine(hvacOptions: HvacOptions) {
     actions: {
       logStateEntry: ({ context }, event) => {
         const eventType = (event as unknown as { type?: string })?.type || 'unknown';
+        // Note: This will use console.log because we're inside XState machine definition
+        // The actual logging happens in the HVACStateMachine class methods
         console.log(`[HVAC] Entering state: ${eventType}`, {
           indoorTemp: context.indoorTemp,
           outdoorTemp: context.outdoorTemp,
@@ -410,8 +413,10 @@ export function createHVACMachine(hvacOptions: HvacOptions) {
 export class HVACStateMachine {
   private machine: HVACMachine;
   private actor?: HVACMachineActor;
+  private logger: LoggerService;
 
   constructor(hvacOptions?: HvacOptions) {
+    this.logger = LoggerService.createModuleLogger('hvac.state-machine');
     this.machine = createHVACMachine(hvacOptions!);
   }
 

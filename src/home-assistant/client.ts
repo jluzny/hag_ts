@@ -8,7 +8,7 @@ import { injectable } from '@needle-di/core';
 // Using native WebSocket API instead of deprecated @std/ws
 import { delay } from '@std/async';
 import type { HassOptions } from '../config/config.ts';
-import { LoggerService } from '../core/logger.ts';
+import { LoggerService, ConnectionLogContext } from '../core/logger.ts';
 import { ConnectionError, StateError, ValidationError as _ValidationError } from '../core/exceptions.ts';
 import { 
   HassStateImpl, 
@@ -43,7 +43,7 @@ export class HomeAssistantClient {
     logger?: LoggerService,
   ) {
     this.config = config!;
-    this.logger = logger!;
+    this.logger = LoggerService.createModuleLogger('home-assistant.client');
   }
 
   /**
@@ -60,8 +60,8 @@ export class HomeAssistantClient {
 
     while (retryCount < this.config.maxRetries) {
       try {
-        this.logger.info('Connecting to Home Assistant', {
-          url: this.config.wsUrl,
+        this.logger.connectionInfo('Connecting to Home Assistant', {
+          wsUrl: this.config.wsUrl,
           attempt: retryCount + 1,
         });
 
@@ -75,7 +75,7 @@ export class HomeAssistantClient {
         
         this.startPingTimer();
         
-        this.logger.info('✅ Connected to Home Assistant successfully');
+        this.logger.connectionInfo('✅ Connected to Home Assistant successfully');
         return;
 
       } catch (error) {

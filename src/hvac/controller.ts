@@ -6,7 +6,7 @@
 
 import { injectable } from '@needle-di/core';
 import { delay } from '@std/async';
-import { LoggerService } from '../core/logger.ts';
+import { LoggerService, HVACLogContext, PerformanceLogContext } from '../core/logger.ts';
 import type { HvacOptions, ApplicationOptions } from '../config/config.ts';
 import { HVACStateMachine } from './state-machine.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
@@ -55,7 +55,7 @@ export class HVACController {
     this.appOptions = appOptions!;
     this.stateMachine = stateMachine!;
     this.haClient = haClient!;
-    this.logger = logger!;
+    this.logger = LoggerService.createModuleLogger('hvac.controller');
     this.hvacAgent = hvacAgent;
   }
 
@@ -68,7 +68,7 @@ export class HVACController {
       return;
     }
 
-    this.logger.info('Starting HVAC controller', {
+    this.logger.hvacInfo('Starting HVAC controller', {
       systemMode: this.hvacOptions.systemMode,
       aiEnabled: this.appOptions.useAi,
       entities: this.hvacOptions.hvacEntities.length,
@@ -556,12 +556,12 @@ export class HVACController {
     const currentState = this.stateMachine.getCurrentState();
     const hvacMode = this.getCurrentHVACMode();
 
-    this.logger.info('State machine evaluation completed', {
+    this.logger.evaluationComplete(
       previousState,
       currentState,
       hvacMode,
-      stateChanged: previousState !== currentState,
-    });
+      previousState !== currentState
+    );
 
     // Execute HVAC actions if mode changed or manual override
     if (hvacMode && (previousState !== currentState || currentState === 'manualOverride')) {
