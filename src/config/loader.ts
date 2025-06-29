@@ -4,7 +4,7 @@
  * Handles loading and validating configuration from YAML files and environment variables.
  */
 
-import { parse } from 'yaml';
+import { parse } from '@std/yaml';
 import { load as loadEnv } from '@std/dotenv';
 import { join } from '@std/path';
 import { SettingsSchema, Settings } from './config.ts';

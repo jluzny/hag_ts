@@ -8,7 +8,7 @@
     ]
   },
   "imports": {
-    "@needle-di/core": "npm:@needle-di/core@^1.0.0",
+    "@needle-di/core": "jsr:@needle-di/core@^1.0.0",
     "@std/testing": "jsr:@std/testing@^1.0.14",
     "@std/assert": "jsr:@std/assert@^1.0.13",
     "@std/log": "jsr:@std/log@^0.224.14",
@@ -18,13 +18,13 @@
     "@std/async": "jsr:@std/async@^1.0.13",
     "@std/http": "jsr:@std/http@^1.0.18",
     "@std/collections": "jsr:@std/collections@^1.1.1",
-    "@cliffy/command": "https://deno.land/x/cliffy@v0.25.7/command/mod.ts",
+    "@cliffy/command": "jsr:@cliffy/command@^1.0.0-rc.7",
+    "@std/yaml": "jsr:@std/yaml@^1.0.8",
     "xstate": "npm:xstate@^5.20.0",
     "@langchain/core": "npm:@langchain/core@^0.3.61",
     "@langchain/openai": "npm:@langchain/openai@^0.5.16",
     "langchain": "npm:langchain@^0.3.29",
-    "zod": "npm:zod@^3.25.67",
-    "yaml": "npm:yaml@^2.8.0"
+    "zod": "npm:zod@^3.25.67"
   },
   "tasks": {
     "dev": "deno run -A src/main.ts --",
