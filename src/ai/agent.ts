@@ -509,7 +509,8 @@ If action is needed, execute the appropriate HVAC control.`;
         outputLength: result.output.length,
         intermediateSteps: result.intermediateSteps?.length || 0,
         processingTimeMs: processingTime,
-        toolsUsed: result.intermediateSteps?.map((step: any) => step.action?.tool) || [],
+        // deno-lint-ignore no-explicit-any
+        toolsUsed: result.intermediateSteps?.map((step: any) => step?.action?.tool) || [],
         conversationLength: this.conversationHistory.length
       });
 
@@ -518,7 +519,8 @@ If action is needed, execute the appropriate HVAC control.`;
         data: {
           aiResponse: result.output,
           steps: result.intermediateSteps?.length || 0,
-          toolsUsed: result.intermediateSteps?.map((step: any) => step.action?.tool) || [],
+          // deno-lint-ignore no-explicit-any
+        toolsUsed: result.intermediateSteps?.map((step: any) => step?.action?.tool) || [],
           processingTimeMs: processingTime,
           entityId: event.entityId,
           temperatureChange: event.oldState && event.newState 
@@ -602,7 +604,8 @@ Use the hvac_control tool to execute the override: {"action": "${action}"${optio
         outputLength: result.output.length,
         intermediateSteps: result.intermediateSteps?.length || 0,
         overrideTimeMs: overrideTime,
-        toolsUsed: result.intermediateSteps?.map((step: any) => step.action?.tool) || [],
+        // deno-lint-ignore no-explicit-any
+        toolsUsed: result.intermediateSteps?.map((step: any) => step?.action?.tool) || [],
         validationPassed: !result.output.toLowerCase().includes('error'),
         conversationLength: this.conversationHistory.length
       });
@@ -614,7 +617,8 @@ Use the hvac_control tool to execute the override: {"action": "${action}"${optio
           action,
           options,
           steps: result.intermediateSteps?.length || 0,
-          toolsUsed: result.intermediateSteps?.map((step: any) => step.action?.tool) || [],
+          // deno-lint-ignore no-explicit-any
+        toolsUsed: result.intermediateSteps?.map((step: any) => step?.action?.tool) || [],
           overrideTimeMs: overrideTime,
           validationResult: !result.output.toLowerCase().includes('error') ? 'approved' : 'rejected'
         },

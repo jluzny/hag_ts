@@ -515,10 +515,10 @@ Deno.test('Heating Strategy - Edge Cases and Boundary Conditions', async (t) => 
     });
     assertEquals(strategy.needsDefrost(exactThresholdData), false);
 
-    // Just below defrost threshold
-    const belowThresholdData = createStateChangeData({
-      weatherTemp: -0.1, // Just below defrost threshold
-    });
+    // Just below defrost threshold - test commented out
+    // const belowThresholdData = createStateChangeData({
+    //   weatherTemp: -0.1, // Just below defrost threshold
+    // });
     // assertEquals(strategy.needsDefrost(belowThresholdData), true);
   });
 });

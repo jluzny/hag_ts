@@ -7,7 +7,8 @@
 import { assertEquals, assertExists, assertRejects, assertThrows } from '@std/assert';
 import { ApplicationContainer, createContainer, getContainer, disposeContainer } from '../../../src/core/container.ts';
 import { TYPES } from '../../../src/core/types.ts';
-import { Settings } from '../../../src/config/config.ts';
+import { Settings, HvacOptions, ApplicationOptions } from '../../../src/config/config.ts';
+import { LoggerService } from '../../../src/core/logger.ts';
 import { SystemMode, LogLevel } from '../../../src/types/common.ts';
 
 // Mock configuration for testing - commented out as unused
@@ -193,7 +194,7 @@ Deno.test('Application Container - Basic Operations', async (t) => {
     const settings = container.get(TYPES.Settings);
     assertExists(settings);
     
-    const hvacOptions = container.get(TYPES.HvacOptions) as any;
+    const hvacOptions = container.get(TYPES.HvacOptions) as HvacOptions;
     assertExists(hvacOptions);
     assertEquals(hvacOptions.tempSensor, 'sensor.indoor_temp');
     
@@ -252,7 +253,7 @@ Deno.test('Application Container - Service Registration', async (t) => {
     assertEquals(container.isBound(TYPES.Logger), true);
     assertEquals(container.isBound(TYPES.ConfigLoader), true);
     
-    const logger = container.get(TYPES.Logger) as any;
+    const logger = container.get(TYPES.Logger) as LoggerService;
     assertExists(logger);
     
     // Logger should have expected methods
@@ -299,7 +300,7 @@ Deno.test('Application Container - AI Integration', async (t) => {
     const container = new ApplicationContainer();
     await container.initialize('ai-config.yaml');
     
-    const appOptions = container.get(TYPES.ApplicationOptions) as any;
+    const appOptions = container.get(TYPES.ApplicationOptions) as ApplicationOptions;
     assertEquals(appOptions.useAi, true);
     
     // Should register AI-related services
@@ -311,7 +312,7 @@ Deno.test('Application Container - AI Integration', async (t) => {
     const container = new ApplicationContainer();
     await container.initialize('test-config.yaml');
     
-    const appOptions = container.get(TYPES.ApplicationOptions) as any;
+    const appOptions = container.get(TYPES.ApplicationOptions) as ApplicationOptions;
     assertEquals(appOptions.useAi, false);
   });
 

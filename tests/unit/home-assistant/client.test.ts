@@ -5,9 +5,8 @@
 import { assertEquals, assertExists, assertRejects } from '@std/assert';
 import { HomeAssistantClient } from '../../../src/home-assistant/client.ts';
 import { HassOptions } from '../../../src/config/config.ts';
-import { ConnectionError, StateError } from '../../../src/core/exceptions.ts';
-import { HassStateImpl, HassServiceCallImpl } from '../../../src/home-assistant/models.ts';
-import { HVACMode } from '../../../src/types/common.ts';
+import { ConnectionError } from '../../../src/core/exceptions.ts';
+import { HassServiceCallImpl } from '../../../src/home-assistant/models.ts';
 import type { LoggerService } from '../../../src/core/logger.ts';
 
 // Mock logger service

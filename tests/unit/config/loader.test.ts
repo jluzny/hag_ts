@@ -605,9 +605,9 @@ Deno.test('Config Loader - Environment Information', async (t) => {
     assertExists(envInfo.platform);
     assertExists(envInfo.environment);
     
-    assertEquals((envInfo.environment as any).hasOpenAI, true);
-    assertEquals((envInfo.environment as any).hasLangSmith, true);
-    assertEquals((envInfo.environment as any).configFile, '/custom/config.yaml');
+    assertEquals((envInfo.environment as Record<string, unknown>).hasOpenAI, true);
+    assertEquals((envInfo.environment as Record<string, unknown>).hasLangSmith, true);
+    assertEquals((envInfo.environment as Record<string, unknown>).configFile, '/custom/config.yaml');
   });
 
   await t.step('should handle missing environment variables', () => {
@@ -615,9 +615,9 @@ Deno.test('Config Loader - Environment Information', async (t) => {
     
     const envInfo = ConfigLoader.getEnvironmentInfo();
     
-    assertEquals((envInfo.environment as any).hasOpenAI, false);
-    assertEquals((envInfo.environment as any).hasLangSmith, false);
-    assertEquals((envInfo.environment as any).configFile, undefined);
+    assertEquals((envInfo.environment as Record<string, unknown>).hasOpenAI, false);
+    assertEquals((envInfo.environment as Record<string, unknown>).hasLangSmith, false);
+    assertEquals((envInfo.environment as Record<string, unknown>).configFile, undefined);
   });
 
   teardownMocks();

@@ -12,7 +12,6 @@ import {
 import { TYPES } from '../../src/core/types.ts';
 import { HVACController } from '../../src/hvac/controller.ts';
 import { HVACStateMachine } from '../../src/hvac/state-machine.ts';
-import { HomeAssistantClient as _HomeAssistantClient } from '../../src/home-assistant/client.ts';
 import { HVACMode, LogLevel, SystemMode } from '../../src/types/common.ts';
 import { Settings } from '../../src/config/config.ts';
 
@@ -293,7 +292,7 @@ Deno.test('HVAC Integration Tests', async (t) => {
 
   await t.step('should handle state machine transitions', async () => {
     // Get initial state
-    const _initialStatus = await controller.getStatus();
+    await controller.getStatus();
 
     // Trigger a manual override that should change state
     await controller.manualOverride('heat', { temperature: 22.0 });

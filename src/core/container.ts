@@ -69,10 +69,10 @@ export class ApplicationContainer {
   /**
    * Initialize container with settings object (for testing)
    */
-  async initializeWithSettings(
+  initializeWithSettings(
     settings: Settings,
     skipRegistrations: string[] = [],
-  ): Promise<void> {
+  ): void {
     try {
       // Use provided settings
       this.settings = settings;
@@ -184,7 +184,6 @@ export class ApplicationContainer {
         const haClient = this.container.get<HomeAssistantClient>(
           TYPES.HomeAssistantClient,
         );
-        const _logger = new LoggerService('HAG.hvac');
         const hvacAgent = this.settings?.appOptions.useAi
           ? this.container.get(
             TYPES.HVACAgent,
@@ -217,13 +216,13 @@ export class ApplicationContainer {
           const haClient = this.container.get<HomeAssistantClient>(
             TYPES.HomeAssistantClient,
           );
-          const _logger = new LoggerService('HAG.ai');
+          const logger = new LoggerService('HAG.ai');
           return new HVACAgent(
             hvacOptions,
             appOptions,
             stateMachine,
             haClient,
-            _logger,
+            logger,
           );
         },
       });
@@ -302,8 +301,8 @@ export class ApplicationContainer {
       }
 
       
-    } catch (error) {
-      
+    } catch (_error) {
+      // Ignore cleanup errors
     }
   }
 }

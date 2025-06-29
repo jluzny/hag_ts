@@ -6,8 +6,7 @@
 
 import { parse } from 'yaml';
 import { load as loadEnv } from '@std/dotenv';
-import { join, dirname as _dirname, fromFileUrl as _fromFileUrl } from '@std/path';
-import { getLogger } from '@std/log';
+import { join } from '@std/path';
 import { SettingsSchema, Settings } from './config.ts';
 import { ConfigurationError } from '../core/exceptions.ts';
 import { LoggerService } from '../core/logger.ts';
@@ -409,7 +408,6 @@ export class ConfigLoader {
    */
   private static applyEnvironmentOverrides(config: unknown): unknown {
     const configObj = config as Record<string, unknown>;
-    const overrides: Record<string, unknown> = {};
     
     logger.debug('🌍 Applying environment variable overrides');
     

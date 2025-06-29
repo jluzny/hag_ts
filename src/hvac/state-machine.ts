@@ -53,14 +53,14 @@ export class HeatingStrategy {
     const evaluationStart = Date.now();
     const { heating } = this.hvacOptions;
     const thresholds = heating.temperatureThresholds;
-    
+
     this.logger.debug('🔥 Evaluating heating conditions', {
       currentTemp: data.currentTemp,
       weatherTemp: data.weatherTemp,
       hour: data.hour,
       isWeekday: data.isWeekday,
       thresholds,
-      targetTemperature: heating.temperature
+      targetTemperature: heating.temperature,
     });
 
     // Check temperature conditions
@@ -68,7 +68,7 @@ export class HeatingStrategy {
       this.logger.debug('❌ Heating rejected: indoor temp at/above max', {
         currentTemp: data.currentTemp,
         indoorMax: thresholds.indoorMax,
-        reason: 'indoor_temp_too_high'
+        reason: 'indoor_temp_too_high',
       });
       return false;
     }
@@ -82,7 +82,9 @@ export class HeatingStrategy {
         weatherTemp: data.weatherTemp,
         outdoorMin: thresholds.outdoorMin,
         outdoorMax: thresholds.outdoorMax,
-        reason: data.weatherTemp < thresholds.outdoorMin ? 'outdoor_too_cold' : 'outdoor_too_hot'
+        reason: data.weatherTemp < thresholds.outdoorMin
+          ? 'outdoor_too_cold'
+          : 'outdoor_too_hot',
       });
       return false;
     }
@@ -93,36 +95,41 @@ export class HeatingStrategy {
         currentHour: data.hour,
         isWeekday: data.isWeekday,
         activeHours: this.hvacOptions.activeHours,
-        reason: 'outside_active_hours'
+        reason: 'outside_active_hours',
       });
       return false;
     }
 
     const shouldHeat = data.currentTemp < thresholds.indoorMin;
     const evaluationTime = Date.now() - evaluationStart;
-    
-    this.logger.info(shouldHeat ? '✅ Heating approved' : '❌ Heating rejected: temp above min', {
-      currentTemp: data.currentTemp,
-      indoorMin: thresholds.indoorMin,
-      shouldHeat,
-      tempDifference: thresholds.indoorMin - data.currentTemp,
-      evaluationTimeMs: evaluationTime,
-      reason: shouldHeat ? 'temp_below_minimum' : 'temp_above_minimum'
-    });
-    
+
+    this.logger.info(
+      shouldHeat
+        ? '✅ Heating approved'
+        : '❌ Heating rejected: temp above min',
+      {
+        currentTemp: data.currentTemp,
+        indoorMin: thresholds.indoorMin,
+        shouldHeat,
+        tempDifference: thresholds.indoorMin - data.currentTemp,
+        evaluationTimeMs: evaluationTime,
+        reason: shouldHeat ? 'temp_below_minimum' : 'temp_above_minimum',
+      },
+    );
+
     return shouldHeat;
   }
 
   needsDefrost(data: StateChangeData): boolean {
     const defrost = this.hvacOptions.heating.defrost;
-    
+
     this.logger.debug('❄️ Evaluating defrost need', {
       weatherTemp: data.weatherTemp,
       defrostEnabled: !!defrost,
       lastDefrost: this.lastDefrost?.toISOString(),
-      defrostConfig: defrost
+      defrostConfig: defrost,
     });
-    
+
     if (!defrost) {
       this.logger.debug('❌ Defrost disabled in configuration');
       return false;
@@ -133,7 +140,7 @@ export class HeatingStrategy {
       this.logger.debug('❌ Defrost not needed: outdoor temp too warm', {
         weatherTemp: data.weatherTemp,
         temperatureThreshold: defrost.temperatureThreshold,
-        tempDifference: data.weatherTemp - defrost.temperatureThreshold
+        tempDifference: data.weatherTemp - defrost.temperatureThreshold,
       });
       return false;
     }
@@ -142,16 +149,21 @@ export class HeatingStrategy {
     if (this.lastDefrost) {
       const timeSinceDefrost = Date.now() - this.lastDefrost.getTime();
       const periodMs = defrost.periodSeconds * 1000;
-      
+
       if (timeSinceDefrost < periodMs) {
-        this.logger.debug('❌ Defrost not needed: too soon since last defrost', {
-          lastDefrost: this.lastDefrost.toISOString(),
-          timeSinceDefrostMs: timeSinceDefrost,
-          timeSinceDefrostMinutes: Math.round(timeSinceDefrost / 60000),
-          periodSeconds: defrost.periodSeconds,
-          remainingTimeMs: periodMs - timeSinceDefrost,
-          remainingTimeMinutes: Math.round((periodMs - timeSinceDefrost) / 60000)
-        });
+        this.logger.debug(
+          '❌ Defrost not needed: too soon since last defrost',
+          {
+            lastDefrost: this.lastDefrost.toISOString(),
+            timeSinceDefrostMs: timeSinceDefrost,
+            timeSinceDefrostMinutes: Math.round(timeSinceDefrost / 60000),
+            periodSeconds: defrost.periodSeconds,
+            remainingTimeMs: periodMs - timeSinceDefrost,
+            remainingTimeMinutes: Math.round(
+              (periodMs - timeSinceDefrost) / 60000,
+            ),
+          },
+        );
         return false;
       }
     }
@@ -160,23 +172,27 @@ export class HeatingStrategy {
       weatherTemp: data.weatherTemp,
       temperatureThreshold: defrost.temperatureThreshold,
       lastDefrost: this.lastDefrost?.toISOString() || 'never',
-      timeSinceLastDefrost: this.lastDefrost 
-        ? Math.round((Date.now() - this.lastDefrost.getTime()) / 60000) + ' minutes'
+      timeSinceLastDefrost: this.lastDefrost
+        ? Math.round((Date.now() - this.lastDefrost.getTime()) / 60000) +
+          ' minutes'
         : 'never',
       periodSeconds: defrost.periodSeconds,
-      durationSeconds: defrost.durationSeconds
+      durationSeconds: defrost.durationSeconds,
     });
-    
+
     return true;
   }
 
   startDefrost(): void {
     this.lastDefrost = new Date();
-    
+
     this.logger.info('❄️ Defrost cycle started', {
       startTime: this.lastDefrost.toISOString(),
       durationSeconds: this.hvacOptions.heating.defrost?.durationSeconds || 300,
-      expectedEndTime: new Date(this.lastDefrost.getTime() + (this.hvacOptions.heating.defrost?.durationSeconds || 300) * 1000).toISOString()
+      expectedEndTime: new Date(
+        this.lastDefrost.getTime() +
+          (this.hvacOptions.heating.defrost?.durationSeconds || 300) * 1000,
+      ).toISOString(),
     });
   }
 
@@ -191,21 +207,21 @@ export class HeatingStrategy {
 
 export class CoolingStrategy {
   private logger = new LoggerService('HAG.hvac.cooling-strategy');
-  
+
   constructor(private hvacOptions: HvacOptions) {}
 
   shouldCool(data: StateChangeData): boolean {
     const evaluationStart = Date.now();
     const { cooling } = this.hvacOptions;
     const thresholds = cooling.temperatureThresholds;
-    
+
     this.logger.debug('❄️ Evaluating cooling conditions', {
       currentTemp: data.currentTemp,
       weatherTemp: data.weatherTemp,
       hour: data.hour,
       isWeekday: data.isWeekday,
       thresholds,
-      targetTemperature: cooling.temperature
+      targetTemperature: cooling.temperature,
     });
 
     // Check temperature conditions
@@ -213,7 +229,7 @@ export class CoolingStrategy {
       this.logger.debug('❌ Cooling rejected: indoor temp at/below min', {
         currentTemp: data.currentTemp,
         indoorMin: thresholds.indoorMin,
-        reason: 'indoor_temp_too_low'
+        reason: 'indoor_temp_too_low',
       });
       return false;
     }
@@ -227,7 +243,9 @@ export class CoolingStrategy {
         weatherTemp: data.weatherTemp,
         outdoorMin: thresholds.outdoorMin,
         outdoorMax: thresholds.outdoorMax,
-        reason: data.weatherTemp < thresholds.outdoorMin ? 'outdoor_too_cold' : 'outdoor_too_hot'
+        reason: data.weatherTemp < thresholds.outdoorMin
+          ? 'outdoor_too_cold'
+          : 'outdoor_too_hot',
       });
       return false;
     }
@@ -238,23 +256,28 @@ export class CoolingStrategy {
         currentHour: data.hour,
         isWeekday: data.isWeekday,
         activeHours: this.hvacOptions.activeHours,
-        reason: 'outside_active_hours'
+        reason: 'outside_active_hours',
       });
       return false;
     }
 
     const shouldCool = data.currentTemp > thresholds.indoorMax;
     const evaluationTime = Date.now() - evaluationStart;
-    
-    this.logger.info(shouldCool ? '✅ Cooling approved' : '❌ Cooling rejected: temp below max', {
-      currentTemp: data.currentTemp,
-      indoorMax: thresholds.indoorMax,
-      shouldCool,
-      tempDifference: data.currentTemp - thresholds.indoorMax,
-      evaluationTimeMs: evaluationTime,
-      reason: shouldCool ? 'temp_above_maximum' : 'temp_below_maximum'
-    });
-    
+
+    this.logger.info(
+      shouldCool
+        ? '✅ Cooling approved'
+        : '❌ Cooling rejected: temp below max',
+      {
+        currentTemp: data.currentTemp,
+        indoorMax: thresholds.indoorMax,
+        shouldCool,
+        tempDifference: data.currentTemp - thresholds.indoorMax,
+        evaluationTimeMs: evaluationTime,
+        reason: shouldCool ? 'temp_above_maximum' : 'temp_below_maximum',
+      },
+    );
+
     return shouldCool;
   }
 
@@ -270,7 +293,10 @@ export class CoolingStrategy {
 /**
  * Create HVAC state machine with XState
  */
-export function createHVACMachine(hvacOptions: HvacOptions, logger: LoggerService) {
+export function createHVACMachine(
+  hvacOptions: HvacOptions,
+  logger: LoggerService,
+) {
   const heatingStrategy = new HeatingStrategy(hvacOptions);
   const coolingStrategy = new CoolingStrategy(hvacOptions);
 
@@ -458,7 +484,7 @@ export function createHVACMachine(hvacOptions: HvacOptions, logger: LoggerServic
           systemMode: context.systemMode,
           currentHour: context.currentHour,
           isWeekday: context.isWeekday,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
       },
       logHeatingStart: ({ context }) => {
@@ -468,7 +494,7 @@ export function createHVACMachine(hvacOptions: HvacOptions, logger: LoggerServic
           outdoorTemp: context.outdoorTemp,
           presetMode: hvacOptions.heating.presetMode,
           thresholds: hvacOptions.heating.temperatureThresholds,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
       },
       logCoolingStart: ({ context }) => {
@@ -478,13 +504,13 @@ export function createHVACMachine(hvacOptions: HvacOptions, logger: LoggerServic
           outdoorTemp: context.outdoorTemp,
           presetMode: hvacOptions.cooling.presetMode,
           thresholds: hvacOptions.cooling.temperatureThresholds,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
       },
       logManualOverride: (_, event) => {
         logger.info(`🎯 [HVAC] Manual override activated`, {
           event,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
       },
       updateConditions: assign(({ context, event }) => {
@@ -505,13 +531,13 @@ export function createHVACMachine(hvacOptions: HvacOptions, logger: LoggerServic
         heatingStrategy.startDefrost();
         logger.info(`❄️ [HVAC] Defrost cycle started`, {
           durationSeconds: hvacOptions.heating.defrost?.durationSeconds || 300,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
       },
       completeDefrost: () => {
         logger.info(`✅ [HVAC] Defrost cycle completed`, {
           timestamp: new Date().toISOString(),
-          nextState: 'heating'
+          nextState: 'heating',
         });
       },
     },
@@ -619,35 +645,35 @@ export class HVACStateMachine {
     this.logger.info('🚀 Starting HVAC state machine', {
       machineId: this.machine.id,
       initialState: 'idle', // XState v5 doesn't expose initial directly
-      alreadyRunning: !!this.actor
+      alreadyRunning: !!this.actor,
     });
-    
+
     if (this.actor) {
       this.logger.error('❌ State machine is already running');
       throw new StateError('State machine is already running');
     }
 
     this.actor = createActor(this.machine);
-    
+
     // Add state transition logging
     this.actor.subscribe((snapshot) => {
       this.logger.info('🔄 State machine transition', {
         toState: snapshot.value,
         context: snapshot.context,
         status: snapshot.status,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     });
-    
+
     this.actor.start();
-    
+
     const initialSnapshot = this.actor.getSnapshot();
-    
+
     this.logger.info('✅ HVAC state machine started', {
       initialState: initialSnapshot.value,
       initialContext: initialSnapshot.context,
       machineStatus: initialSnapshot.status,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   }
 
@@ -657,21 +683,21 @@ export class HVACStateMachine {
   stop(): void {
     this.logger.info('🛑 Stopping HVAC state machine', {
       currentState: this.actor?.getSnapshot().value || 'not_running',
-      isRunning: !!this.actor
+      isRunning: !!this.actor,
     });
-    
+
     if (this.actor) {
       const finalSnapshot = this.actor.getSnapshot();
-      
+
       this.logger.debug('📋 Final state machine status', {
         finalState: finalSnapshot.value,
         finalContext: finalSnapshot.context,
-        machineStatus: finalSnapshot.status
+        machineStatus: finalSnapshot.status,
       });
-      
+
       this.actor.stop();
       this.actor = undefined;
-      
+
       this.logger.info('✅ HVAC state machine stopped');
     } else {
       this.logger.debug('🔄 State machine was not running');
@@ -685,37 +711,39 @@ export class HVACStateMachine {
     if (!this.actor) {
       this.logger.error('❌ Cannot send event: state machine not running', {
         event,
-        eventType: event.type
+        eventType: event.type,
       });
       throw new StateError('State machine is not running');
     }
-    
+
     const beforeSnapshot = this.actor.getSnapshot();
-    
+
     this.logger.debug('📤 Sending event to state machine', {
       event,
       eventType: event.type,
       currentState: beforeSnapshot.value,
       context: beforeSnapshot.context,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-    
+
     this.actor.send(event);
-    
+
     const afterSnapshot = this.actor.getSnapshot();
-    
+
     if (beforeSnapshot.value !== afterSnapshot.value) {
       this.logger.info('⚙️ Event triggered state transition', {
         event,
         fromState: beforeSnapshot.value,
         toState: afterSnapshot.value,
-        contextChanged: JSON.stringify(beforeSnapshot.context) !== JSON.stringify(afterSnapshot.context)
+        contextChanged: JSON.stringify(beforeSnapshot.context) !==
+          JSON.stringify(afterSnapshot.context),
       });
     } else {
       this.logger.debug('🔄 Event processed without state change', {
         event,
         currentState: afterSnapshot.value,
-        contextChanged: JSON.stringify(beforeSnapshot.context) !== JSON.stringify(afterSnapshot.context)
+        contextChanged: JSON.stringify(beforeSnapshot.context) !==
+          JSON.stringify(afterSnapshot.context),
       });
     }
   }
@@ -746,10 +774,14 @@ export class HVACStateMachine {
   updateTemperatures(indoor: number, outdoor: number): void {
     const context = this.getContext();
     const tempChange = {
-      indoorChange: context.indoorTemp ? indoor - context.indoorTemp : undefined,
-      outdoorChange: context.outdoorTemp ? outdoor - context.outdoorTemp : undefined
+      indoorChange: context.indoorTemp
+        ? indoor - context.indoorTemp
+        : undefined,
+      outdoorChange: context.outdoorTemp
+        ? outdoor - context.outdoorTemp
+        : undefined,
     };
-    
+
     this.logger.info('🌡️ Updating temperature conditions', {
       indoor,
       outdoor,
@@ -757,10 +789,11 @@ export class HVACStateMachine {
       previousOutdoor: context.outdoorTemp,
       indoorChange: tempChange.indoorChange,
       outdoorChange: tempChange.outdoorChange,
-      significantChange: Math.abs(tempChange.indoorChange || 0) > 0.5 || Math.abs(tempChange.outdoorChange || 0) > 2,
-      timestamp: new Date().toISOString()
+      significantChange: Math.abs(tempChange.indoorChange || 0) > 0.5 ||
+        Math.abs(tempChange.outdoorChange || 0) > 2,
+      timestamp: new Date().toISOString(),
     });
-    
+
     this.send({
       type: 'UPDATE_TEMPERATURES',
       indoor,
@@ -774,7 +807,7 @@ export class HVACStateMachine {
   evaluateConditions(): void {
     const currentState = this.getCurrentState();
     const context = this.getContext();
-    
+
     this.logger.info('🎯 Triggering condition evaluation', {
       currentState,
       hasTemperatureData: !!(context.indoorTemp && context.outdoorTemp),
@@ -783,9 +816,9 @@ export class HVACStateMachine {
       systemMode: context.systemMode,
       currentHour: context.currentHour,
       isWeekday: context.isWeekday,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-    
+
     this.send({ type: 'AUTO_EVALUATE' });
   }
 
@@ -795,26 +828,26 @@ export class HVACStateMachine {
   manualOverride(mode: HVACMode, temperature?: number): void {
     const currentState = this.getCurrentState();
     const context = this.getContext();
-    
+
     this.logger.info('🎯 Manual override initiated', {
       requestedMode: mode,
       requestedTemperature: temperature,
       currentState,
       currentContext: context,
       systemMode: context.systemMode,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
-    
+
     this.send({
       type: 'MANUAL_OVERRIDE',
       mode,
       temperature,
     });
-    
+
     this.logger.debug('✅ Manual override event sent', {
       mode,
       temperature,
-      newState: this.getCurrentState()
+      newState: this.getCurrentState(),
     });
   }
 
@@ -842,4 +875,3 @@ export class HVACStateMachine {
     };
   }
 }
-

@@ -11,32 +11,7 @@ import { HVACStateMachine } from '../../../src/hvac/state-machine.ts';
 import { HomeAssistantClient } from '../../../src/home-assistant/client.ts';
 import { HvacOptions, ApplicationOptions } from '../../../src/config/config.ts';
 import { HVACMode, SystemMode, LogLevel } from '../../../src/types/common.ts';
-import { HassEventImpl } from '../../../src/home-assistant/models.ts';
 
-// Mock logger service that captures logs
-class MockLoggerService {
-  logs: Array<{ level: string; message: string; data?: Record<string, unknown> }> = [];
-
-  info(message: string, data?: Record<string, unknown>): void {
-    this.logs.push({ level: 'info', message, data });
-  }
-
-  error(message: string, _error?: unknown, data?: Record<string, unknown>): void {
-    this.logs.push({ level: 'error', message, data });
-  }
-
-  debug(message: string, data?: Record<string, unknown>): void {
-    this.logs.push({ level: 'debug', message, data });
-  }
-
-  warning(message: string, data?: Record<string, unknown>): void {
-    this.logs.push({ level: 'warning', message, data });
-  }
-
-  warn(message: string, data?: Record<string, unknown>): void {
-    this.logs.push({ level: 'warn', message, data });
-  }
-}
 
 // Mock state machine
 class MockHVACStateMachine {
@@ -122,7 +97,7 @@ class MockHomeAssistantClient {
     return true;
   }
 
-  async subscribeEvents(eventType: string): Promise<void> {
+  subscribeEvents(eventType: string): void {
     this.subscribedEvents.add(eventType);
     // Mock implementation - just track that we subscribed
   }
@@ -143,7 +118,7 @@ class MockHomeAssistantClient {
     };
   }
 
-  async callService(serviceCall: { domain: string; service: string; serviceData?: unknown }): Promise<void> {
+  callService(serviceCall: { domain: string; service: string; serviceData?: unknown }): void {
     this.serviceCalls.push({
       domain: serviceCall.domain,
       service: serviceCall.service,
