@@ -17,6 +17,10 @@ import { HVACAgent } from '../ai/agent.ts';
 import { TYPES } from './types.ts';
 import { LoggerService } from './logger.ts';
 import { HVACStateMachine } from '../hvac/state-machine.ts';
+import { HVACLangGraphStateMachine } from '../hvac/state-machine-lg.ts';
+import { XStateHVACStateMachineAdapter } from '../hvac/state-machine-xstate-adapter.ts';
+import { LangGraphHVACStateMachineAdapter } from '../hvac/state-machine-lg-adapter.ts';
+import { IHVACStateMachine } from '../hvac/state-machine-interface.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
 
 // Re-export for backward compatibility
@@ -162,11 +166,24 @@ export class ApplicationContainer {
    * Register HVAC services
    */
   public registerHVACServices(): void {
+    // Register state machine based on experimental feature flag
     this.container.bind({
       provide: TYPES.HVACStateMachine,
       useFactory: () => {
         const hvacOptions = this.container.get<HvacOptions>(TYPES.HvacOptions);
-        return new HVACStateMachine(hvacOptions);
+        const appOptions = this.container.get<ApplicationOptions>(TYPES.ApplicationOptions);
+        const logger = new LoggerService('HAG.hvac.state-machine-factory');
+        
+        // Check for LangGraph experiment feature flag
+        const useLangGraph = appOptions.experimentalFeatures?.includes('langgraph-state-machine') || false;
+        
+        if (useLangGraph) {
+          logger.info('🧪 [Experiment] Creating LangGraph state machine implementation');
+          return new LangGraphHVACStateMachineAdapter(hvacOptions, appOptions, logger);
+        } else {
+          logger.info('🔄 Creating XState state machine implementation (default)');
+          return new XStateHVACStateMachineAdapter(hvacOptions, logger);
+        }
       },
     });
     this.container.bind({
@@ -178,9 +195,9 @@ export class ApplicationContainer {
         const appOptions = this.container.get<ApplicationOptions>(
           TYPES.ApplicationOptions,
         );
-        const stateMachine = this.container.get<HVACStateMachine>(
+        const stateMachine = this.container.get<IHVACStateMachine>(
           TYPES.HVACStateMachine,
-        );
+        ) as unknown as HVACStateMachine;
         const haClient = this.container.get<HomeAssistantClient>(
           TYPES.HomeAssistantClient,
         );
@@ -210,9 +227,9 @@ export class ApplicationContainer {
           const appOptions = this.container.get<ApplicationOptions>(
             TYPES.ApplicationOptions,
           );
-          const stateMachine = this.container.get<HVACStateMachine>(
+          const stateMachine = this.container.get<IHVACStateMachine>(
             TYPES.HVACStateMachine,
-          );
+          ) as unknown as HVACStateMachine;
           const haClient = this.container.get<HomeAssistantClient>(
             TYPES.HomeAssistantClient,
           );

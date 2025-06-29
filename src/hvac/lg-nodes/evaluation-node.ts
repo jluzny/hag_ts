@@ -8,8 +8,7 @@
 
 import { HVACLangGraphState, EvaluationHistoryEntry } from '../lg-types/hvac-state.ts';
 import { SystemMode } from '../../types/common.ts';
-import { HeatingStrategy } from '../heating-strategy.ts';
-import { CoolingStrategy } from '../cooling-strategy.ts';
+import { HeatingStrategy, CoolingStrategy } from '../state-machine.ts';
 
 /**
  * Evaluation node - Core decision making logic

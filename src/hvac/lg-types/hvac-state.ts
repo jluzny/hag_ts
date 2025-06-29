@@ -83,6 +83,11 @@ export interface HVACLangGraphState {
   graphStartTime: Date;
   totalTransitions: number;
   
+  // Action timestamps for state machine transition tracking
+  lastActionTimestamp?: Date;
+  lastIdleTimestamp?: Date;
+  lastShutdownTimestamp?: Date;
+  
   // Error handling
   lastError?: {
     timestamp: Date;
@@ -99,6 +104,29 @@ export interface HVACLangGraphState {
     setBy?: string;
     timestamp?: Date;
     expiresAt?: Date;
+  };
+  
+  // Shutdown result tracking (for off node)
+  shutdownResult?: {
+    shutdownActions: string[];
+    hvacEntitiesOff: boolean;
+    monitoringActive: boolean;
+    emergencyContactsNotified: boolean;
+  };
+  
+  // Action results tracking (for specific nodes)
+  lastActionResult?: {
+    action: string;
+    success: boolean;
+    timestamp: Date;
+    details?: Record<string, unknown>;
+  };
+  
+  idleMaintenanceResult?: {
+    maintenancePerformed: string[];
+    nextMaintenanceIn: string;
+    systemHealthStatus: "good" | "warning" | "error";
+    energyUsageOptimal: boolean;
   };
 }
 

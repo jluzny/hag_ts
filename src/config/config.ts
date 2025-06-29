@@ -110,6 +110,7 @@ export const ApplicationOptionsSchema = z.object({
   aiTemperature: z.number().min(0).max(2).default(0.1).describe('AI model temperature'),
   openaiApiKey: z.string().optional().describe('OpenAI API key for AI agent'),
   dryRun: z.boolean().default(false).describe('Enable dry run mode (no actual HA calls)'),
+  experimentalFeatures: z.array(z.string()).optional().describe('Experimental features to enable (e.g., ["langgraph-state-machine"])'),
 });
 
 /**
