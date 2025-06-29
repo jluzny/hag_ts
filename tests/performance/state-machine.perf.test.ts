@@ -1,0 +1,223 @@
+#!/usr/bin/env -S deno run --allow-all
+/**
+ * Performance Benchmark: HVAC State Machine
+ * 
+ * This script benchmarks the performance of the XState HVAC implementation
+ * to ensure optimal performance under various load conditions.
+ */
+
+import { assertEquals, assertExists } from '@std/assert';
+import { createContainer } from '../../src/core/container.ts';
+import { XStateHVACStateMachineAdapter } from '../../src/hvac/state-machine-xstate-adapter.ts';
+import { HVACMode, SystemMode } from '../../src/types/common.ts';
+
+interface BenchmarkResult {
+  operation: string;
+  iterations: number;
+  totalTimeMs: number;
+  avgTimeMs: number;
+  minTimeMs: number;
+  maxTimeMs: number;
+  memoryUsageMB?: number;
+}
+
+/**
+ * Benchmark a specific operation
+ */
+async function benchmarkOperation(
+  name: string,
+  operation: () => Promise<void> | void,
+  iterations: number = 100
+): Promise<BenchmarkResult> {
+  const times: number[] = [];
+  
+  // Warm up
+  for (let i = 0; i < 5; i++) {
+    await operation();
+  }
+  
+  // Force garbage collection if available
+  if ((globalThis as any).gc) {
+    (globalThis as any).gc();
+  }
+  
+  const memoryBefore = (Deno as any).memoryUsage?.() || { rss: 0 };
+  const startTime = performance.now();
+  
+  // Benchmark iterations
+  for (let i = 0; i < iterations; i++) {
+    const iterationStart = performance.now();
+    await operation();
+    const iterationTime = performance.now() - iterationStart;
+    times.push(iterationTime);
+  }
+  
+  const totalTime = performance.now() - startTime;
+  const memoryAfter = (Deno as any).memoryUsage?.() || { rss: 0 };
+  
+  return {
+    operation: name,
+    iterations,
+    totalTimeMs: totalTime,
+    avgTimeMs: totalTime / iterations,
+    minTimeMs: Math.min(...times),
+    maxTimeMs: Math.max(...times),
+    memoryUsageMB: (memoryAfter.rss - memoryBefore.rss) / 1024 / 1024
+  };
+}
+
+/**
+ * Performance test for XState HVAC State Machine
+ */
+async function testXStatePerformance(): Promise<void> {
+  console.log('🔄 Benchmarking XState HVAC State Machine...\n');
+  
+  // Create container with default (XState) config
+  const container = await createContainer('./config/hvac_config.yaml');
+  const stateMachine = container.get(Symbol.for('HVACStateMachine')) as XStateHVACStateMachineAdapter;
+  
+  const results: BenchmarkResult[] = [];
+  
+  // Test 1: Start/Stop Performance
+  results.push(await benchmarkOperation(
+    'Start/Stop Cycle',
+    async () => {
+      await stateMachine.start();
+      await stateMachine.stop();
+    },
+    50
+  ));
+  
+  // Restart for remaining tests
+  await stateMachine.start();
+  
+  // Test 2: Temperature Updates
+  results.push(await benchmarkOperation(
+    'Temperature Update',
+    () => {
+      stateMachine.updateTemperature(20 + Math.random() * 10);
+    },
+    1000
+  ));
+  
+  // Test 3: Manual Override
+  const modes = ['heating', 'cooling', 'idle', 'off'] as const;
+  results.push(await benchmarkOperation(
+    'Manual Override',
+    () => {
+      const mode = modes[Math.floor(Math.random() * modes.length)];
+      stateMachine.manualOverride(mode);
+    },
+    500
+  ));
+  
+  // Test 4: Status Queries
+  results.push(await benchmarkOperation(
+    'Status Query',
+    () => {
+      stateMachine.getStatus();
+    },
+    2000
+  ));
+  
+  // Test 5: State Evaluation
+  results.push(await benchmarkOperation(
+    'State Evaluation',
+    async () => {
+      await stateMachine.evaluate();
+    },
+    200
+  ));
+  
+  await stateMachine.stop();
+  
+  // Display results
+  console.log('📊 Performance Results:\n');
+  console.log('| Operation | Iterations | Avg Time (ms) | Min/Max (ms) | Memory (MB) |');
+  console.log('|-----------|------------|---------------|---------------|-------------|');
+  
+  for (const result of results) {
+    const avgTime = result.avgTimeMs.toFixed(2);
+    const minTime = result.minTimeMs.toFixed(2);
+    const maxTime = result.maxTimeMs.toFixed(2);
+    const memory = result.memoryUsageMB?.toFixed(2) || 'N/A';
+    
+    console.log(`| ${result.operation.padEnd(9)} | ${result.iterations.toString().padEnd(10)} | ${avgTime.padEnd(13)} | ${minTime}/${maxTime.padEnd(8)} | ${memory.padEnd(11)} |`);
+  }
+  
+  // Performance assertions
+  const tempUpdateResult = results.find(r => r.operation === 'Temperature Update');
+  const statusQueryResult = results.find(r => r.operation === 'Status Query');
+  
+  if (tempUpdateResult) {
+    // Temperature updates should be very fast (< 1ms average)
+    assertEquals(tempUpdateResult.avgTimeMs < 1.0, true, 'Temperature updates should be < 1ms on average');
+  }
+  
+  if (statusQueryResult) {
+    // Status queries should be extremely fast (< 0.1ms average)
+    assertEquals(statusQueryResult.avgTimeMs < 0.1, true, 'Status queries should be < 0.1ms on average');
+  }
+  
+  console.log('\n✅ All performance benchmarks completed successfully!');
+}
+
+/**
+ * Stress test for concurrent operations
+ */
+async function testConcurrentOperations(): Promise<void> {
+  console.log('\n🚀 Testing Concurrent Operations...\n');
+  
+  const container = await createContainer('./config/hvac_config.yaml');
+  const stateMachine = container.get(Symbol.for('HVACStateMachine')) as XStateHVACStateMachineAdapter;
+  
+  await stateMachine.start();
+  
+  const startTime = performance.now();
+  const concurrentOps = 50;
+  
+  // Run multiple operations concurrently
+  const promises = [];
+  for (let i = 0; i < concurrentOps; i++) {
+    promises.push(
+      Promise.all([
+        stateMachine.updateTemperature(20 + Math.random() * 5),
+        stateMachine.getStatus(),
+        stateMachine.evaluate()
+      ])
+    );
+  }
+  
+  await Promise.all(promises);
+  
+  const totalTime = performance.now() - startTime;
+  
+  console.log(`📊 Concurrent Operations Results:`);
+  console.log(`   Operations: ${concurrentOps * 3} (${concurrentOps} batches of 3)`);
+  console.log(`   Total Time: ${totalTime.toFixed(2)}ms`);
+  console.log(`   Avg per batch: ${(totalTime / concurrentOps).toFixed(2)}ms`);
+  console.log(`   Avg per operation: ${(totalTime / (concurrentOps * 3)).toFixed(2)}ms`);
+  
+  await stateMachine.stop();
+  
+  // Assert reasonable performance under concurrency
+  const avgPerOp = totalTime / (concurrentOps * 3);
+  assertEquals(avgPerOp < 5.0, true, 'Concurrent operations should average < 5ms each');
+  
+  console.log('✅ Concurrent operations test completed successfully!');
+}
+
+// Run performance tests if called directly
+if (import.meta.main) {
+  console.log('⚡ HVAC State Machine Performance Tests\n');
+  
+  try {
+    await testXStatePerformance();
+    await testConcurrentOperations();
+    
+    console.log('\n🎉 All performance tests passed!');
+  } catch (error) {
+    console.error('❌ Performance test failed:', error.message);
+    Deno.exit(1);
+  }
+}

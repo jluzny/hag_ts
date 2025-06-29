@@ -5,7 +5,7 @@
  * controller structure while providing enhanced capabilities.
  */
 
-import { HVACLangGraphStateMachine } from './state-machine-lg.ts';
+import { HVACLangGraphStateMachineV2 } from './state-machine-lg-v2.ts';
 import { IHVACStateMachine } from './state-machine-interface.ts';
 import { HVACMode, SystemMode } from '../types/common.ts';
 import { HvacOptions, ApplicationOptions } from '../config/config.ts';
@@ -15,14 +15,14 @@ import type { LoggerService } from '../core/logger.ts';
  * Adapter that provides enhanced LangGraph capabilities to the controller
  */
 export class LangGraphHVACStateMachineAdapter implements IHVACStateMachine {
-  private langGraphStateMachine: HVACLangGraphStateMachine;
+  private langGraphStateMachine: HVACLangGraphStateMachineV2;
   
   constructor(
     private hvacOptions: HvacOptions,
     private appOptions: ApplicationOptions,
     private logger: LoggerService
   ) {
-    this.langGraphStateMachine = new HVACLangGraphStateMachine(
+    this.langGraphStateMachine = new HVACLangGraphStateMachineV2(
       hvacOptions,
       appOptions,
       logger

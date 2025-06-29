@@ -6,7 +6,7 @@
  * HVAC system states and transitions.
  */
 
-import { StateGraph } from "@langchain/langgraph";
+import { StateGraph, Annotation } from "@langchain/langgraph";
 import { HVACLangGraphState, createDefaultHVACState, HVACInputEvent } from './lg-types/hvac-state.ts';
 import { evaluationNode } from './lg-nodes/evaluation-node.ts';
 import { heatingNode } from './lg-nodes/heating-node.ts';

@@ -1,84 +1,133 @@
-# HAG Helper Scripts
+# HAG Development Scripts
 
-This directory contains debugging and testing scripts for the HAG (Home Assistant aGentic HVAC Automation) system.
+This directory contains helper utilities and interactive tools for HAG system validation and debugging.
+
+## Organization
+
+**Tests have been moved to the `tests/` directory for better organization:**
+- `tests/ai/` - AI component tests
+- `tests/integration/` - Integration and Home Assistant tests  
+- `tests/performance/` - Performance benchmarks
+- `tests/system/` - System validation tests
+
+**Scripts now contain only helper utilities for prompt-driven validation.**
 
 ## Available Scripts
 
-### 🔧 `test_ha_connection.ts`
-**Comprehensive connection test script**
-- Tests both REST API and WebSocket connectivity
-- Lists available temperature sensors
-- Validates authentication flow
-- **Usage**: `deno run --allow-net --allow-read --allow-env --allow-write scripts/test_ha_connection.ts`
+### Interactive Validation
+- `interactive_validator.ts` - Interactive system validation with user prompts
+- `validation_helpers.ts` - Utility functions for validation and health checking
 
-### 🌡️ `test_sensors.ts`
-**Temperature sensor availability test**
-- Tests specific temperature sensors configured in the system
-- Useful for verifying sensor entity IDs are correct
-- **Usage**: `deno run --allow-net --allow-read --allow-env --allow-write scripts/test_sensors.ts`
+### Home Assistant Utilities
+- `list_entities.ts` - List all available Home Assistant entities
+- `call_service.ts` - Call Home Assistant services directly
+- `check_hvac_status.ts` - Check current HVAC system status
+- `debug_websocket.ts` - Debug WebSocket connection issues
 
-### 📊 `list_entities.ts`
-**Home Assistant entity discovery**
-- Lists available entities by type (sensor, climate, weather)
-- Filters for temperature-related entities
-- Useful for finding correct sensor names
-- **Usage**: `deno run --allow-net --allow-read --allow-env --allow-write scripts/list_entities.ts`
+### Development Utilities
+- `debug_langgraph_api.ts` - Debug LangGraph API compatibility issues
+- `hvac_prompts.md` - Documentation for HVAC-related prompts and scenarios
 
-### 🌐 `test_rest_api.ts`
-**Direct REST API testing**
-- Tests Home Assistant REST API calls without using HAG client
-- Useful for debugging REST API URL construction and authentication
-- **Usage**: `deno run --allow-net --allow-env scripts/test_rest_api.ts`
+## Usage
 
-### 🔌 `debug_websocket.ts`
-**WebSocket connection debugging**
-- Step-by-step WebSocket connection and authentication testing
-- Shows connection stats and sensor data access
-- **Usage**: `deno run --allow-net --allow-read --allow-env --allow-write scripts/debug_websocket.ts`
+### Interactive Validation
+Run the interactive validator for step-by-step system validation:
+
+```bash
+deno run --allow-all scripts/interactive_validator.ts
+```
+
+This will guide you through:
+- System requirements checking
+- Network connectivity testing  
+- Configuration file validation
+- Home Assistant connectivity
+- AI components availability
+- Binary validation
+
+### Direct Utilities
+```bash
+# List Home Assistant entities
+HASS_URL=http://homeassistant.local:8123 HASS_TOKEN=your_token deno run --allow-all scripts/list_entities.ts
+
+# Check HVAC status
+deno run --allow-all scripts/check_hvac_status.ts
+
+# Debug WebSocket connection
+deno run --allow-all scripts/debug_websocket.ts
+```
+
+### Running Tests
+For comprehensive automated testing, use the test scripts:
+
+```bash
+# Run all tests
+deno task test
+
+# Run specific test categories
+deno run --allow-all tests/ai/test_ai_decision_engine.ts
+deno run --allow-all tests/system/test_production_readiness.ts
+deno run --allow-all tests/performance/benchmark_state_machines.ts
+```
+
+## Environment Variables
+
+Scripts require these environment variables:
+- `HASS_URL` - Home Assistant URL (e.g., http://homeassistant.local:8123)
+- `HASS_TOKEN` - Long-lived access token from Home Assistant
+- `OPENAI_API_KEY` - OpenAI API key for AI functionality (optional)
+
+## Script Categories
+
+### 🔍 **Interactive Validation**
+User-guided validation tools for system setup and troubleshooting.
+
+### 🏠 **Home Assistant Utilities**  
+Direct integration tools for debugging Home Assistant connectivity.
+
+### 🛠️ **Development Utilities**
+Low-level debugging and development support tools.
+
+### 🧪 **Testing (Moved to tests/)**
+All comprehensive test suites have been moved to the `tests/` directory for better organization and automated test running.
 
 ## Quick Reference
 
-All scripts are executable and can be run directly:
-
 ```bash
-# Make scripts executable (already done)
-chmod +x scripts/*.ts
+# Interactive validation (recommended for first-time setup)
+deno run --allow-all scripts/interactive_validator.ts
 
-# Run any script directly
-./scripts/test_ha_connection.ts
-./scripts/debug_websocket.ts
+# List available Home Assistant entities
+deno run --allow-all scripts/list_entities.ts
+
+# Debug WebSocket connectivity
+deno run --allow-all scripts/debug_websocket.ts
+
+# Run comprehensive test suite
+deno task test
 ```
 
-## Environment Requirements
-
-These scripts require the same environment variables as the main HAG application:
-
-- `HASS_HassOptions__Token` - Home Assistant long-lived access token
-- Valid `config/hvac_config.yaml` configuration file
-
-## Troubleshooting
-
-1. **Connection Issues**: Run `test_ha_connection.ts` first
-2. **Sensor Not Found**: Use `list_entities.ts` to discover available sensors
-3. **Authentication Problems**: Check `debug_websocket.ts` for detailed auth flow
-4. **REST API Issues**: Use `test_rest_api.ts` to test direct API calls
-
-## Example Output
+## Example Interactive Session
 
 ```bash
-$ ./scripts/test_ha_connection.ts
-🏠 Home Assistant Connection Test
+$ deno run --allow-all scripts/interactive_validator.ts
+🚀 HAG Interactive System Validator
+===================================
 
-📡 Testing REST API directly...
-✅ REST API working - Found 13 temperature sensors
-   sensor.1st_floor_hall_multisensor_temperature: 24.7 °C
-   sensor.openweathermap_temperature: 20.13 °C
+🔍 Check system requirements?
+Enter "y" to confirm, any other key to skip:
+y
 
-🔌 Testing WebSocket connection...
-✅ WebSocket connected and authenticated
-✅ sensor.1st_floor_hall_multisensor_temperature: 24.7 °C
-✅ sensor.openweathermap_temperature: 20.13 °C
-✅ WebSocket disconnected cleanly
+📊 System Requirements
+==================================================
+✅ Deno Runtime
+   Version: 2.0.0
+✅ Environment Variable: HOME
+   Set
+✅ File System Access
+   Read/write permissions available
 
-🎯 Connection test complete
+📈 Success Rate: 100% (3/3)
+
+⏸️  Press Enter to continue...
 ```
