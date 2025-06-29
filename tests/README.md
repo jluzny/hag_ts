@@ -1,17 +1,22 @@
 # HAG Test Suite
 
-This directory contains comprehensive test suites for the HAG (Home Assistant aGentic HVAC Automation) system.
+This directory contains comprehensive test suites for the HAG (Home Assistant
+aGentic HVAC Automation) system.
 
 ## Test Organization
 
 ### 🤖 **AI Component Tests** (`tests/ai/`)
-- `test_ai_decision_engine.ts` - AI decision making capabilities with OpenAI GPT-4
+
+- `test_ai_decision_engine.ts` - AI decision making capabilities with OpenAI
+  GPT-4
 - `test_adaptive_learning.ts` - Adaptive learning and user preference tracking
 - `test_optimization_analytics.ts` - HVAC optimization and predictive analytics
 - `test_smart_scheduler.ts` - Smart scheduling and automation features
-- `test_monitoring_dashboard.ts` - Real-time monitoring and dashboard functionality
+- `test_monitoring_dashboard.ts` - Real-time monitoring and dashboard
+  functionality
 
 ### 🔗 **Integration Tests** (`tests/integration/`)
+
 - `hvac-integration.test.ts` - Full HVAC system integration testing
 - `test_ha_connection.ts` - Home Assistant WebSocket/REST API connectivity
 - `test_sensors.ts` - Temperature sensor validation and entity state testing
@@ -19,6 +24,7 @@ This directory contains comprehensive test suites for the HAG (Home Assistant aG
 - `test_rollback_mechanism.ts` - System rollback and recovery mechanisms
 
 #### LangGraph Integration (`tests/integration/langgraph/`)
+
 - `test_langgraph.ts` - Basic LangGraph state machine testing
 - `test_langgraph_v2_fix.ts` - Improved LangGraph implementation testing
 - `test_langgraph_v2_performance.ts` - LangGraph v2 performance validation
@@ -27,12 +33,16 @@ This directory contains comprehensive test suites for the HAG (Home Assistant aG
 - `test_langgraph_stability.ts` - Long-running stability testing
 
 ### ⚡ **Performance Tests** (`tests/performance/`)
-- `benchmark_state_machines.ts` - Performance comparison between XState and LangGraph
+
+- `benchmark_state_machines.ts` - Performance comparison between XState and
+  LangGraph
 
 ### 🔧 **System Tests** (`tests/system/`)
+
 - `test_production_readiness.ts` - Comprehensive production readiness validation
 
 ### 📦 **Unit Tests** (`tests/unit/`)
+
 - `ai/agent.test.ts` - AI agent unit tests
 - `config/loader.test.ts` - Configuration loading and validation
 - `config/settings.test.ts` - Settings schema validation
@@ -48,6 +58,7 @@ This directory contains comprehensive test suites for the HAG (Home Assistant aG
 ## Running Tests
 
 ### All Tests
+
 ```bash
 # Run all tests
 deno task test
@@ -57,6 +68,7 @@ deno task test:coverage
 ```
 
 ### Test Categories
+
 ```bash
 # Unit tests only
 deno task test:unit
@@ -69,6 +81,7 @@ deno task test:watch
 ```
 
 ### Specific Test Files
+
 ```bash
 # AI component tests
 deno run --allow-all tests/ai/test_ai_decision_engine.ts
@@ -88,15 +101,19 @@ deno run --allow-all tests/integration/test_ha_connection.ts
 ## Environment Requirements
 
 ### Required Environment Variables
+
 - `HASS_URL` - Home Assistant URL (e.g., `http://homeassistant.local:8123`)
 - `HASS_TOKEN` - Long-lived access token from Home Assistant
 
 ### Optional Environment Variables
+
 - `OPENAI_API_KEY` - OpenAI API key for AI component testing
 - `LOG_LEVEL` - Logging level (`debug`, `info`, `warning`, `error`)
 
 ### Test Configuration
+
 Tests use the same configuration system as the main application:
+
 - `config.yaml` - Main configuration file
 - `config/hvac_config.yaml` - HVAC-specific configuration
 - Environment variable overrides supported
@@ -104,6 +121,7 @@ Tests use the same configuration system as the main application:
 ## Test Features
 
 ### 🔍 **Comprehensive Coverage**
+
 - **Unit Tests**: Individual component testing with mocks
 - **Integration Tests**: Full system integration with Home Assistant
 - **AI Tests**: OpenAI integration and AI decision making
@@ -111,6 +129,7 @@ Tests use the same configuration system as the main application:
 - **System Tests**: Production readiness and deployment validation
 
 ### 🚀 **Production Validation**
+
 - Environment requirements checking
 - Configuration validation
 - Security settings verification
@@ -119,6 +138,7 @@ Tests use the same configuration system as the main application:
 - System health monitoring
 
 ### 🤖 **AI Testing**
+
 - Decision engine accuracy and fallback mechanisms
 - Optimization algorithm effectiveness
 - Predictive analytics accuracy
@@ -126,6 +146,7 @@ Tests use the same configuration system as the main application:
 - Smart scheduling rule execution
 
 ### 📊 **Performance Testing**
+
 - State machine transition performance
 - Memory usage optimization
 - CPU utilization monitoring
@@ -135,6 +156,7 @@ Tests use the same configuration system as the main application:
 ## Test Results
 
 ### Current Status (Latest Run)
+
 - **Unit Tests**: 72/73 passed (99% success rate)
 - **Production Readiness**: 98/100 score (Production Ready ✅)
 - **AI Components**: All functional with proper fallback mechanisms
@@ -142,6 +164,7 @@ Tests use the same configuration system as the main application:
 - **Integration**: Home Assistant connectivity confirmed
 
 ### Key Metrics
+
 - **Test Coverage**: Comprehensive coverage across all components
 - **Performance**: <150ms average response time
 - **Reliability**: 99%+ test pass rate
@@ -150,6 +173,7 @@ Tests use the same configuration system as the main application:
 ## Usage Examples
 
 ### Quick Validation
+
 ```bash
 # Interactive system validation
 deno run --allow-all scripts/interactive_validator.ts
@@ -159,6 +183,7 @@ deno run --allow-all tests/system/test_production_readiness.ts
 ```
 
 ### Development Testing
+
 ```bash
 # Run specific AI component test
 deno run --allow-all tests/ai/test_ai_decision_engine.ts
@@ -171,6 +196,7 @@ HASS_URL=http://homeassistant.local:8123 HASS_TOKEN=your_token deno run --allow-
 ```
 
 ### Continuous Integration
+
 ```bash
 # Full test suite for CI/CD
 deno task test
@@ -185,6 +211,7 @@ deno task fmt && deno task lint
 ## Test Patterns
 
 ### Dependency Injection Testing
+
 Tests use mock implementations of services to isolate components:
 
 ```typescript
@@ -195,33 +222,37 @@ class MockHomeAssistantClient {
 }
 
 // Replace in container
-container.getContainer().rebind(TYPES.HomeAssistantClient).toConstantValue(mockHaClient);
+container.getContainer().rebind(TYPES.HomeAssistantClient).toConstantValue(
+  mockHaClient,
+);
 ```
 
 ### Configuration Testing
+
 Tests validate Zod schemas with both valid and invalid inputs:
 
 ```typescript
 await t.step('should validate valid HVAC config', () => {
-  const validConfig = { /* ... */ };
+  const validConfig = {/* ... */};
   const result = HvacOptionsSchema.parse(validConfig);
   assertEquals(result.systemMode, SystemMode.AUTO);
 });
 
 await t.step('should reject invalid values', () => {
-  const invalidConfig = { /* ... */ };
+  const invalidConfig = {/* ... */};
   assertThrows(() => HvacOptionsSchema.parse(invalidConfig), ZodError);
 });
 ```
 
 ### Integration Testing
+
 Tests verify component integration without external dependencies:
 
 ```typescript
 await t.step('should start and connect to Home Assistant', async () => {
   await controller.start();
   assertEquals(mockHaClient.connected, true);
-  
+
   const status = await controller.getStatus();
   assertEquals(status.controller.running, true);
 });
@@ -230,6 +261,7 @@ await t.step('should start and connect to Home Assistant', async () => {
 ## Contributing
 
 When adding new tests:
+
 1. Place in appropriate category directory
 2. Follow existing naming conventions
 3. Include comprehensive error handling

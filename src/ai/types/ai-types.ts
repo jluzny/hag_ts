@@ -13,15 +13,15 @@ export interface HVACDecisionContext {
   indoorTemp?: number;
   outdoorTemp?: number;
   targetTemp?: number;
-  
+
   // System state
   systemMode: SystemMode;
   currentMode: string;
-  
+
   // Temporal context
   currentHour?: number;
   isWeekday?: boolean;
-  
+
   // Manual overrides
   manualOverride?: {
     active: boolean;
@@ -29,23 +29,23 @@ export interface HVACDecisionContext {
     temperature?: number;
     expiresAt?: Date;
   };
-  
+
   // Historical context
   lastTransitionTime?: Date;
   recentTransitions?: number;
-  
+
   // Energy and optimization context
   energyPrice?: {
     level: 'low' | 'medium' | 'high';
     rate: number; // per kWh
   };
-  
+
   // Weather forecast (for future enhancements)
   weatherForecast?: {
     nextHourTemp?: number;
     next4HourTrend?: 'rising' | 'falling' | 'stable';
   };
-  
+
   // User preferences (for future enhancements)
   userPreferences?: {
     comfortRange: { min: number; max: number };
@@ -60,16 +60,16 @@ export interface HVACDecisionContext {
 export interface DecisionResult {
   // Primary decision
   action: 'heating' | 'cooling' | 'idle' | 'off';
-  
+
   // Confidence and reasoning
   confidence: number; // 0.0 to 1.0
   reasoning: string;
   factors: string[];
-  
+
   // Impact assessment
   energyImpact: 'low' | 'medium' | 'high';
   comfortImpact: 'low' | 'medium' | 'high';
-  
+
   // Metadata
   source: 'ai' | 'fallback' | 'rule_based';
   executionTimeMs: number;
@@ -85,21 +85,21 @@ export interface AIEnhancedState extends HVACLangGraphState {
   aiContext?: {
     // Decision history
     decisionHistory: DecisionResult[];
-    
+
     // Prediction data
     predictions?: {
       nextHourTemp?: number;
       energyUsageForecast?: number;
       optimalSchedule?: ScheduleItem[];
     };
-    
+
     // Learning data
     learningData?: {
       userPatterns: UserPattern[];
       environmentalPatterns: EnvironmentalPattern[];
       preferenceWeights: PreferenceWeights;
     };
-    
+
     // Optimization goals
     optimizationGoals?: {
       energyEfficiency: number; // 0.0 to 1.0
@@ -107,7 +107,7 @@ export interface AIEnhancedState extends HVACLangGraphState {
       costOptimization: number; // 0.0 to 1.0
     };
   };
-  
+
   // Enhanced historical data
   historicalData?: {
     temperatureHistory: TemperatureReading[];
@@ -115,7 +115,7 @@ export interface AIEnhancedState extends HVACLangGraphState {
     userInteractions: UserInteraction[];
     weatherHistory: WeatherData[];
   };
-  
+
   // AI performance metrics
   aiMetrics?: {
     totalAIDecisions: number;
@@ -199,7 +199,11 @@ export interface EnergyUsageData {
  */
 export interface UserInteraction {
   timestamp: Date;
-  type: 'manual_override' | 'schedule_change' | 'mode_change' | 'preference_update';
+  type:
+    | 'manual_override'
+    | 'schedule_change'
+    | 'mode_change'
+    | 'preference_update';
   details: Record<string, any>;
   context: {
     indoorTemp?: number;
@@ -231,17 +235,17 @@ export interface WeatherData {
 export interface AIAgent {
   name: string;
   description: string;
-  
+
   /**
    * Process input and generate output
    */
   process(input: any): Promise<any>;
-  
+
   /**
    * Check agent health and availability
    */
   healthCheck(): Promise<boolean>;
-  
+
   /**
    * Get agent configuration
    */

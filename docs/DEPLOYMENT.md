@@ -1,6 +1,7 @@
 # HAG Deployment Guide
 
-This guide provides comprehensive instructions for deploying HAG (Home Assistant aGentic HVAC Automation) to production environments.
+This guide provides comprehensive instructions for deploying HAG (Home Assistant
+aGentic HVAC Automation) to production environments.
 
 ## 📋 Pre-Deployment Checklist
 
@@ -11,7 +12,8 @@ This guide provides comprehensive instructions for deploying HAG (Home Assistant
 - **Memory**: Minimum 512MB RAM, Recommended 1GB+
 - **CPU**: Minimum 2 cores, Recommended 4+ cores
 - **Storage**: 1GB free space
-- **Network**: Stable connection to Home Assistant and internet (for AI features)
+- **Network**: Stable connection to Home Assistant and internet (for AI
+  features)
 
 ### Prerequisites
 
@@ -116,31 +118,31 @@ Edit `/etc/hag/config.yaml`:
 ```yaml
 # Home Assistant Integration
 homeAssistant:
-  url: "${HASS_URL}"
-  token: "${HASS_TOKEN}"
+  url: '${HASS_URL}'
+  token: '${HASS_TOKEN}'
   websocket:
     reconnectInterval: 5000
     maxReconnectAttempts: 10
-  
+
 # HVAC Configuration
 hvac:
-  tempSensor: "sensor.indoor_temperature"
-  outdoorSensor: "sensor.outdoor_temperature"
-  humiditySensor: "sensor.humidity"
-  occupancySensor: "binary_sensor.occupancy"
-  
+  tempSensor: 'sensor.indoor_temperature'
+  outdoorSensor: 'sensor.outdoor_temperature'
+  humiditySensor: 'sensor.humidity'
+  occupancySensor: 'binary_sensor.occupancy'
+
   heating:
     enabled: true
-    switch: "switch.heating"
+    switch: 'switch.heating'
     temperatureThresholds:
       low: 18
       high: 24
     minRunTime: 15
     maxCyclesPerHour: 4
-    
+
   cooling:
     enabled: true
-    switch: "switch.cooling"
+    switch: 'switch.cooling'
     temperatureThresholds:
       low: 20
       high: 26
@@ -151,27 +153,27 @@ hvac:
 ai:
   enabled: true
   openai:
-    apiKey: "${OPENAI_API_KEY}"
-    model: "gpt-4"
+    apiKey: '${OPENAI_API_KEY}'
+    model: 'gpt-4'
     temperature: 0.3
     maxTokens: 1000
     timeout: 30000
-  
+
   decisionEngine:
     enabled: true
     confidenceThreshold: 0.7
     fallbackToRule: true
-    
+
   optimization:
     comfortWeight: 0.5
     energyWeight: 0.3
     costWeight: 0.2
-    
+
   learning:
     enabled: true
     learningRate: 0.2
     adaptationWindow: 14
-    
+
   scheduling:
     enabled: true
     defaultLookaheadHours: 8
@@ -184,13 +186,13 @@ monitoring:
     enabled: true
     port: 8080
     refreshInterval: 30
-  
+
   alerts:
     enabled: true
     maxDecisionLatency: 1000
     minComfortScore: 0.6
     maxErrorRate: 0.05
-    
+
   metrics:
     retention: 7 # days
     exportEnabled: true
@@ -201,31 +203,31 @@ performance:
     enabled: true
     maxSize: 1000
     ttl: 300
-  
+
   optimization:
     enabled: true
     memoryThreshold: 512 # MB
     cpuThreshold: 80 # percentage
-    
+
 # Logging Configuration
 logging:
-  level: "${LOG_LEVEL}"
-  format: "json"
-  file: "/var/log/hag/application.log"
-  maxSize: "100MB"
+  level: '${LOG_LEVEL}'
+  format: 'json'
+  file: '/var/log/hag/application.log'
+  maxSize: '100MB'
   maxFiles: 10
-  
+
 # Security Configuration
 security:
   https:
-    enabled: "${HTTPS_ENABLED:-false}"
-    certPath: "${SSL_CERT_PATH}"
-    keyPath: "${SSL_KEY_PATH}"
-    
+    enabled: '${HTTPS_ENABLED:-false}'
+    certPath: '${SSL_CERT_PATH}'
+    keyPath: '${SSL_KEY_PATH}'
+
   authentication:
     enabled: false
-    type: "basic" # or "jwt"
-    
+    type: 'basic' # or "jwt"
+
   rateLimit:
     enabled: true
     windowMs: 60000 # 1 minute
@@ -433,12 +435,13 @@ monitoring:
   prometheus:
     enabled: true
     port: 9090
-    path: "/metrics"
+    path: '/metrics'
 ```
 
 #### Grafana Dashboard
 
-Import the HAG Grafana dashboard (dashboard ID: coming soon) or create custom panels for:
+Import the HAG Grafana dashboard (dashboard ID: coming soon) or create custom
+panels for:
 
 - System health status
 - HVAC operation metrics
@@ -620,13 +623,13 @@ Update `config.yaml`:
 ```yaml
 performance:
   caching:
-    maxSize: 2000  # Increase cache size
-    ttl: 600       # Increase TTL
-    
+    maxSize: 2000 # Increase cache size
+    ttl: 600 # Increase TTL
+
   optimization:
-    memoryThreshold: 768  # Adjust for available RAM
-    cpuThreshold: 70      # Lower threshold for earlier optimization
-    
+    memoryThreshold: 768 # Adjust for available RAM
+    cpuThreshold: 70 # Lower threshold for earlier optimization
+
   concurrency:
     maxConnections: 100
     maxConcurrentTasks: 8
@@ -685,7 +688,8 @@ For deployment issues:
 - Validate configuration: `/opt/hag/hag validate`
 - Run health checks: `/opt/hag/hag health`
 
-For additional support, visit our [GitHub Issues](https://github.com/your-org/hag_js/issues) page.
+For additional support, visit our
+[GitHub Issues](https://github.com/your-org/hag_js/issues) page.
 
 ---
 

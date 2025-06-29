@@ -1,6 +1,6 @@
 /**
  * Dependency injection types for HAG JavaScript variant.
- * 
+ *
  * Separated to avoid circular dependencies with decorators.
  */
 
@@ -13,19 +13,19 @@ export const TYPES = {
   HvacOptions: Symbol.for('HvacOptions'),
   HassOptions: Symbol.for('HassOptions'),
   ApplicationOptions: Symbol.for('ApplicationOptions'),
-  
+
   // Core services
   Logger: Symbol.for('Logger'),
   ConfigLoader: Symbol.for('ConfigLoader'),
-  
+
   // Home Assistant
   HomeAssistantClient: Symbol.for('HomeAssistantClient'),
-  
+
   // HVAC
   HVACStateMachine: Symbol.for('HVACStateMachine'),
   HVACController: Symbol.for('HVACController'),
   HVACAgent: Symbol.for('HVACAgent'),
-  
+
   // Tools
   TemperatureMonitorTool: Symbol.for('TemperatureMonitorTool'),
   HVACControlTool: Symbol.for('HVACControlTool'),

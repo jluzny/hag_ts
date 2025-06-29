@@ -1,13 +1,17 @@
 /**
  * AI Decision Engine for HVAC System
- * 
+ *
  * This module implements intelligent decision-making using LangChain and OpenAI
  * to replace traditional rule-based HVAC logic with AI-powered reasoning.
  */
 
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
-import { AIEnhancedState, DecisionResult, HVACDecisionContext } from './types/ai-types.ts';
+import {
+  AIEnhancedState,
+  DecisionResult,
+  HVACDecisionContext,
+} from './types/ai-types.ts';
 import { SystemMode } from '../types/common.ts';
 import type { LoggerService } from '../core/logger.ts';
 
@@ -33,15 +37,15 @@ export class AIDecisionEngine {
   private isEnabled: boolean;
   private fallbackToRules: boolean;
   private logger: LoggerService;
-  
+
   constructor(
     private config: AIDecisionConfig,
-    logger: LoggerService
+    logger: LoggerService,
   ) {
     this.logger = logger;
     this.isEnabled = config.enabled && !!config.openaiApiKey;
     this.fallbackToRules = config.fallbackToRules;
-    
+
     if (this.isEnabled) {
       try {
         this.chatModel = new ChatOpenAI({
@@ -51,10 +55,10 @@ export class AIDecisionEngine {
           maxTokens: config.maxTokens,
           timeout: config.timeoutMs,
         });
-        
+
         this.logger.info('🤖 [AI Engine] Initialized successfully', {
           model: config.model,
-          enabled: this.isEnabled
+          enabled: this.isEnabled,
         });
       } catch (error) {
         this.logger.error('❌ [AI Engine] Failed to initialize', error);
@@ -64,7 +68,7 @@ export class AIDecisionEngine {
       this.logger.info('🤖 [AI Engine] Disabled or no API key provided');
     }
   }
-  
+
   /**
    * Make an AI-powered HVAC decision
    */
@@ -72,39 +76,38 @@ export class AIDecisionEngine {
     if (!this.isEnabled) {
       return this.fallbackDecision(context, 'AI_DISABLED');
     }
-    
+
     try {
       const startTime = performance.now();
-      
+
       this.logger.debug('🧠 [AI Engine] Making decision', {
         indoorTemp: context.indoorTemp,
         outdoorTemp: context.outdoorTemp,
         systemMode: context.systemMode,
-        currentMode: context.currentMode
+        currentMode: context.currentMode,
       });
-      
+
       const aiResponse = await this.callAI(context);
       const decision = this.parseAIResponse(aiResponse);
-      
+
       const executionTime = performance.now() - startTime;
-      
+
       this.logger.info('✅ [AI Engine] Decision made', {
         decision: decision.action,
         confidence: decision.confidence,
         reasoning: decision.reasoning,
-        executionTimeMs: executionTime
+        executionTimeMs: executionTime,
       });
-      
+
       return {
         ...decision,
         source: 'ai',
         executionTimeMs: executionTime,
-        fallbackUsed: false
+        fallbackUsed: false,
       };
-      
     } catch (error) {
       this.logger.error('❌ [AI Engine] Decision failed', error);
-      
+
       if (this.fallbackToRules) {
         return this.fallbackDecision(context, 'AI_ERROR');
       } else {
@@ -112,23 +115,23 @@ export class AIDecisionEngine {
       }
     }
   }
-  
+
   /**
    * Call OpenAI API with HVAC context
    */
   private async callAI(context: HVACDecisionContext): Promise<string> {
     const systemPrompt = this.buildSystemPrompt();
     const userPrompt = this.buildUserPrompt(context);
-    
+
     const messages = [
       new SystemMessage(systemPrompt),
-      new HumanMessage(userPrompt)
+      new HumanMessage(userPrompt),
     ];
-    
+
     const response = await this.chatModel.invoke(messages);
     return response.content as string;
   }
-  
+
   /**
    * Build system prompt for AI
    */
@@ -163,7 +166,7 @@ Provide your response as a JSON object with these exact keys:
 
 IMPORTANT: Always respond with valid JSON. Consider all factors including temperature differentials, outdoor conditions, system efficiency, and user comfort.`;
   }
-  
+
   /**
    * Build user prompt with current context
    */
@@ -178,9 +181,9 @@ IMPORTANT: Always respond with valid JSON. Consider all factors including temper
       isWeekday,
       manualOverride,
       lastTransitionTime,
-      energyPrice
+      energyPrice,
     } = context;
-    
+
     let prompt = `Please make an HVAC decision based on the current conditions:
 
 CURRENT CONDITIONS:
@@ -192,18 +195,23 @@ CURRENT CONDITIONS:
 - Time: ${currentHour ?? 12}:00 (${isWeekday ? 'weekday' : 'weekend'})`;
 
     if (manualOverride?.active) {
-      prompt += `\n- Manual Override: Active (${manualOverride.mode} until ${manualOverride.expiresAt})`;
+      prompt +=
+        `\n- Manual Override: Active (${manualOverride.mode} until ${manualOverride.expiresAt})`;
     }
-    
+
     if (lastTransitionTime) {
-      const timeSinceTransition = (Date.now() - lastTransitionTime.getTime()) / 1000 / 60; // minutes
-      prompt += `\n- Time Since Last Change: ${timeSinceTransition.toFixed(1)} minutes`;
+      const timeSinceTransition = (Date.now() - lastTransitionTime.getTime()) /
+        1000 / 60; // minutes
+      prompt += `\n- Time Since Last Change: ${
+        timeSinceTransition.toFixed(1)
+      } minutes`;
     }
-    
+
     if (energyPrice) {
-      prompt += `\n- Current Energy Price: ${energyPrice.level} (${energyPrice.rate} per kWh)`;
+      prompt +=
+        `\n- Current Energy Price: ${energyPrice.level} (${energyPrice.rate} per kWh)`;
     }
-    
+
     prompt += `\n\nCONSIDERATIONS:
 - Avoid frequent cycling (minimum 5-10 minutes between state changes)
 - Outdoor temperature affects heating/cooling efficiency
@@ -212,10 +220,10 @@ CURRENT CONDITIONS:
 - Manual overrides take precedence when active
 
 Please provide your decision as JSON.`;
-    
+
     return prompt;
   }
-  
+
   /**
    * Parse AI response into structured decision
    */
@@ -226,20 +234,20 @@ Please provide your decision as JSON.`;
       if (!jsonMatch) {
         throw new Error('No JSON found in AI response');
       }
-      
+
       const parsed = JSON.parse(jsonMatch[0]);
-      
+
       // Validate required fields
       if (!parsed.action || !parsed.reasoning) {
         throw new Error('Missing required fields in AI response');
       }
-      
+
       // Validate action
       const validActions = ['heating', 'cooling', 'idle', 'off'];
       if (!validActions.includes(parsed.action)) {
         throw new Error(`Invalid action: ${parsed.action}`);
       }
-      
+
       return {
         action: parsed.action,
         confidence: parsed.confidence ?? 0.8,
@@ -249,29 +257,35 @@ Please provide your decision as JSON.`;
         comfortImpact: parsed.comfortImpact ?? 'medium',
         source: 'ai',
         executionTimeMs: 0, // Set by caller
-        fallbackUsed: false
+        fallbackUsed: false,
       };
-      
     } catch (error) {
       this.logger.error('❌ [AI Engine] Failed to parse AI response', error, {
-        response: response.substring(0, 200)
+        response: response.substring(0, 200),
       });
-      throw new Error(`Failed to parse AI response: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to parse AI response: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
   }
-  
+
   /**
    * Fallback to rule-based decision when AI is unavailable
    */
-  private fallbackDecision(context: HVACDecisionContext, reason: string): DecisionResult {
+  private fallbackDecision(
+    context: HVACDecisionContext,
+    reason: string,
+  ): DecisionResult {
     this.logger.warning('⚠️ [AI Engine] Using fallback decision', { reason });
-    
+
     const { indoorTemp, targetTemp = 22, systemMode, currentMode } = context;
-    
+
     // Simple rule-based logic as fallback
     let action = 'idle';
     let reasoning = 'Using rule-based fallback logic. ';
-    
+
     if (!indoorTemp) {
       action = 'idle';
       reasoning += 'No temperature data available, staying idle.';
@@ -280,19 +294,24 @@ Please provide your decision as JSON.`;
       reasoning += 'System mode is OFF.';
     } else {
       const tempDiff = indoorTemp - targetTemp;
-      
+
       if (tempDiff < -1.5 && systemMode !== SystemMode.COOL_ONLY) {
         action = 'heating';
-        reasoning += `Indoor temp ${indoorTemp}°C is ${Math.abs(tempDiff).toFixed(1)}°C below target ${targetTemp}°C.`;
+        reasoning += `Indoor temp ${indoorTemp}°C is ${
+          Math.abs(tempDiff).toFixed(1)
+        }°C below target ${targetTemp}°C.`;
       } else if (tempDiff > 1.5 && systemMode !== SystemMode.HEAT_ONLY) {
         action = 'cooling';
-        reasoning += `Indoor temp ${indoorTemp}°C is ${tempDiff.toFixed(1)}°C above target ${targetTemp}°C.`;
+        reasoning += `Indoor temp ${indoorTemp}°C is ${
+          tempDiff.toFixed(1)
+        }°C above target ${targetTemp}°C.`;
       } else {
         action = 'idle';
-        reasoning += `Indoor temp ${indoorTemp}°C is within acceptable range of target ${targetTemp}°C.`;
+        reasoning +=
+          `Indoor temp ${indoorTemp}°C is within acceptable range of target ${targetTemp}°C.`;
       }
     }
-    
+
     return {
       action: action as SystemMode,
       confidence: 0.7, // Lower confidence for rule-based decisions
@@ -303,10 +322,10 @@ Please provide your decision as JSON.`;
       source: 'fallback',
       executionTimeMs: 0,
       fallbackUsed: true,
-      fallbackReason: reason
+      fallbackReason: reason,
     };
   }
-  
+
   /**
    * Check if AI engine is available and healthy
    */
@@ -323,28 +342,35 @@ Please provide your decision as JSON.`;
       enabled: this.isEnabled,
       apiKeyConfigured: !!this.config.openaiApiKey,
       modelAccessible: false,
-      lastError: undefined as string | undefined
+      lastError: undefined as string | undefined,
     };
-    
+
     if (this.isEnabled) {
       try {
         // Simple test call to verify model access
         const testResponse = await this.chatModel.invoke([
-          new HumanMessage('Respond with "OK" if you can receive this message.')
+          new HumanMessage(
+            'Respond with "OK" if you can receive this message.',
+          ),
         ]);
-        
-        details.modelAccessible = testResponse.content.toString().includes('OK');
+
+        details.modelAccessible = testResponse.content.toString().includes(
+          'OK',
+        );
       } catch (error) {
-        details.lastError = error instanceof Error ? error.message : String(error);
+        details.lastError = error instanceof Error
+          ? error.message
+          : String(error);
       }
     }
-    
+
     return {
-      healthy: details.enabled && details.apiKeyConfigured && details.modelAccessible,
-      details
+      healthy: details.enabled && details.apiKeyConfigured &&
+        details.modelAccessible,
+      details,
     };
   }
-  
+
   /**
    * Get configuration info
    */
@@ -354,7 +380,7 @@ Please provide your decision as JSON.`;
       temperature: this.config.temperature,
       maxTokens: this.config.maxTokens,
       enabled: this.isEnabled,
-      fallbackToRules: this.fallbackToRules
+      fallbackToRules: this.fallbackToRules,
     };
   }
 }

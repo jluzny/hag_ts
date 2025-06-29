@@ -1,17 +1,25 @@
-
 /**
  * Logging setup for HAG JavaScript variant.
  * Enhanced with structured logging capabilities using native @std/log features.
  */
 
-import { 
-  setup, 
-  getLogger, 
-  type LevelName, 
+import {
   ConsoleHandler,
-  type LogRecord 
+  getLogger,
+  type LevelName,
+  type LogRecord,
+  setup,
 } from '@std/log';
-import { dim, cyan, blue, yellow, red, bold, green, magenta } from '@std/fmt/colors';
+import {
+  blue,
+  bold,
+  cyan,
+  dim,
+  green,
+  magenta,
+  red,
+  yellow,
+} from '@std/fmt/colors';
 
 export interface LogContext {
   [key: string]: unknown;
@@ -22,21 +30,23 @@ export interface LogContext {
  */
 function structuredColoredFormatter(record: LogRecord): string {
   // Format timestamp (HH:MM:SS)
-  const timestamp = dim(cyan(`[${record.datetime.toISOString().substr(11, 8)}]`));
-  
+  const timestamp = dim(
+    cyan(`[${record.datetime.toISOString().substr(11, 8)}]`),
+  );
+
   // Color level based on severity
   const levelColor = getLevelColor(record.level);
   const coloredLevel = levelColor(`${record.levelName}`.padEnd(7));
-  
+
   // Add logger name
   const loggerName = magenta(`[${record.loggerName}]`);
 
   // Format main message with emoji-based coloring
   const coloredMessage = formatMessageWithEmojis(String(record.msg));
-  
+
   // Format structured context from args
   const context = record.args.length > 0 ? formatContext(record.args) : '';
-  
+
   return `${timestamp} ${coloredLevel} ${loggerName} ${coloredMessage}${context}`;
 }
 
@@ -65,7 +75,10 @@ function formatMessageWithEmojis(message: string): string {
   if (message.includes('❄️') || message.toLowerCase().includes('cooling')) {
     return cyan(bold(message));
   }
-  if (message.includes('⏸️') || message.toLowerCase().includes('off') || message.toLowerCase().includes('idle')) {
+  if (
+    message.includes('⏸️') || message.toLowerCase().includes('off') ||
+    message.toLowerCase().includes('idle')
+  ) {
     return dim(message);
   }
   if (message.includes('🎯') || message.toLowerCase().includes('decision')) {
@@ -74,7 +87,9 @@ function formatMessageWithEmojis(message: string): string {
   if (message.includes('✅') || message.toLowerCase().includes('execution')) {
     return green(bold(message));
   }
-  if (message.includes('🔍') || message.toLowerCase().includes('state machine')) {
+  if (
+    message.includes('🔍') || message.toLowerCase().includes('state machine')
+  ) {
     return magenta(bold(message));
   }
   if (message.includes('🚀') || message.toLowerCase().includes('starting')) {
@@ -88,9 +103,9 @@ function formatMessageWithEmojis(message: string): string {
 
 function formatContext(args: unknown[]): string {
   if (args.length === 0) return '';
-  
+
   const contextStr = args
-    .map(arg => {
+    .map((arg) => {
       if (typeof arg === 'object' && arg !== null) {
         return Object.entries(arg)
           .map(([key, value]) => `${key}=${JSON.stringify(value)}`)
@@ -100,7 +115,7 @@ function formatContext(args: unknown[]): string {
     })
     .filter(Boolean)
     .join(' ');
-    
+
   return contextStr ? ` ${dim(green(`{${contextStr}}`))}` : '';
 }
 

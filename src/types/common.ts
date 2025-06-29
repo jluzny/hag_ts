@@ -1,6 +1,6 @@
 /**
  * Common types for HAG JavaScript variant.
- * 
+ *
  * Shared type definitions used throughout the application.
  */
 
@@ -9,7 +9,7 @@
  */
 export enum SystemMode {
   AUTO = 'auto',
-  HEAT_ONLY = 'heat_only', 
+  HEAT_ONLY = 'heat_only',
   COOL_ONLY = 'cool_only',
   OFF = 'off',
 }
@@ -29,7 +29,7 @@ export enum HVACMode {
  */
 export enum LogLevel {
   DEBUG = 'debug',
-  INFO = 'info', 
+  INFO = 'info',
   WARNING = 'warning',
   ERROR = 'error',
 }
@@ -205,20 +205,22 @@ export interface OperationResult<T = unknown> {
  */
 export const TypeGuards = {
   isSystemMode: (value: unknown): value is SystemMode =>
-    typeof value === 'string' && Object.values(SystemMode).includes(value as SystemMode),
-    
+    typeof value === 'string' &&
+    Object.values(SystemMode).includes(value as SystemMode),
+
   isHVACMode: (value: unknown): value is HVACMode =>
-    typeof value === 'string' && Object.values(HVACMode).includes(value as HVACMode),
-    
+    typeof value === 'string' &&
+    Object.values(HVACMode).includes(value as HVACMode),
+
   isLogLevel: (value: unknown): value is LogLevel =>
-    typeof value === 'string' && Object.values(LogLevel).includes(value as LogLevel),
-    
+    typeof value === 'string' &&
+    Object.values(LogLevel).includes(value as LogLevel),
+
   isNumber: (value: unknown): value is number =>
     typeof value === 'number' && !isNaN(value),
-    
-  isString: (value: unknown): value is string =>
-    typeof value === 'string',
-    
+
+  isString: (value: unknown): value is string => typeof value === 'string',
+
   isObject: (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value),
 } as const;

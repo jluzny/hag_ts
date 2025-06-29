@@ -54,7 +54,7 @@ class MockWebSocket extends EventTarget {
   }
 
   // --- Test Helper Methods ---
-  
+
   public connect() {
     if (this.readyState === 0) { // CONNECTING
       this.readyState = 1; // OPEN
@@ -86,7 +86,7 @@ class MockWebSocket extends EventTarget {
     if (this.messageQueue.length === 0) return null;
     return JSON.parse(this.messageQueue[this.messageQueue.length - 1]);
   }
-  
+
   public setFailSend(shouldFail: boolean) {
     this.failSend = shouldFail;
   }
@@ -115,19 +115,19 @@ Deno.test({
       (url: string) => {
         mockWs = new MockWebSocket(url);
         return mockWs as unknown as WebSocket;
-      }
+      },
     );
   };
 
   await t.step('should connect successfully', async () => {
     const client = clientFactory({ ...mockHassOptions, maxRetries: 3 });
     try {
-      // Start connection asynchronously  
+      // Start connection asynchronously
       const connectPromise = client.connect();
-      
+
       // Wait for WebSocket to be created and then immediately simulate connection
-      await new Promise(resolve => setTimeout(resolve, 10));
-      
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
       if (mockWs) {
         // Simulate immediate connection success
         mockWs.connect();
@@ -136,10 +136,10 @@ Deno.test({
       }
 
       // Add timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) => 
+      const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Connection test timeout')), 1000)
       );
-      
+
       await Promise.race([connectPromise, timeoutPromise]);
       assertEquals(client.connected, true);
     } finally {
@@ -151,7 +151,7 @@ Deno.test({
     const client = clientFactory({ ...mockHassOptions, maxRetries: 2 });
     const connectPromise = client.connect();
 
-    await new Promise(resolve => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
     mockWs.failConnection();
 
     await assertRejects(() => connectPromise, ConnectionError);
@@ -160,72 +160,76 @@ Deno.test({
 
 Deno.test({
   name: 'Home Assistant Client - Messaging',
-  ignore: true, // Skip for fast testing due to timing issues  
+  ignore: true, // Skip for fast testing due to timing issues
 }, async (t) => {
-    let mockWs: MockWebSocket;
-    const logger = new MockLoggerService();
+  let mockWs: MockWebSocket;
+  const logger = new MockLoggerService();
 
-    const clientFactory = () => {
-        return new HomeAssistantClient(
-            mockHassOptions,
-            logger as unknown as LoggerService,
-            (url: string) => {
-                mockWs = new MockWebSocket(url);
-                return mockWs as unknown as WebSocket;
-            }
-        );
-    };
+  const clientFactory = () => {
+    return new HomeAssistantClient(
+      mockHassOptions,
+      logger as unknown as LoggerService,
+      (url: string) => {
+        mockWs = new MockWebSocket(url);
+        return mockWs as unknown as WebSocket;
+      },
+    );
+  };
 
-    async function setupConnectedClient() {
-        const client = clientFactory();
-        const connectPromise = client.connect();
-        await Promise.resolve();
-        mockWs.connect();
-        mockWs.receiveMessage({ type: 'auth_required' });
-        mockWs.receiveMessage({ type: 'auth_ok' });
-        await connectPromise;
-        return client;
-    }
+  async function setupConnectedClient() {
+    const client = clientFactory();
+    const connectPromise = client.connect();
+    await Promise.resolve();
+    mockWs.connect();
+    mockWs.receiveMessage({ type: 'auth_required' });
+    mockWs.receiveMessage({ type: 'auth_ok' });
+    await connectPromise;
+    return client;
+  }
 
-    await t.step('should call service and get response', async () => {
-        const client = await setupConnectedClient();
-        const serviceCall = HassServiceCallImpl.climate('set_hvac_mode', 'climate.test', { hvac_mode: 'heat' });
-        
-        const callPromise = client.callService(serviceCall);
-        
-        await Promise.resolve();
-        const sentMessage = mockWs.getLastSentMessage();
-        assertExists(sentMessage);
+  await t.step('should call service and get response', async () => {
+    const client = await setupConnectedClient();
+    const serviceCall = HassServiceCallImpl.climate(
+      'set_hvac_mode',
+      'climate.test',
+      { hvac_mode: 'heat' },
+    );
 
-        mockWs.receiveMessage({
-            id: sentMessage.id,
-            type: 'result',
-            success: true,
-            result: { context: {} }
-        });
+    const callPromise = client.callService(serviceCall);
 
-        await callPromise; // Should resolve
-        await client.disconnect();
+    await Promise.resolve();
+    const sentMessage = mockWs.getLastSentMessage();
+    assertExists(sentMessage);
+
+    mockWs.receiveMessage({
+      id: sentMessage.id,
+      type: 'result',
+      success: true,
+      result: { context: {} },
     });
 
-    await t.step('should handle event subscriptions and handlers', async () => {
-        const client = await setupConnectedClient();
-        let eventHandled = false;
-        
-        client.addEventHandler('state_changed', () => {
-            eventHandled = true;
-        });
+    await callPromise; // Should resolve
+    await client.disconnect();
+  });
 
-        await client.subscribeEvents('state_changed');
-        
-        mockWs.receiveMessage({
-            type: 'event',
-            id: 1,
-            event: { event_type: 'state_changed', data: {} }
-        });
+  await t.step('should handle event subscriptions and handlers', async () => {
+    const client = await setupConnectedClient();
+    let eventHandled = false;
 
-        await new Promise(r => setTimeout(r, 10));
-        assertEquals(eventHandled, true);
-        await client.disconnect();
+    client.addEventHandler('state_changed', () => {
+      eventHandled = true;
     });
+
+    await client.subscribeEvents('state_changed');
+
+    mockWs.receiveMessage({
+      type: 'event',
+      id: 1,
+      event: { event_type: 'state_changed', data: {} },
+    });
+
+    await new Promise((r) => setTimeout(r, 10));
+    assertEquals(eventHandled, true);
+    await client.disconnect();
+  });
 });

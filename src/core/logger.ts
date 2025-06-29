@@ -30,7 +30,7 @@ export class LoggerService {
    */
   error(message: string, error?: unknown, context?: LogContext): void {
     const errorContext: LogContext = { ...context };
-    
+
     if (error instanceof Error) {
       errorContext.error = error.message;
       if (error.stack) {

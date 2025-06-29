@@ -1,6 +1,6 @@
 /**
  * HVAC State Machine Interface
- * 
+ *
  * This interface provides a common abstraction for both XState and LangGraph
  * implementations, allowing the controller to work with either backend.
  */
@@ -15,22 +15,22 @@ export interface IHVACStateMachine {
    * Start the state machine
    */
   start(): Promise<void>;
-  
+
   /**
    * Stop the state machine
    */
   stop(): Promise<void>;
-  
+
   /**
    * Get current state name
    */
   getCurrentState(): string;
-  
+
   /**
    * Get current context/state data
    */
   getContext(): Record<string, unknown>;
-  
+
   /**
    * Get detailed status information
    */
@@ -42,22 +42,22 @@ export interface IHVACStateMachine {
     systemMode: SystemMode;
     [key: string]: unknown; // Allow for implementation-specific properties
   };
-  
+
   /**
    * Handle temperature sensor changes
    */
   handleTemperatureChange(sensor: string, value: number): Promise<void>;
-  
+
   /**
    * Execute manual override
    */
   manualOverride(mode: HVACMode, temperature?: number): Promise<void>;
-  
+
   /**
    * Clear manual override
    */
   clearManualOverride?(): Promise<void>;
-  
+
   /**
    * Update system mode
    */
@@ -79,7 +79,7 @@ export interface IEnhancedHVACStateMachine extends IHVACStateMachine {
     conditions: Record<string, unknown>;
     executionTimeMs: number;
   }>;
-  
+
   /**
    * Get performance metrics (LangGraph specific)
    */
@@ -89,7 +89,7 @@ export interface IEnhancedHVACStateMachine extends IHVACStateMachine {
     lastEvaluationDuration: number;
     avgDecisionTime: number;
   };
-  
+
   /**
    * Get AI recommendations if available
    */

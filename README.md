@@ -9,10 +9,14 @@
 
 ## 🌟 Overview
 
-HAG (Home Assistant aGentic HVAC Automation) is a cutting-edge TypeScript/Deno application that revolutionizes HVAC control through intelligent automation. It combines advanced AI capabilities with Home Assistant integration to provide:
+HAG (Home Assistant aGentic HVAC Automation) is a cutting-edge TypeScript/Deno
+application that revolutionizes HVAC control through intelligent automation. It
+combines advanced AI capabilities with Home Assistant integration to provide:
 
-- **AI-Powered Decision Making**: OpenAI GPT-4 integration for intelligent HVAC decisions
-- **Predictive Analytics**: Advanced forecasting for temperature and energy usage
+- **AI-Powered Decision Making**: OpenAI GPT-4 integration for intelligent HVAC
+  decisions
+- **Predictive Analytics**: Advanced forecasting for temperature and energy
+  usage
 - **Adaptive Learning**: Continuous learning from user preferences and patterns
 - **Smart Scheduling**: Intelligent automation with rule-based optimization
 - **Real-time Monitoring**: Comprehensive dashboard with performance analytics
@@ -21,13 +25,17 @@ HAG (Home Assistant aGentic HVAC Automation) is a cutting-edge TypeScript/Deno a
 ## 🚀 Key Features
 
 ### 🤖 AI Intelligence
+
 - **Decision Engine**: GPT-4 powered decision making with context awareness
 - **Multi-Objective Optimization**: Balance comfort, energy efficiency, and cost
-- **Predictive Analytics**: Time series forecasting with seasonal pattern detection
+- **Predictive Analytics**: Time series forecasting with seasonal pattern
+  detection
 - **Adaptive Learning**: User behavior analysis and preference adaptation
-- **Smart Scheduling**: Automated scheduling with weather and occupancy awareness
+- **Smart Scheduling**: Automated scheduling with weather and occupancy
+  awareness
 
 ### 🏠 Home Assistant Integration
+
 - **Native WebSocket API**: Real-time communication with Home Assistant
 - **Sensor Integration**: Temperature, humidity, and occupancy sensors
 - **HVAC Control**: Direct control of heating, cooling, and ventilation
@@ -35,6 +43,7 @@ HAG (Home Assistant aGentic HVAC Automation) is a cutting-edge TypeScript/Deno a
 - **Event Streaming**: Real-time state change monitoring
 
 ### 📊 Monitoring & Analytics
+
 - **Real-time Dashboard**: Interactive monitoring with multiple widgets
 - **Performance Metrics**: System health, response times, and resource usage
 - **Alert Management**: Intelligent alerting with automated recommendations
@@ -42,8 +51,11 @@ HAG (Home Assistant aGentic HVAC Automation) is a cutting-edge TypeScript/Deno a
 - **Trend Analysis**: Performance prediction and optimization suggestions
 
 ### ⚡ Performance & Production
-- **Performance Optimization**: Memory management, CPU optimization, intelligent caching
-- **Production Validation**: Comprehensive readiness checks and deployment validation
+
+- **Performance Optimization**: Memory management, CPU optimization, intelligent
+  caching
+- **Production Validation**: Comprehensive readiness checks and deployment
+  validation
 - **Zero-downtime Deployment**: Production-ready deployment strategies
 - **Resource Management**: Automatic scaling and resource optimization
 - **Health Monitoring**: Component health tracking and automated recovery
@@ -94,7 +106,8 @@ HAG (Home Assistant aGentic HVAC Automation) is a cutting-edge TypeScript/Deno a
 
 ## 📋 Prerequisites
 
-- **Deno 2.0+** - [Install Deno](https://deno.land/manual/getting_started/installation)
+- **Deno 2.0+** -
+  [Install Deno](https://deno.land/manual/getting_started/installation)
 - **Home Assistant** - Running instance with WebSocket API enabled
 - **OpenAI API Key** - For AI-powered decision making (optional)
 
@@ -141,28 +154,28 @@ Edit `config.yaml` to match your Home Assistant setup:
 
 ```yaml
 homeAssistant:
-  url: "http://homeassistant.local:8123"
-  token: "your_long_lived_access_token"
-  
+  url: 'http://homeassistant.local:8123'
+  token: 'your_long_lived_access_token'
+
 hvac:
-  tempSensor: "sensor.indoor_temperature"
-  outdoorSensor: "sensor.outdoor_temperature"
+  tempSensor: 'sensor.indoor_temperature'
+  outdoorSensor: 'sensor.outdoor_temperature'
   heating:
-    switch: "switch.heating"
+    switch: 'switch.heating'
     temperatureThresholds:
       low: 18
       high: 24
   cooling:
-    switch: "switch.cooling"
+    switch: 'switch.cooling'
     temperatureThresholds:
       low: 20
       high: 26
 
 ai:
   enabled: true
-  openaiApiKey: "${OPENAI_API_KEY}"
+  openaiApiKey: '${OPENAI_API_KEY}'
   decisionEngine:
-    model: "gpt-4"
+    model: 'gpt-4'
     temperature: 0.3
 ```
 
@@ -218,7 +231,8 @@ ai:
 
 ## 🧪 Testing
 
-HAG includes a comprehensive, production-ready test suite with 95%+ coverage of all functionality.
+HAG includes a comprehensive, production-ready test suite with 95%+ coverage of
+all functionality.
 
 ### Test Organization
 
@@ -265,9 +279,11 @@ deno test --allow-all tests/system/production-readiness.system.test.ts
 ### Environment Setup for Testing
 
 #### Required (None - all tests have fallbacks)
+
 All tests work without external dependencies using mocks and fallbacks.
 
 #### Optional for Full Coverage
+
 ```bash
 # Home Assistant integration tests
 export HASS_URL="http://homeassistant.local:8123"
@@ -283,6 +299,7 @@ export LOG_LEVEL="error"  # Reduces noise during testing
 ### Test Categories & Coverage
 
 #### ✅ **Unit Tests** (99% pass rate)
+
 - **AI Components**: Decision engine, optimizer, analytics, learning, scheduling
 - **HVAC Core**: State machine, controller, heating/cooling strategies
 - **Configuration**: Loading, validation, schema checking
@@ -291,16 +308,20 @@ export LOG_LEVEL="error"  # Reduces noise during testing
 - **Type Safety**: Common types and enums
 
 #### ✅ **Integration Tests** (100% pass rate)
+
 - **HVAC System**: Complete workflow with mock services
-- **Home Assistant**: WebSocket/REST API connectivity (when credentials available)
+- **Home Assistant**: WebSocket/REST API connectivity (when credentials
+  available)
 - **AI System**: End-to-end AI decision pipeline with all components
 
 #### ✅ **Performance Tests** (All benchmarks passing)
+
 - **State Machine**: Response time benchmarks (<1ms average)
 - **Concurrent Operations**: Multi-threaded performance validation
 - **Memory Usage**: Resource utilization monitoring
 
 #### ✅ **System Tests** (98/100 production readiness score)
+
 - **Production Readiness**: Comprehensive deployment validation
 - **Environment Checking**: System requirements verification
 - **Health Monitoring**: Component status and system health
@@ -309,14 +330,17 @@ export LOG_LEVEL="error"  # Reduces noise during testing
 ### Test Guidelines
 
 #### **Writing New Tests**
+
 1. **Place in appropriate category**: unit/integration/performance/system
 2. **Follow naming conventions**: `*.test.ts`, `*.integration.test.ts`, etc.
 3. **Use consistent imports**: `../../src/...` for moved tests
 4. **Include error handling**: Graceful fallbacks for missing dependencies
 5. **Mock external services**: Use mocks for Home Assistant, OpenAI, etc.
-6. **Add environment checks**: Skip tests gracefully when credentials unavailable
+6. **Add environment checks**: Skip tests gracefully when credentials
+   unavailable
 
 #### **Test Standards**
+
 ```typescript
 // Unit test example
 Deno.test('Component Name', async (t) => {
@@ -324,7 +348,7 @@ Deno.test('Component Name', async (t) => {
     // Test implementation
     assertEquals(actual, expected);
   });
-  
+
   await t.step('should handle error conditions', () => {
     // Error handling test
     assertThrows(() => functionCall());
@@ -332,7 +356,8 @@ Deno.test('Component Name', async (t) => {
 });
 
 // Integration test with environment check
-const hasCredentials = !!(Deno.env.get('HASS_URL') && Deno.env.get('HASS_TOKEN'));
+const hasCredentials =
+  !!(Deno.env.get('HASS_URL') && Deno.env.get('HASS_TOKEN'));
 
 Deno.test('Integration Test', async (t) => {
   if (!hasCredentials) {
@@ -342,12 +367,13 @@ Deno.test('Integration Test', async (t) => {
     });
     return;
   }
-  
+
   // Test implementation
 });
 ```
 
 #### **Mock Patterns**
+
 ```typescript
 // Logger mock
 class MockLoggerService implements LoggerService {
@@ -360,11 +386,11 @@ class MockLoggerService implements LoggerService {
 // Home Assistant client mock
 class MockHomeAssistantClient {
   private _connected = false;
-  
+
   async connect(): Promise<void> {
     this._connected = true;
   }
-  
+
   get connected(): boolean {
     return this._connected;
   }
@@ -374,12 +400,14 @@ class MockHomeAssistantClient {
 ### Test Results & Validation
 
 #### **Current Status**
+
 - **Unit Tests**: 72/73 passing (99% success rate)
 - **Integration Tests**: All passing with proper environment setup
 - **Performance Tests**: All benchmarks within acceptable ranges (<1ms avg)
 - **System Tests**: 98/100 production readiness score
 
 #### **Continuous Integration**
+
 ```bash
 # Full test suite for CI/CD
 deno task test --no-check
@@ -393,8 +421,9 @@ deno task fmt
 ```
 
 #### **Performance Benchmarks**
+
 - **Temperature Updates**: <1ms average response time
-- **Status Queries**: <0.1ms average response time  
+- **Status Queries**: <0.1ms average response time
 - **State Transitions**: <5ms under concurrent load
 - **Memory Usage**: <512MB peak usage
 - **Production Readiness**: 98/100 validation score
@@ -402,6 +431,7 @@ deno task fmt
 ### Troubleshooting Tests
 
 #### **Common Issues**
+
 ```bash
 # Type checking errors (expected with experimental decorators)
 deno task test --no-check
@@ -418,6 +448,7 @@ deno test --allow-all [test-file]
 ```
 
 #### **Test Debugging**
+
 ```bash
 # Run single test with debug output
 LOG_LEVEL=debug deno test --allow-all tests/unit/hvac/state-machine.test.ts
@@ -432,23 +463,27 @@ deno test --allow-all --v8-flags=--expose-gc tests/performance/
 ### Contributing Tests
 
 When adding new functionality:
+
 1. **Add unit tests** for individual components
-2. **Update integration tests** for component interactions  
+2. **Update integration tests** for component interactions
 3. **Include performance tests** for critical paths
 4. **Validate system integration** in system tests
 5. **Update documentation** including this README
 
-The test suite ensures HAG remains reliable, performant, and production-ready as new features are added.
+The test suite ensures HAG remains reliable, performant, and production-ready as
+new features are added.
 
 ## 📊 Monitoring & Analytics
 
 ### Real-time Dashboard
 
-Access the web dashboard at `http://localhost:8080/dashboard` (when enabled) for:
+Access the web dashboard at `http://localhost:8080/dashboard` (when enabled)
+for:
 
 - **System Health**: Overall status and component health
 - **Performance Metrics**: Response times, resource usage, and throughput
-- **AI Analytics**: Decision accuracy, learning progress, and optimization results
+- **AI Analytics**: Decision accuracy, learning progress, and optimization
+  results
 - **HVAC Status**: Current temperature, target settings, and system operation
 - **Alerts & Events**: Active alerts and recent automation events
 
@@ -478,16 +513,16 @@ config/
 
 ```yaml
 homeAssistant:
-  url: "http://homeassistant.local:8123"
-  token: "${HASS_TOKEN}"
+  url: 'http://homeassistant.local:8123'
+  token: '${HASS_TOKEN}'
   websocket:
     reconnectInterval: 5000
     maxReconnectAttempts: 10
   entities:
-    tempSensor: "sensor.indoor_temperature"
-    outdoorSensor: "sensor.outdoor_temperature"
-    humiditySensor: "sensor.humidity"
-    occupancySensor: "binary_sensor.occupancy"
+    tempSensor: 'sensor.indoor_temperature'
+    outdoorSensor: 'sensor.outdoor_temperature'
+    humiditySensor: 'sensor.humidity'
+    occupancySensor: 'binary_sensor.occupancy'
 ```
 
 #### AI Configuration
@@ -496,21 +531,21 @@ homeAssistant:
 ai:
   enabled: true
   openai:
-    apiKey: "${OPENAI_API_KEY}"
-    model: "gpt-4"
+    apiKey: '${OPENAI_API_KEY}'
+    model: 'gpt-4'
     temperature: 0.3
     maxTokens: 1000
-  
+
   decisionEngine:
     enabled: true
     confidenceThreshold: 0.7
     fallbackToRule: true
-  
+
   optimization:
     comfortWeight: 0.5
     energyWeight: 0.3
     costWeight: 0.2
-  
+
   learning:
     enabled: true
     learningRate: 0.2
@@ -521,21 +556,21 @@ ai:
 
 ```yaml
 hvac:
-  defaultMode: "auto"
-  temperatureUnit: "celsius"
-  
+  defaultMode: 'auto'
+  temperatureUnit: 'celsius'
+
   heating:
     enabled: true
-    switch: "switch.heating"
+    switch: 'switch.heating'
     temperatureThresholds:
       low: 18
       high: 24
     minRunTime: 15 # minutes
     maxCyclesPerHour: 4
-  
+
   cooling:
     enabled: true
-    switch: "switch.cooling"
+    switch: 'switch.cooling'
     temperatureThresholds:
       low: 20
       high: 26
@@ -694,7 +729,8 @@ export LOG_LEVEL=debug
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md)
+for details.
 
 ### Development Setup
 
@@ -737,7 +773,8 @@ src/
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
+for details.
 
 ## 🙏 Acknowledgments
 
@@ -750,7 +787,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 Support
 
 - **Issues**: [GitHub Issues](https://github.com/your-org/hag_js/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-org/hag_js/discussions)
+- **Discussions**:
+  [GitHub Discussions](https://github.com/your-org/hag_js/discussions)
 - **Documentation**: [Wiki](https://github.com/your-org/hag_js/wiki)
 
 ---

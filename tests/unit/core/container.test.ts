@@ -1,15 +1,29 @@
 /**
  * Unit tests for dependency injection container in HAG JavaScript variant.
- * 
+ *
  * Tests container initialization, service registration, and dependency resolution.
  */
 
-import { assertEquals, assertExists, assertRejects, assertThrows } from '@std/assert';
-import { ApplicationContainer, createContainer, getContainer, disposeContainer } from '../../../src/core/container.ts';
+import {
+  assertEquals,
+  assertExists,
+  assertRejects,
+  assertThrows,
+} from '@std/assert';
+import {
+  ApplicationContainer,
+  createContainer,
+  disposeContainer,
+  getContainer,
+} from '../../../src/core/container.ts';
 import { TYPES } from '../../../src/core/types.ts';
-import { Settings, HvacOptions, ApplicationOptions } from '../../../src/config/config.ts';
+import {
+  ApplicationOptions,
+  HvacOptions,
+  Settings,
+} from '../../../src/config/config.ts';
 import { LoggerService } from '../../../src/core/logger.ts';
-import { SystemMode, LogLevel } from '../../../src/types/common.ts';
+import { LogLevel, SystemMode } from '../../../src/types/common.ts';
 
 // Mock configuration for testing - commented out as unused
 // const _mockSettings: Settings = {
@@ -110,8 +124,10 @@ interface MockDeno {
 
 function setupConfigMocks() {
   mockFileSystem.set('test-config.yaml', mockConfigYaml);
-  
-  (Deno as unknown as MockDeno).readTextFile = (path: string | URL): Promise<string> => {
+
+  (Deno as unknown as MockDeno).readTextFile = (
+    path: string | URL,
+  ): Promise<string> => {
     const pathStr = typeof path === 'string' ? path : path.toString();
     const content = mockFileSystem.get(pathStr);
     if (content === undefined) {
@@ -120,7 +136,9 @@ function setupConfigMocks() {
     return Promise.resolve(content);
   };
 
-  (Deno as unknown as MockDeno).statSync = (path: string | URL): Deno.FileInfo => {
+  (Deno as unknown as MockDeno).statSync = (
+    path: string | URL,
+  ): Deno.FileInfo => {
     const pathStr = typeof path === 'string' ? path : path.toString();
     if (mockFileSystem.has(pathStr)) {
       return {
@@ -168,17 +186,20 @@ Deno.test('Application Container - Basic Operations', async (t) => {
   await t.step('should initialize with configuration', async () => {
     const container = new ApplicationContainer();
     await container.initialize('test-config.yaml');
-    
+
     const settings = container.getSettings();
     assertExists(settings);
     assertEquals(settings.appOptions.logLevel, 'error');
-    assertEquals(settings.hassOptions.wsUrl, 'ws://localhost:8123/api/websocket');
+    assertEquals(
+      settings.hassOptions.wsUrl,
+      'ws://localhost:8123/api/websocket',
+    );
   });
 
   await t.step('should check service binding', async () => {
     const container = new ApplicationContainer();
     await container.initialize('test-config.yaml');
-    
+
     // Configuration services should be bound
     assertEquals(container.isBound(TYPES.Settings), true);
     assertEquals(container.isBound(TYPES.HvacOptions), true);
@@ -190,21 +211,21 @@ Deno.test('Application Container - Basic Operations', async (t) => {
   await t.step('should retrieve services', async () => {
     const container = new ApplicationContainer();
     await container.initialize('test-config.yaml');
-    
+
     const settings = container.get(TYPES.Settings);
     assertExists(settings);
-    
+
     const hvacOptions = container.get(TYPES.HvacOptions) as HvacOptions;
     assertExists(hvacOptions);
     assertEquals(hvacOptions.tempSensor, 'sensor.indoor_temp');
-    
+
     const logger = container.get(TYPES.Logger);
     assertExists(logger);
   });
 
   await t.step('should handle initialization errors', async () => {
     const container = new ApplicationContainer();
-    
+
     await assertRejects(
       () => container.initialize('nonexistent-config.yaml'),
       Error,
@@ -214,7 +235,7 @@ Deno.test('Application Container - Basic Operations', async (t) => {
   await t.step('should dispose properly', async () => {
     const container = new ApplicationContainer();
     await container.initialize('test-config.yaml');
-    
+
     // Should not throw
     await container.dispose();
   });
@@ -228,18 +249,18 @@ Deno.test('Application Container - Service Registration', async (t) => {
   await t.step('should register configuration services', async () => {
     const container = new ApplicationContainer();
     await container.initialize('test-config.yaml');
-    
+
     // All configuration should be registered
     const settings = container.get<Settings>(TYPES.Settings);
     const hvacOptions = container.get(TYPES.HvacOptions);
     const hassOptions = container.get(TYPES.HassOptions);
     const appOptions = container.get(TYPES.ApplicationOptions);
-    
+
     assertExists(settings);
     assertExists(hvacOptions);
     assertExists(hassOptions);
     assertExists(appOptions);
-    
+
     // Values should match loaded configuration
     assertEquals(settings.hvacOptions, hvacOptions);
     assertEquals(settings.hassOptions, hassOptions);
@@ -249,13 +270,13 @@ Deno.test('Application Container - Service Registration', async (t) => {
   await t.step('should register core services', async () => {
     const container = new ApplicationContainer();
     await container.initialize('test-config.yaml');
-    
+
     assertEquals(container.isBound(TYPES.Logger), true);
     assertEquals(container.isBound(TYPES.ConfigLoader), true);
-    
+
     const logger = container.get(TYPES.Logger) as LoggerService;
     assertExists(logger);
-    
+
     // Logger should have expected methods
     assertEquals(typeof logger.info, 'function');
     assertEquals(typeof logger.error, 'function');
@@ -267,10 +288,10 @@ Deno.test('Application Container - Service Registration', async (t) => {
     // Test without AI
     const container = new ApplicationContainer();
     await container.initialize('test-config.yaml');
-    
+
     // Wait for lazy loading
-    await new Promise(resolve => setTimeout(resolve, 50));
-    
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
     // Services should be registered (but lazily loaded)
     // We can't easily test the lazy-loaded services without complex mocking
     assertExists(container);
@@ -278,11 +299,11 @@ Deno.test('Application Container - Service Registration', async (t) => {
 
   await t.step('should handle missing settings', () => {
     const container = new ApplicationContainer();
-    
+
     assertThrows(
       () => container.getSettings(),
       Error,
-      'Settings not loaded'
+      'Settings not loaded',
     );
   });
 
@@ -296,23 +317,27 @@ Deno.test('Application Container - AI Integration', async (t) => {
     // Create config with AI enabled
     const aiConfigYaml = mockConfigYaml.replace('useAi: false', 'useAi: true');
     mockFileSystem.set('ai-config.yaml', aiConfigYaml);
-    
+
     const container = new ApplicationContainer();
     await container.initialize('ai-config.yaml');
-    
-    const appOptions = container.get(TYPES.ApplicationOptions) as ApplicationOptions;
+
+    const appOptions = container.get(
+      TYPES.ApplicationOptions,
+    ) as ApplicationOptions;
     assertEquals(appOptions.useAi, true);
-    
+
     // Should register AI-related services
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     assertExists(container);
   });
 
   await t.step('should handle AI disabled configuration', async () => {
     const container = new ApplicationContainer();
     await container.initialize('test-config.yaml');
-    
-    const appOptions = container.get(TYPES.ApplicationOptions) as ApplicationOptions;
+
+    const appOptions = container.get(
+      TYPES.ApplicationOptions,
+    ) as ApplicationOptions;
     assertEquals(appOptions.useAi, false);
   });
 
@@ -324,20 +349,23 @@ Deno.test('Application Container - Global Container Functions', async (t) => {
 
   await t.step('should create global container', async () => {
     const container = await createContainer('test-config.yaml');
-    
+
     assertExists(container);
     assertEquals(container.getSettings().appOptions.logLevel, LogLevel.ERROR);
-    
+
     await disposeContainer();
   });
 
   await t.step('should get global container', async () => {
     await createContainer('test-config.yaml');
-    
+
     const container = getContainer();
     assertExists(container);
-    assertEquals(container.getSettings().hassOptions.wsUrl, 'ws://localhost:8123/api/websocket');
-    
+    assertEquals(
+      container.getSettings().hassOptions.wsUrl,
+      'ws://localhost:8123/api/websocket',
+    );
+
     await disposeContainer();
   });
 
@@ -345,7 +373,7 @@ Deno.test('Application Container - Global Container Functions', async (t) => {
     assertThrows(
       () => getContainer(),
       Error,
-      'Container not initialized'
+      'Container not initialized',
     );
   });
 
@@ -353,15 +381,15 @@ Deno.test('Application Container - Global Container Functions', async (t) => {
     // Create first container
     const container1 = await createContainer('test-config.yaml');
     assertExists(container1);
-    
+
     // Create second container (should dispose first)
     const container2 = await createContainer('test-config.yaml');
     assertExists(container2);
-    
+
     // Should be able to get the new container
     const retrieved = getContainer();
     assertEquals(retrieved, container2);
-    
+
     await disposeContainer();
   });
 
@@ -378,7 +406,7 @@ Deno.test('Application Container - Error Handling', async (t) => {
 
   await t.step('should handle configuration loading errors', async () => {
     const container = new ApplicationContainer();
-    
+
     await assertRejects(
       () => container.initialize('invalid-config.yaml'),
       Error,
@@ -388,25 +416,28 @@ Deno.test('Application Container - Error Handling', async (t) => {
   await t.step('should handle invalid configuration format', async () => {
     const invalidYaml = 'invalid: yaml: structure: [';
     mockFileSystem.set('invalid.yaml', invalidYaml);
-    
+
     const container = new ApplicationContainer();
-    
+
     await assertRejects(
       () => container.initialize('invalid.yaml'),
       Error,
     );
   });
 
-  await t.step('should handle service resolution errors gracefully', async () => {
-    const container = new ApplicationContainer();
-    await container.initialize('test-config.yaml');
-    
-    // Try to get unregistered service
-    assertThrows(
-      () => container.get(Symbol.for('NonexistentService')),
-      Error,
-    );
-  });
+  await t.step(
+    'should handle service resolution errors gracefully',
+    async () => {
+      const container = new ApplicationContainer();
+      await container.initialize('test-config.yaml');
+
+      // Try to get unregistered service
+      assertThrows(
+        () => container.get(Symbol.for('NonexistentService')),
+        Error,
+      );
+    },
+  );
 
   teardownConfigMocks();
 });
@@ -415,23 +446,29 @@ Deno.test('Application Container - Logging Setup', async (t) => {
   setupConfigMocks();
 
   await t.step('should setup logging with INFO level', async () => {
-    const infoConfigYaml = mockConfigYaml.replace('logLevel: error', 'logLevel: info');
+    const infoConfigYaml = mockConfigYaml.replace(
+      'logLevel: error',
+      'logLevel: info',
+    );
     mockFileSystem.set('info-config.yaml', infoConfigYaml);
-    
+
     const container = new ApplicationContainer();
     await container.initialize('info-config.yaml');
-    
+
     const settings = container.getSettings();
     assertEquals(settings.appOptions.logLevel, LogLevel.INFO);
   });
 
   await t.step('should setup logging with DEBUG level', async () => {
-    const debugConfigYaml = mockConfigYaml.replace('logLevel: error', 'logLevel: debug');
+    const debugConfigYaml = mockConfigYaml.replace(
+      'logLevel: error',
+      'logLevel: debug',
+    );
     mockFileSystem.set('debug-config.yaml', debugConfigYaml);
-    
+
     const container = new ApplicationContainer();
     await container.initialize('debug-config.yaml');
-    
+
     const settings = container.getSettings();
     assertEquals(settings.appOptions.logLevel, LogLevel.DEBUG);
   });
@@ -445,12 +482,12 @@ Deno.test('Application Container - Resource Cleanup', async (t) => {
   await t.step('should cleanup services on dispose', async () => {
     const container = new ApplicationContainer();
     await container.initialize('test-config.yaml');
-    
+
     // Services should be registered
     assertEquals(container.isBound(TYPES.Settings), true);
-    
+
     await container.dispose();
-    
+
     // Container should still exist but services should be cleaned up
     assertExists(container);
   });
@@ -458,7 +495,7 @@ Deno.test('Application Container - Resource Cleanup', async (t) => {
   await t.step('should handle dispose with service errors', async () => {
     const container = new ApplicationContainer();
     await container.initialize('test-config.yaml');
-    
+
     // Should not throw even if services have issues during cleanup
     await container.dispose();
   });
@@ -472,22 +509,24 @@ Deno.test('Application Container - Configuration Validation', async (t) => {
   await t.step('should validate complete configuration', async () => {
     const container = new ApplicationContainer();
     await container.initialize('test-config.yaml');
-    
+
     const settings = container.getSettings();
-    
+
     // All required sections should be present
     assertExists(settings.appOptions);
     assertExists(settings.hassOptions);
     assertExists(settings.hvacOptions);
-    
+
     // Key values should be correct
     assertEquals(settings.hvacOptions.tempSensor, 'sensor.indoor_temp');
     assertEquals(settings.hvacOptions.systemMode, SystemMode.AUTO);
     assertEquals(settings.hassOptions.token, 'test_token');
   });
 
-  await t.step('should handle partial configuration with defaults', async () => {
-    const minimalYaml = `
+  await t.step(
+    'should handle partial configuration with defaults',
+    async () => {
+      const minimalYaml = `
     hassOptions:
       wsUrl: ws://localhost:8123/api/websocket
       restUrl: http://localhost:8123
@@ -498,19 +537,20 @@ Deno.test('Application Container - Configuration Validation', async (t) => {
       heating: {}
       cooling: {}
     `;
-    
-    mockFileSystem.set('minimal.yaml', minimalYaml);
-    
-    const container = new ApplicationContainer();
-    await container.initialize('minimal.yaml');
-    
-    const settings = container.getSettings();
-    
-    // Should have default values
-    assertEquals(settings.appOptions.logLevel, LogLevel.INFO);
-    assertEquals(settings.appOptions.useAi, false);
-    assertEquals(settings.hvacOptions.systemMode, SystemMode.AUTO);
-  });
+
+      mockFileSystem.set('minimal.yaml', minimalYaml);
+
+      const container = new ApplicationContainer();
+      await container.initialize('minimal.yaml');
+
+      const settings = container.getSettings();
+
+      // Should have default values
+      assertEquals(settings.appOptions.logLevel, LogLevel.INFO);
+      assertEquals(settings.appOptions.useAi, false);
+      assertEquals(settings.hvacOptions.systemMode, SystemMode.AUTO);
+    },
+  );
 
   teardownConfigMocks();
 });
@@ -520,14 +560,14 @@ Deno.test('Application Container - Concurrent Operations', async (t) => {
 
   await t.step('should handle concurrent initialization attempts', async () => {
     const container = new ApplicationContainer();
-    
+
     // Start multiple initializations concurrently
     const init1 = container.initialize('test-config.yaml');
     const init2 = container.initialize('test-config.yaml');
-    
+
     // Both should complete without error
     await Promise.all([init1, init2]);
-    
+
     const settings = container.getSettings();
     assertExists(settings);
   });
@@ -535,7 +575,7 @@ Deno.test('Application Container - Concurrent Operations', async (t) => {
   await t.step('should handle concurrent service access', async () => {
     const container = new ApplicationContainer();
     await container.initialize('test-config.yaml');
-    
+
     // Access services concurrently
     const promises = [
       Promise.resolve(container.get(TYPES.Settings)),
@@ -543,9 +583,9 @@ Deno.test('Application Container - Concurrent Operations', async (t) => {
       Promise.resolve(container.get(TYPES.HassOptions)),
       Promise.resolve(container.get(TYPES.Logger)),
     ];
-    
+
     const services = await Promise.all(promises);
-    
+
     // All services should be retrieved successfully
     for (const service of services) {
       assertExists(service);

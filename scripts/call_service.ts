@@ -10,7 +10,9 @@
 const [service, ...args] = Deno.args;
 
 if (!service) {
-  console.error('Usage: ./call_service.ts <domain>.<service> [--entity_id <entity_id>] [key=value ...]');
+  console.error(
+    'Usage: ./call_service.ts <domain>.<service> [--entity_id <entity_id>] [key=value ...]',
+  );
   Deno.exit(1);
 }
 
@@ -44,7 +46,10 @@ const token = Deno.env.get('HASS_HassOptions__Token');
 const restUrl = 'http://192.168.0.204:8123/api';
 
 try {
-  console.log(`Calling service ${domain}.${serviceName} with data:`, serviceData);
+  console.log(
+    `Calling service ${domain}.${serviceName} with data:`,
+    serviceData,
+  );
   const response = await fetch(`${restUrl}/services/${domain}/${serviceName}`, {
     method: 'POST',
     headers: {

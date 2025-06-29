@@ -1,6 +1,6 @@
 /**
  * Unit tests for AI agent in HAG JavaScript variant.
- * 
+ *
  * Tests LangChain integration, tool usage, and AI decision making.
  */
 
@@ -8,8 +8,8 @@ import { assertEquals, assertExists } from '@std/assert';
 import { HVACAgent } from '../../../src/ai/agent.ts';
 import { HVACStateMachine } from '../../../src/hvac/state-machine.ts';
 import { HomeAssistantClient } from '../../../src/home-assistant/client.ts';
-import { HvacOptions, ApplicationOptions } from '../../../src/config/config.ts';
-import { HVACMode, SystemMode, LogLevel } from '../../../src/types/common.ts';
+import { ApplicationOptions, HvacOptions } from '../../../src/config/config.ts';
+import { HVACMode, LogLevel, SystemMode } from '../../../src/types/common.ts';
 // import { AIError } from '../../../src/core/exceptions.ts'; // Unused
 import type { LoggerService } from '../../../src/core/logger.ts';
 
@@ -79,7 +79,10 @@ class MockHVACStateMachine {
 
 // Mock Home Assistant client
 class MockHomeAssistantClient {
-  private mockStates = new Map<string, { state: string; attributes: Record<string, unknown> }>();
+  private mockStates = new Map<
+    string,
+    { state: string; attributes: Record<string, unknown> }
+  >();
 
   constructor() {
     // Set up default mock states
@@ -98,7 +101,7 @@ class MockHomeAssistantClient {
     if (!mockState) {
       throw new Error(`Entity ${entityId} not found`);
     }
-    
+
     return {
       entityId,
       state: mockState.state,
@@ -107,7 +110,11 @@ class MockHomeAssistantClient {
     };
   }
 
-  setMockState(entityId: string, state: string, attributes: Record<string, unknown> = {}): void {
+  setMockState(
+    entityId: string,
+    state: string,
+    attributes: Record<string, unknown> = {},
+  ): void {
     this.mockStates.set(entityId, { state, attributes });
   }
 }
@@ -156,7 +163,8 @@ const mockAppOptions: ApplicationOptions = {
 };
 
 // Skip AI tests if no OpenAI key available (for CI/CD)
-const hasOpenAIKey = Deno.env.get('OPENAI_API_KEY') || mockAppOptions.openaiApiKey;
+const hasOpenAIKey = Deno.env.get('OPENAI_API_KEY') ||
+  mockAppOptions.openaiApiKey;
 
 Deno.test('AI Agent - Initialization', async (t) => {
   if (!hasOpenAIKey) {
@@ -182,7 +190,7 @@ Deno.test('AI Agent - Initialization', async (t) => {
 
   await t.step('should initialize without OpenAI key', () => {
     const optionsWithoutKey = { ...mockAppOptions, openaiApiKey: undefined };
-    
+
     // Should still initialize but may fail on actual AI operations
     const agent = new HVACAgent(
       mockHvacOptions,
@@ -216,10 +224,10 @@ Deno.test('AI Agent - Status Summary', async (t) => {
 
   await t.step('should provide status summary', async () => {
     const summary = await agent.getStatusSummary();
-    
+
     assertExists(summary);
     assertEquals(typeof summary.success, 'boolean');
-    
+
     if (summary.success) {
       assertExists(summary.aiSummary);
       assertEquals(typeof summary.aiSummary, 'string');
@@ -231,7 +239,9 @@ Deno.test('AI Agent - Status Summary', async (t) => {
   await t.step('should handle status summary errors gracefully', async () => {
     // Test with invalid state machine
     const failingStateMachine = {
-      getStatus: () => { throw new Error('State machine error'); },
+      getStatus: () => {
+        throw new Error('State machine error');
+      },
     };
 
     const failingAgent = new HVACAgent(
@@ -276,7 +286,7 @@ Deno.test('AI Agent - Temperature Change Processing', async (t) => {
     };
 
     const result = await agent.processTemperatureChange(temperatureEvent);
-    
+
     assertExists(result);
     assertEquals(typeof result.success, 'boolean');
   });
@@ -290,7 +300,7 @@ Deno.test('AI Agent - Temperature Change Processing', async (t) => {
     };
 
     const result = await agent.processTemperatureChange(invalidEvent);
-    
+
     // Should handle gracefully
     assertExists(result);
     assertEquals(typeof result.success, 'boolean');
@@ -305,7 +315,7 @@ Deno.test('AI Agent - Temperature Change Processing', async (t) => {
     };
 
     const result = await agent.processTemperatureChange(significantChangeEvent);
-    
+
     assertExists(result);
     assertEquals(typeof result.success, 'boolean');
   });
@@ -331,53 +341,65 @@ Deno.test('AI Agent - Manual Override', async (t) => {
 
   await t.step('should handle manual override - heat', async () => {
     const result = await agent.manualOverride('heat', { temperature: 22.0 });
-    
+
     assertExists(result);
     assertEquals(typeof result.success, 'boolean');
-    
+
     if (result.success) {
       assertExists((result.data as unknown as { action?: string })?.action);
-      assertEquals((result.data as unknown as { action?: string })?.action, 'heat');
+      assertEquals(
+        (result.data as unknown as { action?: string })?.action,
+        'heat',
+      );
     }
   });
 
   await t.step('should handle manual override - cool', async () => {
     const result = await agent.manualOverride('cool', { temperature: 24.0 });
-    
+
     assertExists(result);
     assertEquals(typeof result.success, 'boolean');
-    
+
     if (result.success) {
       assertExists((result.data as unknown as { action?: string })?.action);
-      assertEquals((result.data as unknown as { action?: string })?.action, 'cool');
+      assertEquals(
+        (result.data as unknown as { action?: string })?.action,
+        'cool',
+      );
     }
   });
 
   await t.step('should handle manual override - off', async () => {
     const result = await agent.manualOverride('off', {});
-    
+
     assertExists(result);
     assertEquals(typeof result.success, 'boolean');
-    
+
     if (result.success) {
       assertExists((result.data as unknown as { action?: string })?.action);
-      assertEquals((result.data as unknown as { action?: string })?.action, 'off');
+      assertEquals(
+        (result.data as unknown as { action?: string })?.action,
+        'off',
+      );
     }
   });
 
   await t.step('should reject invalid override actions', async () => {
     const result = await agent.manualOverride('invalid_action', {});
-    
+
     assertEquals(result.success, false);
     assertExists(result.error);
   });
 
   await t.step('should handle override with temperature', async () => {
     const result = await agent.manualOverride('heat', { temperature: 20.5 });
-    
+
     assertExists(result);
     if (result.success) {
-      assertEquals((result.data as unknown as { temperature?: number })?.temperature, 20.5);
+      assertEquals(
+        (result.data as unknown as { temperature?: number })?.temperature,
+        20.5,
+      );
     }
   });
 });
@@ -402,26 +424,39 @@ Deno.test('AI Agent - Efficiency Evaluation', async (t) => {
 
   await t.step('should evaluate system efficiency', async () => {
     const result = await agent.evaluateEfficiency();
-    
+
     assertExists(result);
     assertEquals(typeof result.success, 'boolean');
-    
+
     if (result.success) {
-      assertExists((result.data as unknown as { analysis?: unknown })?.analysis);
-      assertExists((result.data as unknown as { recommendations?: unknown[] })?.recommendations);
-      assertEquals(Array.isArray((result.data as unknown as { recommendations?: unknown[] })?.recommendations), true);
+      assertExists(
+        (result.data as unknown as { analysis?: unknown })?.analysis,
+      );
+      assertExists(
+        (result.data as unknown as { recommendations?: unknown[] })
+          ?.recommendations,
+      );
+      assertEquals(
+        Array.isArray(
+          (result.data as unknown as { recommendations?: unknown[] })
+            ?.recommendations,
+        ),
+        true,
+      );
     }
   });
 
   await t.step('should provide efficiency recommendations', async () => {
     // Set up scenario that might trigger recommendations
     mockHaClient.setMockState('sensor.indoor_temp', '17.0'); // Cold
-    mockHaClient.setMockState('sensor.outdoor_temp', '5.0');  // Cool outside
-    
+    mockHaClient.setMockState('sensor.outdoor_temp', '5.0'); // Cool outside
+
     const result = await agent.evaluateEfficiency();
-    
+
     assertExists(result);
-    const recommendations = (result.data as unknown as { recommendations?: unknown[] })?.recommendations;
+    const recommendations =
+      (result.data as unknown as { recommendations?: unknown[] })
+        ?.recommendations;
     if (result.success && recommendations) {
       assertEquals(recommendations.length > 0, true);
     }
@@ -468,7 +503,7 @@ Deno.test('AI Agent - Tool Integration', async (t) => {
 
     // Test that tools are accessible and functional
     const result = await agent.manualOverride('heat', { temperature: 21.0 });
-    
+
     assertExists(result);
     // The tool should have been used internally
   });
@@ -487,7 +522,7 @@ Deno.test('AI Agent - Tool Integration', async (t) => {
     mockHaClient.setMockState('sensor.outdoor_temp', '8.0');
 
     const summary = await agent.getStatusSummary();
-    
+
     assertExists(summary);
     // Tools should have been used to read temperatures
   });
@@ -502,7 +537,7 @@ Deno.test('AI Agent - Tool Integration', async (t) => {
     );
 
     const summary = await agent.getStatusSummary();
-    
+
     assertExists(summary);
     if (summary.success) {
       // Status tool should have provided system information
@@ -524,7 +559,7 @@ Deno.test('AI Agent - Error Handling', async (t) => {
   await t.step('should handle AI service errors', async () => {
     // Test with invalid API key
     const invalidOptions = { ...mockAppOptions, openaiApiKey: 'invalid-key' };
-    
+
     const agent = new HVACAgent(
       mockHvacOptions,
       invalidOptions,
@@ -534,7 +569,7 @@ Deno.test('AI Agent - Error Handling', async (t) => {
     );
 
     const result = await agent.getStatusSummary();
-    
+
     // Should handle API errors gracefully
     assertExists(result);
     if (!result.success) {
@@ -545,7 +580,9 @@ Deno.test('AI Agent - Error Handling', async (t) => {
   await t.step('should handle tool execution errors', async () => {
     // Test with failing state machine
     const failingStateMachine = {
-      manualOverride: () => { throw new Error('State machine error'); },
+      manualOverride: () => {
+        throw new Error('State machine error');
+      },
       getStatus: () => ({ currentState: 'error', context: {} }),
     };
 
@@ -558,7 +595,7 @@ Deno.test('AI Agent - Error Handling', async (t) => {
     );
 
     const result = await agent.manualOverride('heat', {});
-    
+
     // Should handle tool errors gracefully
     assertExists(result);
     assertEquals(result.success, false);
@@ -600,7 +637,7 @@ Deno.test('AI Agent - Configuration Scenarios', async (t) => {
 
   await t.step('should work with different AI models', async () => {
     const gpt4Options = { ...mockAppOptions, aiModel: 'gpt-4' };
-    
+
     const agent = new HVACAgent(
       mockHvacOptions,
       gpt4Options,
@@ -615,7 +652,7 @@ Deno.test('AI Agent - Configuration Scenarios', async (t) => {
 
   await t.step('should work with different temperature settings', async () => {
     const highTempOptions = { ...mockAppOptions, aiTemperature: 0.8 };
-    
+
     const agent = new HVACAgent(
       mockHvacOptions,
       highTempOptions,
@@ -629,8 +666,11 @@ Deno.test('AI Agent - Configuration Scenarios', async (t) => {
   });
 
   await t.step('should work with different system modes', async () => {
-    const heatOnlyOptions = { ...mockHvacOptions, systemMode: SystemMode.HEAT_ONLY };
-    
+    const heatOnlyOptions = {
+      ...mockHvacOptions,
+      systemMode: SystemMode.HEAT_ONLY,
+    };
+
     const agent = new HVACAgent(
       heatOnlyOptions,
       mockAppOptions,
@@ -694,8 +734,12 @@ Deno.test('AI Agent - Real-world Scenarios', async (t) => {
 
     const efficiency = await agent.evaluateEfficiency();
     assertExists(efficiency);
-    
-    if (efficiency.success && efficiency.data && typeof efficiency.data === 'object' && 'recommendations' in efficiency.data) {
+
+    if (
+      efficiency.success && efficiency.data &&
+      typeof efficiency.data === 'object' &&
+      'recommendations' in efficiency.data
+    ) {
       // Should provide energy-saving recommendations
       assertEquals(Array.isArray(efficiency.data.recommendations), true);
     }

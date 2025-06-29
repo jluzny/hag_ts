@@ -1,7 +1,6 @@
-
 /**
  * Unit tests for HVAC Controller in HAG JavaScript variant.
- * 
+ *
  * Tests controller functionality, dry run mode, and service coordination.
  */
 
@@ -9,9 +8,8 @@ import { assertEquals, assertExists } from '@std/assert';
 import { HVACController } from '../../../src/hvac/controller.ts';
 import { HVACStateMachine } from '../../../src/hvac/state-machine.ts';
 import { HomeAssistantClient } from '../../../src/home-assistant/client.ts';
-import { HvacOptions, ApplicationOptions } from '../../../src/config/config.ts';
-import { HVACMode, SystemMode, LogLevel } from '../../../src/types/common.ts';
-
+import { ApplicationOptions, HvacOptions } from '../../../src/config/config.ts';
+import { HVACMode, LogLevel, SystemMode } from '../../../src/types/common.ts';
 
 // Mock state machine
 class MockHVACStateMachine {
@@ -54,7 +52,7 @@ class MockHVACStateMachine {
   }
 
   stop(): void {
-    // Mock implementation  
+    // Mock implementation
   }
 
   send(_event: unknown): void {
@@ -69,7 +67,10 @@ class MockHVACStateMachine {
 // Mock Home Assistant client
 class MockHomeAssistantClient {
   serviceCalls: Array<{ domain: string; service: string; data: unknown }> = [];
-  private mockStates = new Map<string, { state: string; attributes: Record<string, unknown> }>();
+  private mockStates = new Map<
+    string,
+    { state: string; attributes: Record<string, unknown> }
+  >();
   private eventHandlers = new Map<string, Set<(event: unknown) => void>>();
   private subscribedEvents = new Set<string>();
 
@@ -107,7 +108,7 @@ class MockHomeAssistantClient {
     if (!mockState) {
       throw new Error(`Entity ${entityId} not found`);
     }
-    
+
     return {
       entityId,
       state: mockState.state,
@@ -118,7 +119,9 @@ class MockHomeAssistantClient {
     };
   }
 
-  callService(serviceCall: { domain: string; service: string; serviceData?: unknown }): void {
+  callService(
+    serviceCall: { domain: string; service: string; serviceData?: unknown },
+  ): void {
     this.serviceCalls.push({
       domain: serviceCall.domain,
       service: serviceCall.service,
@@ -126,7 +129,11 @@ class MockHomeAssistantClient {
     });
   }
 
-  setMockState(entityId: string, state: string, attributes: Record<string, unknown> = {}): void {
+  setMockState(
+    entityId: string,
+    state: string,
+    attributes: Record<string, unknown> = {},
+  ): void {
     this.mockStates.set(entityId, { state, attributes });
   }
 
@@ -241,7 +248,10 @@ Deno.test('HVAC Controller - Dry Run Mode', async (t) => {
       // This should fail because controller is not running
     } catch (error) {
       // Expected: controller not running
-      assertEquals(error instanceof Error && error.message.includes('not running'), true);
+      assertEquals(
+        error instanceof Error && error.message.includes('not running'),
+        true,
+      );
     }
 
     // Assert that no service calls were made to Home Assistant

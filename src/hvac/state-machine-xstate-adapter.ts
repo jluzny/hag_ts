@@ -1,6 +1,6 @@
 /**
  * XState Adapter for HVAC State Machine Interface
- * 
+ *
  * This adapter wraps the existing XState HVACStateMachine to conform
  * to the new IHVACStateMachine interface, allowing seamless switching
  * between XState and LangGraph implementations.
@@ -17,14 +17,14 @@ import type { LoggerService } from '../core/logger.ts';
  */
 export class XStateHVACStateMachineAdapter implements IHVACStateMachine {
   private xstateStateMachine: HVACStateMachine;
-  
+
   constructor(
     private hvacOptions: HvacOptions,
-    private logger: LoggerService
+    private logger: LoggerService,
   ) {
     this.xstateStateMachine = new HVACStateMachine(hvacOptions);
   }
-  
+
   /**
    * Start the state machine
    */
@@ -32,7 +32,7 @@ export class XStateHVACStateMachineAdapter implements IHVACStateMachine {
     this.logger.info('🚀 [XState Adapter] Starting HVAC state machine');
     this.xstateStateMachine.start();
   }
-  
+
   /**
    * Stop the state machine
    */
@@ -40,14 +40,14 @@ export class XStateHVACStateMachineAdapter implements IHVACStateMachine {
     this.logger.info('🛑 [XState Adapter] Stopping HVAC state machine');
     this.xstateStateMachine.stop();
   }
-  
+
   /**
    * Get current state name
    */
   getCurrentState(): string {
     return this.xstateStateMachine.getCurrentState();
   }
-  
+
   /**
    * Get current context/state data
    */
@@ -59,10 +59,10 @@ export class XStateHVACStateMachineAdapter implements IHVACStateMachine {
       systemMode: context.systemMode,
       currentHour: context.currentHour,
       isWeekday: context.isWeekday,
-      lastDefrost: context.lastDefrost
+      lastDefrost: context.lastDefrost,
     };
   }
-  
+
   /**
    * Get detailed status information
    */
@@ -76,16 +76,16 @@ export class XStateHVACStateMachineAdapter implements IHVACStateMachine {
     const currentState = this.getCurrentState();
     const context = this.getContext();
     const systemMode = context.systemMode as SystemMode;
-    
+
     return {
       currentState,
       context,
       canHeat: systemMode !== SystemMode.COOL_ONLY,
       canCool: systemMode !== SystemMode.HEAT_ONLY,
-      systemMode
+      systemMode,
     };
   }
-  
+
   /**
    * Handle temperature sensor changes
    */
@@ -93,28 +93,30 @@ export class XStateHVACStateMachineAdapter implements IHVACStateMachine {
     this.logger.debug('🌡️ [XState Adapter] Temperature change received', {
       sensor,
       value,
-      currentState: this.getCurrentState()
+      currentState: this.getCurrentState(),
     });
-    
+
     // For XState implementation, we need to get current temperatures
     // and update both indoor and outdoor together
     const context = this.getContext();
     let indoor = context.indoorTemp as number;
     let outdoor = context.outdoorTemp as number;
-    
+
     // Update the appropriate temperature based on sensor name
     if (sensor.includes('indoor') || sensor.includes('hall_multisensor')) {
       indoor = value;
-    } else if (sensor.includes('outdoor') || sensor.includes('openweathermap')) {
+    } else if (
+      sensor.includes('outdoor') || sensor.includes('openweathermap')
+    ) {
       outdoor = value;
     }
-    
+
     // Only update if we have both temperatures
     if (indoor !== undefined && outdoor !== undefined) {
       this.xstateStateMachine.updateTemperatures(indoor, outdoor);
     }
   }
-  
+
   /**
    * Execute manual override
    */
@@ -122,12 +124,12 @@ export class XStateHVACStateMachineAdapter implements IHVACStateMachine {
     this.logger.info('👤 [XState Adapter] Manual override triggered', {
       mode,
       temperature,
-      currentState: this.getCurrentState()
+      currentState: this.getCurrentState(),
     });
-    
+
     this.xstateStateMachine.manualOverride(mode, temperature);
   }
-  
+
   /**
    * Clear manual override (delegate to evaluation)
    */
@@ -135,7 +137,7 @@ export class XStateHVACStateMachineAdapter implements IHVACStateMachine {
     this.logger.info('🔄 [XState Adapter] Clearing manual override');
     this.xstateStateMachine.evaluateConditions();
   }
-  
+
   /**
    * Update system mode
    * Note: XState implementation doesn't have direct system mode updates,
@@ -144,23 +146,23 @@ export class XStateHVACStateMachineAdapter implements IHVACStateMachine {
   async updateSystemMode(systemMode: SystemMode): Promise<void> {
     this.logger.info('⚙️ [XState Adapter] System mode updated', {
       newMode: systemMode,
-      currentState: this.getCurrentState()
+      currentState: this.getCurrentState(),
     });
-    
+
     // Update the hvacOptions with new system mode
     this.hvacOptions.systemMode = systemMode;
-    
+
     // Trigger evaluation to apply new system mode
     this.xstateStateMachine.evaluateConditions();
   }
-  
+
   /**
    * Trigger evaluation (XState specific method)
    */
   evaluateConditions(): void {
     this.xstateStateMachine.evaluateConditions();
   }
-  
+
   /**
    * Send event to XState machine (XState specific method)
    */

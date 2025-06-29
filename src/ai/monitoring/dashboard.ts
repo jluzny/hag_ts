@@ -1,12 +1,18 @@
 /**
  * AI HVAC System Dashboard
- * 
+ *
  * This module provides a comprehensive dashboard interface for monitoring
  * and managing the AI-enhanced HVAC system with real-time metrics,
  * alerts, and performance analytics.
  */
 
-import { SystemMonitor, SystemMetrics, ComponentHealth, SystemAlert, TrendAnalysis } from './system-monitor.ts';
+import {
+  ComponentHealth,
+  SystemAlert,
+  SystemMetrics,
+  SystemMonitor,
+  TrendAnalysis,
+} from './system-monitor.ts';
 import { HVACOptimizer } from '../optimization/hvac-optimizer.ts';
 import { PredictiveAnalyticsEngine } from '../predictive/analytics-engine.ts';
 import { AdaptiveLearningEngine } from '../learning/adaptive-learning-engine.ts';
@@ -20,15 +26,15 @@ export interface DashboardConfig {
   // Display settings
   refreshInterval: number; // seconds
   metricsRetention: number; // hours
-  
+
   // Chart settings
   chartDataPoints: number;
   trendAnalysisPeriod: number; // hours
-  
+
   // Alert settings
   autoAcknowledgeInfo: boolean;
   alertDisplayLimit: number;
-  
+
   // Export settings
   enableDataExport: boolean;
   exportFormats: string[];
@@ -82,24 +88,24 @@ export interface ExportData {
 export class AIHVACDashboard {
   private config: DashboardConfig;
   private logger: LoggerService;
-  
+
   // System components
   private monitor: SystemMonitor;
   private optimizer?: HVACOptimizer;
   private analytics?: PredictiveAnalyticsEngine;
   private learning?: AdaptiveLearningEngine;
   private scheduler?: SmartScheduler;
-  
+
   // Dashboard state
   private isRunning: boolean = false;
   private currentLayout: DashboardLayout;
   private widgets: Map<string, DashboardWidget> = new Map();
   private refreshInterval?: number;
-  
+
   // Real-time data
   private realtimeMetrics: SystemMetrics[] = [];
   private realtimeAlerts: SystemAlert[] = [];
-  
+
   constructor(
     config: DashboardConfig,
     monitor: SystemMonitor,
@@ -107,7 +113,7 @@ export class AIHVACDashboard {
     optimizer?: HVACOptimizer,
     analytics?: PredictiveAnalyticsEngine,
     learning?: AdaptiveLearningEngine,
-    scheduler?: SmartScheduler
+    scheduler?: SmartScheduler,
   ) {
     this.config = config;
     this.monitor = monitor;
@@ -116,10 +122,10 @@ export class AIHVACDashboard {
     this.analytics = analytics;
     this.learning = learning;
     this.scheduler = scheduler;
-    
+
     // Initialize default layout
     this.currentLayout = this.createDefaultLayout();
-    
+
     this.logger.info('📊 [Dashboard] Initialized', {
       refreshInterval: config.refreshInterval,
       widgets: this.currentLayout.widgets.length,
@@ -127,11 +133,11 @@ export class AIHVACDashboard {
         optimizer: !!optimizer,
         analytics: !!analytics,
         learning: !!learning,
-        scheduler: !!scheduler
-      }
+        scheduler: !!scheduler,
+      },
     });
   }
-  
+
   /**
    * Start the dashboard
    */
@@ -140,28 +146,27 @@ export class AIHVACDashboard {
       this.logger.warning('🔄 [Dashboard] Already running');
       return;
     }
-    
+
     try {
       this.isRunning = true;
-      
+
       // Initialize widgets
       await this.initializeWidgets();
-      
+
       // Start periodic refresh
       this.startPeriodicRefresh();
-      
+
       this.logger.info('🚀 [Dashboard] Started successfully', {
         layout: this.currentLayout.name,
-        widgets: this.widgets.size
+        widgets: this.widgets.size,
       });
-      
     } catch (error) {
       this.logger.error('❌ [Dashboard] Failed to start', error);
       this.isRunning = false;
       throw error;
     }
   }
-  
+
   /**
    * Stop the dashboard
    */
@@ -169,14 +174,14 @@ export class AIHVACDashboard {
     if (!this.isRunning) {
       return;
     }
-    
+
     this.logger.info('🛑 [Dashboard] Stopping');
-    
+
     this.isRunning = false;
-    
+
     if (this.refreshInterval) clearInterval(this.refreshInterval);
   }
-  
+
   /**
    * Get current dashboard state
    */
@@ -193,7 +198,7 @@ export class AIHVACDashboard {
     };
   } {
     const dashboard = this.monitor.getDashboard();
-    
+
     return {
       isRunning: this.isRunning,
       layout: this.currentLayout,
@@ -203,18 +208,18 @@ export class AIHVACDashboard {
         health: dashboard.overview.healthStatus,
         uptime: dashboard.overview.uptime,
         activeAlerts: dashboard.overview.alertCount,
-        componentCount: dashboard.overview.componentCount
-      }
+        componentCount: dashboard.overview.componentCount,
+      },
     };
   }
-  
+
   /**
    * Get real-time metrics for charts
    */
   getRealtimeMetrics(hours: number = 24): SystemMetrics[] {
     return this.monitor.getMetricsHistory(hours);
   }
-  
+
   /**
    * Get performance summary
    */
@@ -240,43 +245,57 @@ export class AIHVACDashboard {
     const dashboard = this.monitor.getDashboard();
     const metrics = this.monitor.getMetricsHistory(24);
     const current = dashboard.currentMetrics;
-    
+
     // Calculate achievements
-    const uptimePercent = metrics.length > 0 ? 
-      (metrics.filter(m => m.healthStatus !== 'critical').length / metrics.length) * 100 : 100;
-    
-    const avgComfortScore = metrics.length > 0 ?
-      metrics.reduce((sum, m) => sum + m.comfortScore, 0) / metrics.length : 0;
-    
-    const energySavings = metrics.length > 0 ?
-      metrics.reduce((sum, m) => sum + m.energyEfficiency, 0) / metrics.length : 0;
-    
+    const uptimePercent = metrics.length > 0
+      ? (metrics.filter((m) => m.healthStatus !== 'critical').length /
+        metrics.length) * 100
+      : 100;
+
+    const avgComfortScore = metrics.length > 0
+      ? metrics.reduce((sum, m) => sum + m.comfortScore, 0) / metrics.length
+      : 0;
+
+    const energySavings = metrics.length > 0
+      ? metrics.reduce((sum, m) => sum + m.energyEfficiency, 0) / metrics.length
+      : 0;
+
     // Calculate alert resolution time
-    const resolvedAlerts = this.monitor.getAlertHistory(24).filter(a => a.resolvedAt);
-    const avgResolutionTime = resolvedAlerts.length > 0 ?
-      resolvedAlerts.reduce((sum, a) => sum + (a.resolvedAt!.getTime() - a.timestamp.getTime()), 0) / resolvedAlerts.length / (1000 * 60) : 0;
-    
+    const resolvedAlerts = this.monitor.getAlertHistory(24).filter((a) =>
+      a.resolvedAt
+    );
+    const avgResolutionTime = resolvedAlerts.length > 0
+      ? resolvedAlerts.reduce(
+        (sum, a) => sum + (a.resolvedAt!.getTime() - a.timestamp.getTime()),
+        0,
+      ) / resolvedAlerts.length / (1000 * 60)
+      : 0;
+
     return {
       current: {
         comfort: current?.comfortScore || 0,
         efficiency: current?.energyEfficiency || 0,
         aiLatency: current?.aiDecisionLatency || 0,
-        systemHealth: current?.healthStatus || 'unknown'
+        systemHealth: current?.healthStatus || 'unknown',
       },
       trends: {
-        comfort: dashboard.recentTrends.find(t => t.metric === 'comfortScore') || null,
-        efficiency: dashboard.recentTrends.find(t => t.metric === 'energyEfficiency') || null,
-        performance: null // Would be calculated from multiple metrics
+        comfort:
+          dashboard.recentTrends.find((t) => t.metric === 'comfortScore') ||
+          null,
+        efficiency:
+          dashboard.recentTrends.find((t) => t.metric === 'energyEfficiency') ||
+          null,
+        performance: null, // Would be calculated from multiple metrics
       },
       achievements: {
         uptimePercent,
         avgComfortScore,
         energySavings: energySavings * 100, // As percentage
-        alertResolutionTime: avgResolutionTime // Minutes
-      }
+        alertResolutionTime: avgResolutionTime, // Minutes
+      },
     };
   }
-  
+
   /**
    * Get AI component status
    */
@@ -314,45 +333,48 @@ export class AIHVACDashboard {
   } {
     const dashboard = this.monitor.getDashboard();
     const components = dashboard.componentHealth;
-    
+
     // Get component status by name
-    const getComponentStatus = (name: string) => 
-      components.find(c => c.name.includes(name))?.status || 'unknown';
-    
+    const getComponentStatus = (name: string) =>
+      components.find((c) => c.name.includes(name))?.status || 'unknown';
+
     return {
       decisionEngine: {
         status: getComponentStatus('decision'),
         responseTime: dashboard.currentMetrics?.aiDecisionLatency || 0,
         accuracy: dashboard.currentMetrics?.predictionAccuracy || 0,
-        decisionsToday: 0 // Would be tracked separately
+        decisionsToday: 0, // Would be tracked separately
       },
       optimizer: {
         status: getComponentStatus('optimizer'),
         optimizations: 0, // Would be tracked by optimizer
         energySavings: dashboard.currentMetrics?.energyEfficiency || 0,
-        comfortImpact: dashboard.currentMetrics?.comfortScore || 0
+        comfortImpact: dashboard.currentMetrics?.comfortScore || 0,
       },
       analytics: {
         status: getComponentStatus('analytics'),
         predictions: 0, // Would be tracked by analytics
         accuracy: dashboard.currentMetrics?.predictionAccuracy || 0,
-        dataPoints: this.analytics?.getAnalyticsSummary().dataPoints.temperature || 0
+        dataPoints:
+          this.analytics?.getAnalyticsSummary().dataPoints.temperature || 0,
       },
       learning: {
         status: getComponentStatus('learning'),
         interactions: this.learning?.getLearningStats().interactions || 0,
         patterns: this.learning?.getLearningStats().patterns || 0,
-        adaptations: 0 // Would be tracked separately
+        adaptations: 0, // Would be tracked separately
       },
       scheduler: {
         status: getComponentStatus('scheduler'),
         scheduleItems: this.scheduler?.getCurrentSchedule().length || 0,
         automations: this.scheduler?.getEventHistory(24).length || 0,
-        nextEvent: this.scheduler?.getScheduleStatus().nextScheduledItem?.startTime || null
-      }
+        nextEvent:
+          this.scheduler?.getScheduleStatus().nextScheduledItem?.startTime ||
+          null,
+      },
     };
   }
-  
+
   /**
    * Get alert management interface
    */
@@ -374,21 +396,23 @@ export class AIHVACDashboard {
     const dashboard = this.monitor.getDashboard();
     const activeAlerts = dashboard.activeAlerts;
     const recentAlerts = this.monitor.getAlertHistory(24);
-    
+
     return {
       active: activeAlerts,
       recent: recentAlerts,
       summary: {
-        critical: activeAlerts.filter(a => a.severity === 'critical').length,
-        warnings: activeAlerts.filter(a => a.severity === 'warning').length,
-        info: activeAlerts.filter(a => a.severity === 'info').length,
-        acknowledged: activeAlerts.filter(a => a.acknowledged).length
+        critical: activeAlerts.filter((a) => a.severity === 'critical').length,
+        warnings: activeAlerts.filter((a) => a.severity === 'warning').length,
+        info: activeAlerts.filter((a) => a.severity === 'info').length,
+        acknowledged: activeAlerts.filter((a) => a.acknowledged).length,
       },
       actions: {
         acknowledgeAll: async () => {
           let acknowledged = 0;
           for (const alert of activeAlerts) {
-            if (!alert.acknowledged && this.monitor.acknowledgeAlert(alert.id)) {
+            if (
+              !alert.acknowledged && this.monitor.acknowledgeAlert(alert.id)
+            ) {
               acknowledged++;
             }
           }
@@ -398,63 +422,80 @@ export class AIHVACDashboard {
           return this.monitor.resolveAlert(id);
         },
         getRecommendations: (alertId: string) => {
-          const alert = activeAlerts.find(a => a.id === alertId);
+          const alert = activeAlerts.find((a) => a.id === alertId);
           return alert ? this.generateAlertRecommendations(alert) : [];
-        }
-      }
+        },
+      },
     };
   }
-  
+
   /**
    * Export dashboard data
    */
   async exportData(
     format: 'json' | 'csv' | 'xlsx',
-    timeRange: { start: Date; end: Date }
+    timeRange: { start: Date; end: Date },
   ): Promise<ExportData> {
-    
     if (!this.config.enableDataExport) {
       throw new Error('Data export is disabled');
     }
-    
+
     const metrics = this.monitor.getMetricsHistory(
-      Math.ceil((timeRange.end.getTime() - timeRange.start.getTime()) / (1000 * 60 * 60))
-    ).filter(m => m.timestamp >= timeRange.start && m.timestamp <= timeRange.end);
-    
+      Math.ceil(
+        (timeRange.end.getTime() - timeRange.start.getTime()) /
+          (1000 * 60 * 60),
+      ),
+    ).filter((m) =>
+      m.timestamp >= timeRange.start && m.timestamp <= timeRange.end
+    );
+
     const alerts = this.monitor.getAlertHistory(
-      Math.ceil((timeRange.end.getTime() - timeRange.start.getTime()) / (1000 * 60 * 60))
-    ).filter(a => a.timestamp >= timeRange.start && a.timestamp <= timeRange.end);
-    
+      Math.ceil(
+        (timeRange.end.getTime() - timeRange.start.getTime()) /
+          (1000 * 60 * 60),
+      ),
+    ).filter((a) =>
+      a.timestamp >= timeRange.start && a.timestamp <= timeRange.end
+    );
+
     const dashboard = this.monitor.getDashboard();
-    
+
     // Calculate summary statistics
     const summary = {
-      averageComfort: metrics.reduce((sum, m) => sum + m.comfortScore, 0) / metrics.length || 0,
-      averageEfficiency: metrics.reduce((sum, m) => sum + m.energyEfficiency, 0) / metrics.length || 0,
-      totalUptime: metrics.length > 0 ? metrics[metrics.length - 1].systemUptime - metrics[0].systemUptime : 0,
+      averageComfort:
+        metrics.reduce((sum, m) => sum + m.comfortScore, 0) / metrics.length ||
+        0,
+      averageEfficiency:
+        metrics.reduce((sum, m) => sum + m.energyEfficiency, 0) /
+          metrics.length || 0,
+      totalUptime: metrics.length > 0
+        ? metrics[metrics.length - 1].systemUptime - metrics[0].systemUptime
+        : 0,
       alertCount: alerts.length,
-      errorRate: metrics.reduce((sum, m) => sum + m.errorRate, 0) / metrics.length || 0
+      errorRate:
+        metrics.reduce((sum, m) => sum + m.errorRate, 0) / metrics.length || 0,
     };
-    
+
     const exportData: ExportData = {
       timestamp: new Date(),
       timeRange,
       metrics,
       alerts,
       componentHealth: dashboard.componentHealth,
-      summary
+      summary,
     };
-    
+
     this.logger.info('📁 [Dashboard] Data exported', {
       format,
-      timeRange: `${timeRange.start.toISOString()} to ${timeRange.end.toISOString()}`,
+      timeRange:
+        `${timeRange.start.toISOString()} to ${timeRange.end.toISOString()}`,
       metricsCount: metrics.length,
-      alertsCount: alerts.length
+      alertsCount: alerts.length,
     });
-    
+
     return exportData;
   }
-  
+
   /**
    * Create default dashboard layout
    */
@@ -472,7 +513,7 @@ export class AIHVACDashboard {
           position: { row: 0, col: 0 },
           data: {},
           refreshRate: 30,
-          lastUpdate: new Date()
+          lastUpdate: new Date(),
         },
         {
           id: 'comfort_score',
@@ -482,7 +523,7 @@ export class AIHVACDashboard {
           position: { row: 0, col: 1 },
           data: {},
           refreshRate: 30,
-          lastUpdate: new Date()
+          lastUpdate: new Date(),
         },
         {
           id: 'energy_efficiency',
@@ -492,7 +533,7 @@ export class AIHVACDashboard {
           position: { row: 0, col: 2 },
           data: {},
           refreshRate: 30,
-          lastUpdate: new Date()
+          lastUpdate: new Date(),
         },
         {
           id: 'active_alerts',
@@ -502,7 +543,7 @@ export class AIHVACDashboard {
           position: { row: 0, col: 3 },
           data: {},
           refreshRate: 10,
-          lastUpdate: new Date()
+          lastUpdate: new Date(),
         },
         {
           id: 'metrics_chart',
@@ -512,7 +553,7 @@ export class AIHVACDashboard {
           position: { row: 1, col: 0 },
           data: {},
           refreshRate: 60,
-          lastUpdate: new Date()
+          lastUpdate: new Date(),
         },
         {
           id: 'component_status',
@@ -522,7 +563,7 @@ export class AIHVACDashboard {
           position: { row: 1, col: 2 },
           data: {},
           refreshRate: 30,
-          lastUpdate: new Date()
+          lastUpdate: new Date(),
         },
         {
           id: 'recent_alerts',
@@ -532,7 +573,7 @@ export class AIHVACDashboard {
           position: { row: 2, col: 0 },
           data: {},
           refreshRate: 20,
-          lastUpdate: new Date()
+          lastUpdate: new Date(),
         },
         {
           id: 'ai_performance',
@@ -542,12 +583,12 @@ export class AIHVACDashboard {
           position: { row: 2, col: 2 },
           data: {},
           refreshRate: 60,
-          lastUpdate: new Date()
-        }
-      ]
+          lastUpdate: new Date(),
+        },
+      ],
     };
   }
-  
+
   /**
    * Initialize dashboard widgets
    */
@@ -557,7 +598,7 @@ export class AIHVACDashboard {
       this.widgets.set(widget.id, widget);
     }
   }
-  
+
   /**
    * Start periodic refresh
    */
@@ -568,173 +609,194 @@ export class AIHVACDashboard {
       }
     }, this.config.refreshInterval * 1000);
   }
-  
+
   /**
    * Refresh all widgets
    */
   private async refreshWidgets(): Promise<void> {
     const now = new Date();
-    
+
     for (const widget of this.widgets.values()) {
       const timeSinceUpdate = now.getTime() - widget.lastUpdate.getTime();
       const shouldUpdate = timeSinceUpdate >= widget.refreshRate * 1000;
-      
+
       if (shouldUpdate) {
         try {
           widget.data = await this.updateWidgetData(widget);
           widget.lastUpdate = now;
         } catch (error) {
-          this.logger.error(`❌ [Dashboard] Failed to update widget ${widget.id}`, error);
+          this.logger.error(
+            `❌ [Dashboard] Failed to update widget ${widget.id}`,
+            error,
+          );
         }
       }
     }
   }
-  
+
   /**
    * Update data for a specific widget
    */
   private async updateWidgetData(widget: DashboardWidget): Promise<any> {
     const dashboard = this.monitor.getDashboard();
-    
+
     switch (widget.id) {
       case 'system_health':
         return {
           value: dashboard.overview.healthStatus,
           score: this.healthToScore(dashboard.overview.healthStatus),
-          color: this.healthToColor(dashboard.overview.healthStatus)
+          color: this.healthToColor(dashboard.overview.healthStatus),
         };
-        
+
       case 'comfort_score':
         return {
           value: dashboard.currentMetrics?.comfortScore || 0,
           percentage: (dashboard.currentMetrics?.comfortScore || 0) * 100,
-          trend: this.getMetricTrend('comfortScore')
+          trend: this.getMetricTrend('comfortScore'),
         };
-        
+
       case 'energy_efficiency':
         return {
           value: dashboard.currentMetrics?.energyEfficiency || 0,
           percentage: (dashboard.currentMetrics?.energyEfficiency || 0) * 100,
-          trend: this.getMetricTrend('energyEfficiency')
+          trend: this.getMetricTrend('energyEfficiency'),
         };
-        
+
       case 'active_alerts':
         return {
           count: dashboard.activeAlerts.length,
-          critical: dashboard.activeAlerts.filter(a => a.severity === 'critical').length,
-          warnings: dashboard.activeAlerts.filter(a => a.severity === 'warning').length
+          critical:
+            dashboard.activeAlerts.filter((a) => a.severity === 'critical')
+              .length,
+          warnings:
+            dashboard.activeAlerts.filter((a) => a.severity === 'warning')
+              .length,
         };
-        
+
       case 'metrics_chart':
-        const metrics = this.monitor.getMetricsHistory(this.config.chartDataPoints / 4);
+        const metrics = this.monitor.getMetricsHistory(
+          this.config.chartDataPoints / 4,
+        );
         return {
-          labels: metrics.map(m => m.timestamp.toLocaleTimeString()),
+          labels: metrics.map((m) => m.timestamp.toLocaleTimeString()),
           datasets: [
             {
               name: 'Comfort',
-              data: metrics.map(m => m.comfortScore * 100),
-              color: '#4CAF50'
+              data: metrics.map((m) => m.comfortScore * 100),
+              color: '#4CAF50',
             },
             {
               name: 'Efficiency',
-              data: metrics.map(m => m.energyEfficiency * 100),
-              color: '#2196F3'
+              data: metrics.map((m) => m.energyEfficiency * 100),
+              color: '#2196F3',
             },
             {
               name: 'AI Latency',
-              data: metrics.map(m => m.aiDecisionLatency),
-              color: '#FF9800'
-            }
-          ]
+              data: metrics.map((m) => m.aiDecisionLatency),
+              color: '#FF9800',
+            },
+          ],
         };
-        
+
       case 'component_status':
         return {
-          components: dashboard.componentHealth.map(c => ({
+          components: dashboard.componentHealth.map((c) => ({
             name: c.name,
             status: c.status,
             responseTime: c.responseTime,
-            issues: c.issues.length
-          }))
+            issues: c.issues.length,
+          })),
         };
-        
+
       case 'recent_alerts':
         return {
-          alerts: dashboard.activeAlerts.slice(0, this.config.alertDisplayLimit).map(a => ({
-            id: a.id,
-            severity: a.severity,
-            title: a.title,
-            component: a.component,
-            timestamp: a.timestamp.toLocaleString(),
-            acknowledged: a.acknowledged
-          }))
+          alerts: dashboard.activeAlerts.slice(0, this.config.alertDisplayLimit)
+            .map((a) => ({
+              id: a.id,
+              severity: a.severity,
+              title: a.title,
+              component: a.component,
+              timestamp: a.timestamp.toLocaleString(),
+              acknowledged: a.acknowledged,
+            })),
         };
-        
+
       case 'ai_performance':
         const aiMetrics = this.monitor.getMetricsHistory(12);
         return {
-          labels: aiMetrics.map(m => m.timestamp.toLocaleTimeString()),
+          labels: aiMetrics.map((m) => m.timestamp.toLocaleTimeString()),
           datasets: [
             {
               name: 'Decision Latency',
-              data: aiMetrics.map(m => m.aiDecisionLatency),
-              color: '#E91E63'
+              data: aiMetrics.map((m) => m.aiDecisionLatency),
+              color: '#E91E63',
             },
             {
               name: 'Prediction Accuracy',
-              data: aiMetrics.map(m => m.predictionAccuracy * 100),
-              color: '#9C27B0'
-            }
-          ]
+              data: aiMetrics.map((m) => m.predictionAccuracy * 100),
+              color: '#9C27B0',
+            },
+          ],
         };
-        
+
       default:
         return {};
     }
   }
-  
+
   /**
    * Helper methods
    */
-  
+
   private healthToScore(health: string): number {
     switch (health) {
-      case 'healthy': return 100;
-      case 'warning': return 75;
-      case 'critical': return 25;
-      default: return 50;
+      case 'healthy':
+        return 100;
+      case 'warning':
+        return 75;
+      case 'critical':
+        return 25;
+      default:
+        return 50;
     }
   }
-  
+
   private healthToColor(health: string): string {
     switch (health) {
-      case 'healthy': return '#4CAF50';
-      case 'warning': return '#FF9800';
-      case 'critical': return '#F44336';
-      default: return '#9E9E9E';
+      case 'healthy':
+        return '#4CAF50';
+      case 'warning':
+        return '#FF9800';
+      case 'critical':
+        return '#F44336';
+      default:
+        return '#9E9E9E';
     }
   }
-  
+
   private getMetricTrend(metric: string): 'up' | 'down' | 'stable' {
     const dashboard = this.monitor.getDashboard();
-    const trend = dashboard.recentTrends.find(t => t.metric === metric);
-    
+    const trend = dashboard.recentTrends.find((t) => t.metric === metric);
+
     if (!trend) return 'stable';
-    
+
     switch (trend.trend) {
-      case 'improving': return 'up';
-      case 'degrading': return 'down';
-      default: return 'stable';
+      case 'improving':
+        return 'up';
+      case 'degrading':
+        return 'down';
+      default:
+        return 'stable';
     }
   }
-  
+
   private generateAlertRecommendations(alert: SystemAlert): string[] {
     const recommendations = [];
-    
+
     if (alert.recommendation) {
       recommendations.push(alert.recommendation);
     }
-    
+
     // Add general recommendations based on alert type
     switch (alert.category) {
       case 'performance':
@@ -754,7 +816,7 @@ export class AIHVACDashboard {
         recommendations.push('Restart affected services if necessary');
         break;
     }
-    
+
     return recommendations;
   }
 }

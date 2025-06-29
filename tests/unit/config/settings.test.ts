@@ -5,14 +5,14 @@
 import { assertEquals, assertThrows } from '@std/assert';
 import { ZodError } from 'zod';
 import {
-  HassOptionsSchema,
-  HvacOptionsSchema,
   ApplicationOptionsSchema,
-  SettingsSchema,
-  SystemMode,
+  HassOptionsSchema,
+  type HvacOptions as _HvacOptions,
+  HvacOptionsSchema,
   LogLevel,
   type Settings as _Settings,
-  type HvacOptions as _HvacOptions,
+  SettingsSchema,
+  SystemMode,
 } from '../../../src/config/config.ts';
 
 Deno.test('HassOptionsSchema', async (t) => {
@@ -271,7 +271,10 @@ Deno.test('SettingsSchema', async (t) => {
     const result = SettingsSchema.parse(completeSettings);
     assertEquals(result.appOptions.logLevel, LogLevel.INFO);
     assertEquals(result.hassOptions.wsUrl, completeSettings.hassOptions.wsUrl);
-    assertEquals(result.hvacOptions.tempSensor, completeSettings.hvacOptions.tempSensor);
+    assertEquals(
+      result.hvacOptions.tempSensor,
+      completeSettings.hvacOptions.tempSensor,
+    );
   });
 
   await t.step('should apply nested defaults', () => {
@@ -307,7 +310,10 @@ Deno.test('SettingsSchema', async (t) => {
     assertEquals(result.appOptions.logLevel, LogLevel.DEBUG);
     assertEquals(result.appOptions.useAi, false);
     assertEquals(result.hvacOptions.systemMode, SystemMode.AUTO);
-    assertEquals(result.hvacOptions.outdoorSensor, 'sensor.openweathermap_temperature');
+    assertEquals(
+      result.hvacOptions.outdoorSensor,
+      'sensor.openweathermap_temperature',
+    );
   });
 });
 

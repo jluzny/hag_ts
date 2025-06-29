@@ -1,10 +1,16 @@
 /**
  * Home Assistant data models for HAG JavaScript variant.
- * 
+ *
  * Type-safe models for Home Assistant WebSocket and REST API interactions.
  */
 
-import { HassState, HassEvent, HassStateChangeData, HassServiceCall, WebSocketMessage } from '../types/common.ts';
+import {
+  HassEvent,
+  HassServiceCall,
+  HassState,
+  HassStateChangeData,
+  WebSocketMessage,
+} from '../types/common.ts';
 import { ValidationError } from '../core/exceptions.ts';
 
 /**
@@ -82,15 +88,29 @@ export class HassStateImpl implements HassState {
    */
   static fromApiResponse(data: Record<string, unknown>): HassStateImpl {
     if (!data.entity_id || typeof data.entity_id !== 'string') {
-      throw new ValidationError('Invalid entity_id in state data', 'entity_id', 'string', data.entity_id);
+      throw new ValidationError(
+        'Invalid entity_id in state data',
+        'entity_id',
+        'string',
+        data.entity_id,
+      );
     }
 
     if (!data.state || typeof data.state !== 'string') {
-      throw new ValidationError('Invalid state in state data', 'state', 'string', data.state);
+      throw new ValidationError(
+        'Invalid state in state data',
+        'state',
+        'string',
+        data.state,
+      );
     }
 
-    const lastChanged = data.last_changed ? new Date(data.last_changed as string) : new Date();
-    const lastUpdated = data.last_updated ? new Date(data.last_updated as string) : new Date();
+    const lastChanged = data.last_changed
+      ? new Date(data.last_changed as string)
+      : new Date();
+    const lastUpdated = data.last_updated
+      ? new Date(data.last_updated as string)
+      : new Date();
     const attributes = data.attributes as Record<string, unknown> || {};
 
     return new HassStateImpl(
@@ -134,12 +154,16 @@ export class HassEventImpl implements HassEvent {
       return null;
     }
 
-    const newState = this.data.new_state 
-      ? HassStateImpl.fromApiResponse(this.data.new_state as Record<string, unknown>)
+    const newState = this.data.new_state
+      ? HassStateImpl.fromApiResponse(
+        this.data.new_state as Record<string, unknown>,
+      )
       : null;
-    
+
     const oldState = this.data.old_state
-      ? HassStateImpl.fromApiResponse(this.data.old_state as Record<string, unknown>)
+      ? HassStateImpl.fromApiResponse(
+        this.data.old_state as Record<string, unknown>,
+      )
       : null;
 
     return {
@@ -160,12 +184,19 @@ export class HassEventImpl implements HassEvent {
 
     const eventType = event.event_type as string;
     if (!eventType) {
-      throw new ValidationError('Invalid event_type', 'event_type', 'string', event.event_type);
+      throw new ValidationError(
+        'Invalid event_type',
+        'event_type',
+        'string',
+        event.event_type,
+      );
     }
 
     const eventData = event.data as Record<string, unknown> || {};
     const origin = event.origin as string || 'LOCAL';
-    const timeFired = event.time_fired ? new Date(event.time_fired as string) : new Date();
+    const timeFired = event.time_fired
+      ? new Date(event.time_fired as string)
+      : new Date();
 
     return new HassEventImpl(eventType, eventData, origin, timeFired);
   }

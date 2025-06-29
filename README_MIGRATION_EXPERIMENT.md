@@ -2,11 +2,15 @@
 
 ## Overview
 
-This branch contains an experimental migration from XState to LangGraph for the HAG HVAC automation system. The goal is to explore whether LangGraph can serve as a drop-in replacement for XState while potentially adding AI-driven capabilities.
+This branch contains an experimental migration from XState to LangGraph for the
+HAG HVAC automation system. The goal is to explore whether LangGraph can serve
+as a drop-in replacement for XState while potentially adding AI-driven
+capabilities.
 
 ## Quick Start
 
 ### 1. Switch to LangGraph Dependencies
+
 ```bash
 # Backup current deno.json
 cp deno.json deno.json.xstate
@@ -16,6 +20,7 @@ cp deno.json.langgraph deno.json
 ```
 
 ### 2. Run with Feature Flag
+
 ```bash
 # Test LangGraph implementation
 deno task dev --config config/hvac_config.yaml
@@ -27,6 +32,7 @@ deno task dev --config config/hvac_config.yaml
 ```
 
 ### 3. Compare Implementations
+
 ```bash
 # Run tests for both implementations
 deno task test:unit
@@ -38,6 +44,7 @@ deno test -A tests/unit/hvac/state-machine-lg.test.ts
 ## What's Been Implemented
 
 ### ✅ Phase 1: Foundation (Current)
+
 - [x] Directory structure created
 - [x] LangGraph dependencies added
 - [x] Type definitions for HVACLangGraphState
@@ -45,12 +52,14 @@ deno test -A tests/unit/hvac/state-machine-lg.test.ts
 - [x] Migration plan documented
 
 ### 🔄 Phase 2: Core Implementation (Next)
+
 - [ ] Complete all LangGraph nodes (heating, cooling, idle)
 - [ ] Graph construction and routing logic
 - [ ] State machine interface abstraction
 - [ ] Feature flag integration in controller
 
 ### ⏳ Phase 3-5: Future Phases
+
 - Integration & Testing
 - AI Enhancement
 - Performance & Monitoring
@@ -58,28 +67,33 @@ deno test -A tests/unit/hvac/state-machine-lg.test.ts
 ## Key Files
 
 ### Migration Documentation
+
 - `MIGRATION_PLAN_XSTATE_TO_LANGGRAPH.md` - Comprehensive migration plan
 - `README_MIGRATION_EXPERIMENT.md` - This file
 
 ### LangGraph Implementation
+
 - `src/hvac/lg-types/hvac-state.ts` - State type definitions
 - `src/hvac/lg-nodes/evaluation-node.ts` - Core evaluation logic
 - `src/hvac/lg-nodes/` - Individual node implementations (WIP)
 - `src/hvac/state-machine-lg.ts` - Main LangGraph state machine (TODO)
 
 ### Configuration
+
 - `deno.json.langgraph` - Dependencies with LangGraph support
 - `deno.json.xstate` - Original XState-only dependencies
 
 ## Architecture Comparison
 
 ### XState (Current)
+
 ```typescript
 // Simple state machine with guards
 idle → evaluating → heating/cooling/off
 ```
 
 ### LangGraph (Experimental)
+
 ```typescript
 // Graph-based with node functions
 evaluationNode → heatingNode/coolingNode/idleNode → evaluationNode
@@ -87,14 +101,14 @@ evaluationNode → heatingNode/coolingNode/idleNode → evaluationNode
 
 ## Key Differences
 
-| Aspect | XState | LangGraph |
-|--------|--------|-----------|
-| **State Model** | Finite state machine | Graph of functions |
-| **Transitions** | Event-driven | Function-to-function |
-| **Context** | Single context object | Message-passing state |
-| **AI Integration** | Manual | Built-in capabilities |
-| **Debugging** | Visual state charts | Graph execution traces |
-| **Performance** | Very fast | Moderate (more overhead) |
+| Aspect             | XState                | LangGraph                |
+| ------------------ | --------------------- | ------------------------ |
+| **State Model**    | Finite state machine  | Graph of functions       |
+| **Transitions**    | Event-driven          | Function-to-function     |
+| **Context**        | Single context object | Message-passing state    |
+| **AI Integration** | Manual                | Built-in capabilities    |
+| **Debugging**      | Visual state charts   | Graph execution traces   |
+| **Performance**    | Very fast             | Moderate (more overhead) |
 
 ## Benefits of LangGraph
 
@@ -114,6 +128,7 @@ evaluationNode → heatingNode/coolingNode/idleNode → evaluationNode
 ## Testing the Migration
 
 ### Current Status Tests
+
 ```bash
 # Verify both implementations work
 deno task test:unit
@@ -123,6 +138,7 @@ deno test -A tests/unit/hvac/lg-nodes/evaluation-node.test.ts
 ```
 
 ### Performance Comparison
+
 ```bash
 # Benchmark both implementations (when complete)
 deno run -A scripts/benchmark-state-machines.ts
@@ -174,4 +190,6 @@ This is an experimental branch. Key questions to evaluate:
 
 ---
 
-**Remember**: This is an experiment. The goal is learning, not necessarily adopting LangGraph. The existing XState implementation remains the production system until this experiment proves conclusively beneficial.
+**Remember**: This is an experiment. The goal is learning, not necessarily
+adopting LangGraph. The existing XState implementation remains the production
+system until this experiment proves conclusively beneficial.

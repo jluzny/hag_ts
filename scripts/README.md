@@ -1,12 +1,14 @@
 # HAG Development Scripts
 
-This directory contains helper utilities and interactive tools for HAG system validation and debugging.
+This directory contains helper utilities and interactive tools for HAG system
+validation and debugging.
 
 ## Organization
 
 **Tests have been moved to the `tests/` directory for better organization:**
+
 - `tests/ai/` - AI component tests
-- `tests/integration/` - Integration and Home Assistant tests  
+- `tests/integration/` - Integration and Home Assistant tests
 - `tests/performance/` - Performance benchmarks
 - `tests/system/` - System validation tests
 
@@ -15,22 +17,26 @@ This directory contains helper utilities and interactive tools for HAG system va
 ## Available Scripts
 
 ### Interactive Validation
+
 - `interactive_validator.ts` - Interactive system validation with user prompts
 - `validation_helpers.ts` - Utility functions for validation and health checking
 
 ### Home Assistant Utilities
+
 - `list_entities.ts` - List all available Home Assistant entities
 - `call_service.ts` - Call Home Assistant services directly
 - `check_hvac_status.ts` - Check current HVAC system status
 - `debug_websocket.ts` - Debug WebSocket connection issues
 
 ### Development Utilities
+
 - `debug_langgraph_api.ts` - Debug LangGraph API compatibility issues
 - `hvac_prompts.md` - Documentation for HVAC-related prompts and scenarios
 
 ## Usage
 
 ### Interactive Validation
+
 Run the interactive validator for step-by-step system validation:
 
 ```bash
@@ -38,14 +44,16 @@ deno run --allow-all scripts/interactive_validator.ts
 ```
 
 This will guide you through:
+
 - System requirements checking
-- Network connectivity testing  
+- Network connectivity testing
 - Configuration file validation
 - Home Assistant connectivity
 - AI components availability
 - Binary validation
 
 ### Direct Utilities
+
 ```bash
 # List Home Assistant entities
 HASS_URL=http://homeassistant.local:8123 HASS_TOKEN=your_token deno run --allow-all scripts/list_entities.ts
@@ -58,6 +66,7 @@ deno run --allow-all scripts/debug_websocket.ts
 ```
 
 ### Running Tests
+
 For comprehensive automated testing, use the test scripts:
 
 ```bash
@@ -73,6 +82,7 @@ deno run --allow-all tests/performance/benchmark_state_machines.ts
 ## Environment Variables
 
 Scripts require these environment variables:
+
 - `HASS_URL` - Home Assistant URL (e.g., http://homeassistant.local:8123)
 - `HASS_TOKEN` - Long-lived access token from Home Assistant
 - `OPENAI_API_KEY` - OpenAI API key for AI functionality (optional)
@@ -80,16 +90,21 @@ Scripts require these environment variables:
 ## Script Categories
 
 ### 🔍 **Interactive Validation**
+
 User-guided validation tools for system setup and troubleshooting.
 
-### 🏠 **Home Assistant Utilities**  
+### 🏠 **Home Assistant Utilities**
+
 Direct integration tools for debugging Home Assistant connectivity.
 
 ### 🛠️ **Development Utilities**
+
 Low-level debugging and development support tools.
 
 ### 🧪 **Testing (Moved to tests/)**
-All comprehensive test suites have been moved to the `tests/` directory for better organization and automated test running.
+
+All comprehensive test suites have been moved to the `tests/` directory for
+better organization and automated test running.
 
 ## Quick Reference
 

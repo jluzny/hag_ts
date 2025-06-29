@@ -1,14 +1,20 @@
 # Phase 3: Advanced AI Integration Design
 
 ## Overview
-Phase 3 focuses on leveraging the LangGraph foundation to implement advanced AI capabilities that go beyond basic state machine logic. This phase will transform the HVAC system into an intelligent, adaptive, and predictive system.
+
+Phase 3 focuses on leveraging the LangGraph foundation to implement advanced AI
+capabilities that go beyond basic state machine logic. This phase will transform
+the HVAC system into an intelligent, adaptive, and predictive system.
 
 ## Phase 3 Goals
 
 ### 🎯 Primary Objectives
-1. **AI-Powered Decision Making**: Replace rule-based logic with intelligent AI agents
+
+1. **AI-Powered Decision Making**: Replace rule-based logic with intelligent AI
+   agents
 2. **Predictive Analytics**: Anticipate heating/cooling needs based on patterns
-3. **Energy Optimization**: Minimize energy consumption while maintaining comfort
+3. **Energy Optimization**: Minimize energy consumption while maintaining
+   comfort
 4. **Adaptive Learning**: Learn from user preferences and environmental patterns
 5. **Advanced Automation**: Intelligent scheduling and proactive adjustments
 
@@ -47,13 +53,13 @@ Phase 3 focuses on leveraging the LangGraph foundation to implement advanced AI 
    interface HVACAIAgent {
      // Decision-making agent
      decisionAgent: Agent;
-     
-     // Predictive analysis agent  
+
+     // Predictive analysis agent
      predictiveAgent: Agent;
-     
+
      // Learning and adaptation agent
      learningAgent: Agent;
-     
+
      // Optimization agent
      optimizationAgent: Agent;
    }
@@ -69,7 +75,7 @@ Phase 3 focuses on leveraging the LangGraph foundation to implement advanced AI 
        optimizationGoals: OptimizationGoals;
        explanations: DecisionExplanation[];
      };
-     
+
      // Historical data for learning
      historicalData: {
        temperatureHistory: TemperatureReading[];
@@ -94,6 +100,7 @@ Phase 3 focuses on leveraging the LangGraph foundation to implement advanced AI 
 ### 🏗️ Implementation Plan
 
 #### Phase 3.1: AI Decision Engine (High Priority)
+
 - **Week 1-2**: Core AI agent integration
   - OpenAI API integration
   - Basic decision-making agent
@@ -106,7 +113,8 @@ Phase 3 focuses on leveraging the LangGraph foundation to implement advanced AI 
   - `src/ai/prompts/` - AI prompt templates
   - Integration with LangGraph v2 state machine
 
-#### Phase 3.2: Predictive Analytics (High Priority)  
+#### Phase 3.2: Predictive Analytics (High Priority)
+
 - **Week 3-4**: Predictive capabilities
   - Time series analysis implementation
   - Weather API integration
@@ -120,6 +128,7 @@ Phase 3 focuses on leveraging the LangGraph foundation to implement advanced AI 
   - Prediction accuracy metrics
 
 #### Phase 3.3: Learning and Optimization (Medium Priority)
+
 - **Week 5-6**: Adaptive intelligence
   - User preference learning algorithms
   - Environmental pattern recognition
@@ -133,6 +142,7 @@ Phase 3 focuses on leveraging the LangGraph foundation to implement advanced AI 
   - Performance optimization metrics
 
 #### Phase 3.4: Advanced Features (Medium Priority)
+
 - **Week 7-8**: Advanced automation
   - Intelligent scheduling system
   - Energy price optimization
@@ -148,6 +158,7 @@ Phase 3 focuses on leveraging the LangGraph foundation to implement advanced AI 
 ### 🔬 Testing Strategy
 
 #### AI Testing Framework
+
 1. **Decision Quality Tests**
    - AI decision accuracy vs rule-based system
    - Energy efficiency improvements
@@ -175,6 +186,7 @@ Phase 3 focuses on leveraging the LangGraph foundation to implement advanced AI 
 ### 📊 Success Metrics
 
 #### Quantitative Metrics
+
 - **Energy Efficiency**: 15-25% reduction in energy consumption
 - **Comfort Optimization**: 90%+ time within preferred temperature range
 - **Prediction Accuracy**: 85%+ accuracy for next 4-hour temperature needs
@@ -182,6 +194,7 @@ Phase 3 focuses on leveraging the LangGraph foundation to implement advanced AI 
 - **User Satisfaction**: Reduced manual overrides by 60%+
 
 #### Qualitative Metrics
+
 - **Decision Explainability**: Clear reasoning for all AI decisions
 - **System Reliability**: Graceful degradation when AI unavailable
 - **User Experience**: Intuitive and transparent AI interactions
@@ -190,6 +203,7 @@ Phase 3 focuses on leveraging the LangGraph foundation to implement advanced AI 
 ### 🛡️ Risk Mitigation
 
 #### Technical Risks
+
 1. **AI API Reliability**
    - Fallback to rule-based system
    - Local AI model options
@@ -209,6 +223,7 @@ Phase 3 focuses on leveraging the LangGraph foundation to implement advanced AI 
    - GDPR compliance considerations
 
 #### Operational Risks
+
 1. **Cost Management**
    - AI API usage monitoring
    - Cost budgets and alerts
@@ -224,33 +239,35 @@ Phase 3 focuses on leveraging the LangGraph foundation to implement advanced AI 
 ### 🔄 Integration with Existing System
 
 #### Backward Compatibility
+
 - All existing XState functionality preserved
 - Feature flag controls for AI features
 - Gradual rollout capabilities
 - Easy rollback mechanisms
 
 #### Configuration Extensions
+
 ```yaml
 # Enhanced configuration for AI features
 aiOptions:
   enabled: true
   providers:
     openai:
-      apiKey: "${OPENAI_API_KEY}"
-      model: "gpt-4"
+      apiKey: '${OPENAI_API_KEY}'
+      model: 'gpt-4'
       maxTokens: 500
-    
+
   features:
     decisionMaking: true
     predictiveAnalytics: true
     adaptiveLearning: true
     energyOptimization: true
-    
+
   performance:
     cacheEnabled: true
     asyncProcessing: true
     maxConcurrentRequests: 3
-    
+
   privacy:
     localProcessing: false
     anonymizeData: true
@@ -260,6 +277,7 @@ aiOptions:
 ### 🚀 Phase 3 Roadmap
 
 #### Immediate Next Steps (Phase 3.1)
+
 1. **AI Infrastructure Setup**
    - OpenAI API integration
    - LangChain agent framework
@@ -279,10 +297,13 @@ aiOptions:
    - User acceptance testing
 
 #### Success Criteria for Phase 3.1
+
 - ✅ AI makes basic HVAC decisions with explanations
 - ✅ Performance impact <500ms additional latency
 - ✅ Fallback system works seamlessly
 - ✅ Decision quality matches or exceeds rule-based system
 - ✅ All existing functionality preserved
 
-This design provides a comprehensive roadmap for transforming the HVAC system into an intelligent, AI-powered solution while maintaining the reliability and performance established in Phase 2.
+This design provides a comprehensive roadmap for transforming the HVAC system
+into an intelligent, AI-powered solution while maintaining the reliability and
+performance established in Phase 2.

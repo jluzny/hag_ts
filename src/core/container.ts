@@ -62,10 +62,7 @@ export class ApplicationContainer {
         // TODO : Uncomment when tools are implemented
         // this.registerTools();
       }
-
-      
     } catch (error) {
-      
       throw error;
     }
   }
@@ -104,15 +101,10 @@ export class ApplicationContainer {
         // TODO : Uncomment when tools are implemented
         // this.registerTools();
       }
-
-      
     } catch (error) {
-      
       throw error;
     }
   }
-
-  
 
   /**
    * Register configuration objects
@@ -141,7 +133,10 @@ export class ApplicationContainer {
    * Register core services
    */
   private registerCoreServices(): void {
-    this.container.bind({ provide: TYPES.Logger, useFactory: () => new LoggerService('HAG.core') });
+    this.container.bind({
+      provide: TYPES.Logger,
+      useFactory: () => new LoggerService('HAG.core'),
+    });
     this.container.bind({
       provide: TYPES.ConfigLoader,
       useClass: ConfigLoader,
@@ -171,17 +166,29 @@ export class ApplicationContainer {
       provide: TYPES.HVACStateMachine,
       useFactory: () => {
         const hvacOptions = this.container.get<HvacOptions>(TYPES.HvacOptions);
-        const appOptions = this.container.get<ApplicationOptions>(TYPES.ApplicationOptions);
+        const appOptions = this.container.get<ApplicationOptions>(
+          TYPES.ApplicationOptions,
+        );
         const logger = new LoggerService('HAG.hvac.state-machine-factory');
-        
+
         // Check for LangGraph experiment feature flag
-        const useLangGraph = appOptions.experimentalFeatures?.includes('langgraph-state-machine') || false;
-        
+        const useLangGraph = appOptions.experimentalFeatures?.includes(
+          'langgraph-state-machine',
+        ) || false;
+
         if (useLangGraph) {
-          logger.info('🧪 [Experiment] Creating LangGraph state machine implementation');
-          return new LangGraphHVACStateMachineAdapter(hvacOptions, appOptions, logger);
+          logger.info(
+            '🧪 [Experiment] Creating LangGraph state machine implementation',
+          );
+          return new LangGraphHVACStateMachineAdapter(
+            hvacOptions,
+            appOptions,
+            logger,
+          );
         } else {
-          logger.info('🔄 Creating XState state machine implementation (default)');
+          logger.info(
+            '🔄 Creating XState state machine implementation (default)',
+          );
           return new XStateHVACStateMachineAdapter(hvacOptions, logger);
         }
       },
@@ -316,8 +323,6 @@ export class ApplicationContainer {
           await client.disconnect();
         }
       }
-
-      
     } catch (_error) {
       // Ignore cleanup errors
     }

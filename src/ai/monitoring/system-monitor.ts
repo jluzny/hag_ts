@@ -1,6 +1,6 @@
 /**
  * System Monitor for HVAC AI Operations
- * 
+ *
  * This module provides comprehensive monitoring, metrics collection,
  * and real-time analytics for the AI-enhanced HVAC system.
  */
@@ -13,24 +13,24 @@ import type { LoggerService } from '../../core/logger.ts';
  */
 export interface SystemMetrics {
   timestamp: Date;
-  
+
   // AI component performance
   aiDecisionLatency: number; // ms
   optimizationLatency: number; // ms
   predictionAccuracy: number; // 0.0 to 1.0
   learningEfficiency: number; // 0.0 to 1.0
-  
+
   // HVAC system performance
   energyEfficiency: number; // 0.0 to 1.0
   comfortScore: number; // 0.0 to 1.0
   systemUptime: number; // hours
   cycleCount: number;
-  
+
   // Resource utilization
   memoryUsage: number; // MB
   cpuUsage: number; // percentage
   networkLatency: number; // ms
-  
+
   // Error rates
   errorRate: number; // errors per hour
   healthStatus: 'healthy' | 'warning' | 'critical';
@@ -54,17 +54,17 @@ export interface ComponentHealth {
  */
 export interface AlertConfig {
   enabled: boolean;
-  
+
   // Performance thresholds
   maxDecisionLatency: number; // ms
   minComfortScore: number;
   maxErrorRate: number; // errors per hour
-  
+
   // Resource thresholds
   maxMemoryUsage: number; // MB
   maxCpuUsage: number; // percentage
   maxNetworkLatency: number; // ms
-  
+
   // Notification settings
   alertCooldown: number; // minutes
   escalationThreshold: number; // repeated alerts
@@ -111,33 +111,33 @@ export interface TrendAnalysis {
 export class SystemMonitor {
   private config: AlertConfig;
   private logger: LoggerService;
-  
+
   // Metrics storage
   private metricsHistory: SystemMetrics[] = [];
   private componentHealth: Map<string, ComponentHealth> = new Map();
   private activeAlerts: Map<string, SystemAlert> = new Map();
   private alertHistory: SystemAlert[] = [];
-  
+
   // Monitoring state
   private isMonitoring: boolean = false;
   private monitoringInterval?: number;
   private healthCheckInterval?: number;
-  
+
   // Performance tracking
   private lastMetricsUpdate: Date = new Date(0);
   private metricsBuffer: Partial<SystemMetrics>[] = [];
-  
+
   constructor(config: AlertConfig, logger: LoggerService) {
     this.config = config;
     this.logger = logger;
-    
+
     this.logger.info('📊 [System Monitor] Initialized', {
       alertsEnabled: config.enabled,
       maxDecisionLatency: config.maxDecisionLatency,
-      maxErrorRate: config.maxErrorRate
+      maxErrorRate: config.maxErrorRate,
     });
   }
-  
+
   /**
    * Start system monitoring
    */
@@ -146,28 +146,27 @@ export class SystemMonitor {
       this.logger.warning('🔄 [System Monitor] Already monitoring');
       return;
     }
-    
+
     try {
       this.isMonitoring = true;
-      
+
       // Initialize component health tracking
       await this.initializeComponentTracking();
-      
+
       // Start periodic monitoring
       this.startPeriodicMonitoring();
-      
+
       this.logger.info('🚀 [System Monitor] Started successfully', {
         components: this.componentHealth.size,
-        alertsEnabled: this.config.enabled
+        alertsEnabled: this.config.enabled,
       });
-      
     } catch (error) {
       this.logger.error('❌ [System Monitor] Failed to start', error);
       this.isMonitoring = false;
       throw error;
     }
   }
-  
+
   /**
    * Stop system monitoring
    */
@@ -175,24 +174,24 @@ export class SystemMonitor {
     if (!this.isMonitoring) {
       return;
     }
-    
+
     this.logger.info('🛑 [System Monitor] Stopping', {
       metricsCollected: this.metricsHistory.length,
-      activeAlerts: this.activeAlerts.size
+      activeAlerts: this.activeAlerts.size,
     });
-    
+
     this.isMonitoring = false;
-    
+
     if (this.monitoringInterval) clearInterval(this.monitoringInterval);
     if (this.healthCheckInterval) clearInterval(this.healthCheckInterval);
   }
-  
+
   /**
    * Record system metrics
    */
   recordMetrics(metrics: Partial<SystemMetrics>): void {
     const timestamp = new Date();
-    
+
     const fullMetrics: SystemMetrics = {
       timestamp,
       aiDecisionLatency: metrics.aiDecisionLatency || 0,
@@ -207,30 +206,30 @@ export class SystemMonitor {
       cpuUsage: metrics.cpuUsage || this.getCpuUsage(),
       networkLatency: metrics.networkLatency || 0,
       errorRate: metrics.errorRate || 0,
-      healthStatus: this.calculateHealthStatus(metrics)
+      healthStatus: this.calculateHealthStatus(metrics),
     };
-    
+
     this.metricsHistory.push(fullMetrics);
     this.pruneMetricsHistory();
-    
+
     this.logger.debug('📈 [System Monitor] Metrics recorded', {
       healthStatus: fullMetrics.healthStatus,
       comfortScore: fullMetrics.comfortScore.toFixed(2),
-      energyEfficiency: fullMetrics.energyEfficiency.toFixed(2)
+      energyEfficiency: fullMetrics.energyEfficiency.toFixed(2),
     });
-    
+
     // Check for alerts if enabled
     if (this.config.enabled) {
       this.checkAlerts(fullMetrics);
     }
   }
-  
+
   /**
    * Record component health status
    */
   recordComponentHealth(name: string, health: Partial<ComponentHealth>): void {
     const timestamp = new Date();
-    
+
     const fullHealth: ComponentHealth = {
       name,
       status: health.status || 'online',
@@ -238,19 +237,19 @@ export class SystemMonitor {
       responseTime: health.responseTime || 0,
       errorCount: health.errorCount || 0,
       metrics: health.metrics || {},
-      issues: health.issues || []
+      issues: health.issues || [],
     };
-    
+
     this.componentHealth.set(name, fullHealth);
-    
+
     this.logger.debug('🔧 [System Monitor] Component health updated', {
       component: name,
       status: fullHealth.status,
       responseTime: fullHealth.responseTime,
-      issues: fullHealth.issues.length
+      issues: fullHealth.issues.length,
     });
   }
-  
+
   /**
    * Get current system dashboard
    */
@@ -266,40 +265,44 @@ export class SystemMonitor {
     activeAlerts: SystemAlert[];
     recentTrends: TrendAnalysis[];
   } {
-    const latestMetrics = this.metricsHistory[this.metricsHistory.length - 1] || null;
+    const latestMetrics = this.metricsHistory[this.metricsHistory.length - 1] ||
+      null;
     const components = Array.from(this.componentHealth.values());
     const alerts = Array.from(this.activeAlerts.values());
-    
+
     return {
       overview: {
         healthStatus: latestMetrics?.healthStatus || 'unknown',
         uptime: latestMetrics?.systemUptime || 0,
-        alertCount: alerts.filter(a => a.severity === 'error' || a.severity === 'critical').length,
-        componentCount: components.filter(c => c.status === 'online').length
+        alertCount:
+          alerts.filter((a) =>
+            a.severity === 'error' || a.severity === 'critical'
+          ).length,
+        componentCount: components.filter((c) => c.status === 'online').length,
       },
       currentMetrics: latestMetrics,
       componentHealth: components,
       activeAlerts: alerts,
-      recentTrends: this.generateTrendAnalysis()
+      recentTrends: this.generateTrendAnalysis(),
     };
   }
-  
+
   /**
    * Get performance metrics for a time period
    */
   getMetricsHistory(hours: number = 24): SystemMetrics[] {
     const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
-    return this.metricsHistory.filter(m => m.timestamp >= cutoff);
+    return this.metricsHistory.filter((m) => m.timestamp >= cutoff);
   }
-  
+
   /**
    * Get alert history
    */
   getAlertHistory(hours: number = 24): SystemAlert[] {
     const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000);
-    return this.alertHistory.filter(a => a.timestamp >= cutoff);
+    return this.alertHistory.filter((a) => a.timestamp >= cutoff);
   }
-  
+
   /**
    * Acknowledge an alert
    */
@@ -308,18 +311,18 @@ export class SystemMonitor {
     if (!alert) {
       return false;
     }
-    
+
     alert.acknowledged = true;
-    
+
     this.logger.info('✅ [System Monitor] Alert acknowledged', {
       alertId,
       title: alert.title,
-      acknowledgedBy
+      acknowledgedBy,
     });
-    
+
     return true;
   }
-  
+
   /**
    * Resolve an alert
    */
@@ -328,35 +331,35 @@ export class SystemMonitor {
     if (!alert) {
       return false;
     }
-    
+
     alert.resolvedAt = new Date();
     this.activeAlerts.delete(alertId);
-    
+
     this.logger.info('🔒 [System Monitor] Alert resolved', {
       alertId,
       title: alert.title,
       resolvedBy,
-      duration: alert.resolvedAt.getTime() - alert.timestamp.getTime()
+      duration: alert.resolvedAt.getTime() - alert.timestamp.getTime(),
     });
-    
+
     return true;
   }
-  
+
   /**
    * Initialize component tracking
    */
   private async initializeComponentTracking(): Promise<void> {
     const components = [
       'ai_decision_engine',
-      'hvac_optimizer', 
+      'hvac_optimizer',
       'predictive_analytics',
       'adaptive_learning',
       'smart_scheduler',
       'home_assistant_client',
       'hvac_controller',
-      'state_machine'
+      'state_machine',
     ];
-    
+
     for (const component of components) {
       this.componentHealth.set(component, {
         name: component,
@@ -365,11 +368,11 @@ export class SystemMonitor {
         responseTime: 0,
         errorCount: 0,
         metrics: {},
-        issues: []
+        issues: [],
       });
     }
   }
-  
+
   /**
    * Start periodic monitoring tasks
    */
@@ -380,7 +383,7 @@ export class SystemMonitor {
         await this.collectSystemMetrics();
       }
     }, 60000);
-    
+
     // Health check loop (every 5 minutes)
     this.healthCheckInterval = setInterval(async () => {
       if (this.isMonitoring) {
@@ -388,7 +391,7 @@ export class SystemMonitor {
       }
     }, 5 * 60000);
   }
-  
+
   /**
    * Collect current system metrics
    */
@@ -398,23 +401,25 @@ export class SystemMonitor {
         timestamp: new Date(),
         memoryUsage: this.getMemoryUsage(),
         cpuUsage: this.getCpuUsage(),
-        systemUptime: this.getSystemUptime()
+        systemUptime: this.getSystemUptime(),
       };
-      
+
       // Add metrics from buffer if available
       if (this.metricsBuffer.length > 0) {
-        const bufferedMetrics = this.metricsBuffer.reduce((acc, m) => ({ ...acc, ...m }), {});
+        const bufferedMetrics = this.metricsBuffer.reduce(
+          (acc, m) => ({ ...acc, ...m }),
+          {},
+        );
         Object.assign(metrics, bufferedMetrics);
         this.metricsBuffer = [];
       }
-      
+
       this.recordMetrics(metrics);
-      
     } catch (error) {
       this.logger.error('❌ [System Monitor] Failed to collect metrics', error);
     }
   }
-  
+
   /**
    * Perform health checks on all components
    */
@@ -422,45 +427,44 @@ export class SystemMonitor {
     for (const [name, health] of this.componentHealth.entries()) {
       try {
         const startTime = performance.now();
-        
+
         // Simulate health check (in production, this would ping actual components)
         const isHealthy = await this.checkComponentHealth(name);
         const responseTime = performance.now() - startTime;
-        
+
         this.recordComponentHealth(name, {
           status: isHealthy ? 'online' : 'degraded',
           responseTime,
-          lastCheck: new Date()
+          lastCheck: new Date(),
         });
-        
       } catch (error) {
         this.recordComponentHealth(name, {
           status: 'offline',
           responseTime: 0,
           lastCheck: new Date(),
-          issues: [`Health check failed: ${error.message}`]
+          issues: [`Health check failed: ${error.message}`],
         });
       }
     }
   }
-  
+
   /**
    * Check component health (simulated)
    */
   private async checkComponentHealth(componentName: string): Promise<boolean> {
     // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, Math.random() * 50));
-    
+    await new Promise((resolve) => setTimeout(resolve, Math.random() * 50));
+
     // Simulate occasional failures
     return Math.random() > 0.05; // 95% success rate
   }
-  
+
   /**
    * Check for alert conditions
    */
   private checkAlerts(metrics: SystemMetrics): void {
     const alerts: SystemAlert[] = [];
-    
+
     // Check decision latency
     if (metrics.aiDecisionLatency > this.config.maxDecisionLatency) {
       alerts.push(this.createAlert(
@@ -472,25 +476,27 @@ export class SystemMonitor {
         'aiDecisionLatency',
         this.config.maxDecisionLatency,
         metrics.aiDecisionLatency,
-        'Consider scaling AI resources or optimizing decision algorithms'
+        'Consider scaling AI resources or optimizing decision algorithms',
       ));
     }
-    
+
     // Check comfort score
     if (metrics.comfortScore < this.config.minComfortScore) {
       alerts.push(this.createAlert(
         'performance',
         'warning',
         'Low Comfort Score',
-        `System comfort score is ${(metrics.comfortScore * 100).toFixed(0)}%, below target of ${(this.config.minComfortScore * 100).toFixed(0)}%`,
+        `System comfort score is ${
+          (metrics.comfortScore * 100).toFixed(0)
+        }%, below target of ${(this.config.minComfortScore * 100).toFixed(0)}%`,
         'hvac_controller',
         'comfortScore',
         this.config.minComfortScore,
         metrics.comfortScore,
-        'Review HVAC settings and optimization parameters'
+        'Review HVAC settings and optimization parameters',
       ));
     }
-    
+
     // Check error rate
     if (metrics.errorRate > this.config.maxErrorRate) {
       alerts.push(this.createAlert(
@@ -502,10 +508,10 @@ export class SystemMonitor {
         'errorRate',
         this.config.maxErrorRate,
         metrics.errorRate,
-        'Investigate error sources and check component health'
+        'Investigate error sources and check component health',
       ));
     }
-    
+
     // Check memory usage
     if (metrics.memoryUsage > this.config.maxMemoryUsage) {
       alerts.push(this.createAlert(
@@ -517,16 +523,16 @@ export class SystemMonitor {
         'memoryUsage',
         this.config.maxMemoryUsage,
         metrics.memoryUsage,
-        'Consider restarting components or increasing memory allocation'
+        'Consider restarting components or increasing memory allocation',
       ));
     }
-    
+
     // Process new alerts
     for (const alert of alerts) {
       this.processAlert(alert);
     }
   }
-  
+
   /**
    * Create a system alert
    */
@@ -539,7 +545,7 @@ export class SystemMonitor {
     metric: string,
     threshold: number,
     actualValue: number,
-    recommendation?: string
+    recommendation?: string,
   ): SystemAlert {
     return {
       id: `alert_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -553,32 +559,32 @@ export class SystemMonitor {
       threshold,
       actualValue,
       recommendation,
-      acknowledged: false
+      acknowledged: false,
     };
   }
-  
+
   /**
    * Process and potentially trigger an alert
    */
   private processAlert(alert: SystemAlert): void {
     // Check if similar alert already exists
-    const existingAlert = Array.from(this.activeAlerts.values()).find(a => 
-      a.component === alert.component && 
+    const existingAlert = Array.from(this.activeAlerts.values()).find((a) =>
+      a.component === alert.component &&
       a.metric === alert.metric &&
       !a.acknowledged
     );
-    
+
     if (existingAlert) {
       // Update existing alert
       existingAlert.actualValue = alert.actualValue;
       existingAlert.timestamp = alert.timestamp;
       return;
     }
-    
+
     // Add new alert
     this.activeAlerts.set(alert.id, alert);
     this.alertHistory.push(alert);
-    
+
     this.logger.warning('🚨 [System Monitor] Alert triggered', {
       alertId: alert.id,
       severity: alert.severity,
@@ -586,42 +592,51 @@ export class SystemMonitor {
       component: alert.component,
       metric: alert.metric,
       threshold: alert.threshold,
-      actual: alert.actualValue
+      actual: alert.actualValue,
     });
-    
+
     // Limit alert history size
     if (this.alertHistory.length > 1000) {
       this.alertHistory = this.alertHistory.slice(-500);
     }
   }
-  
+
   /**
    * Calculate overall health status
    */
-  private calculateHealthStatus(metrics: Partial<SystemMetrics>): SystemMetrics['healthStatus'] {
+  private calculateHealthStatus(
+    metrics: Partial<SystemMetrics>,
+  ): SystemMetrics['healthStatus'] {
     const issues = [];
-    
-    if (metrics.aiDecisionLatency && metrics.aiDecisionLatency > this.config.maxDecisionLatency) {
+
+    if (
+      metrics.aiDecisionLatency &&
+      metrics.aiDecisionLatency > this.config.maxDecisionLatency
+    ) {
       issues.push('High latency');
     }
-    
-    if (metrics.comfortScore && metrics.comfortScore < this.config.minComfortScore) {
+
+    if (
+      metrics.comfortScore && metrics.comfortScore < this.config.minComfortScore
+    ) {
       issues.push('Low comfort');
     }
-    
+
     if (metrics.errorRate && metrics.errorRate > this.config.maxErrorRate) {
       issues.push('High errors');
     }
-    
-    if (metrics.memoryUsage && metrics.memoryUsage > this.config.maxMemoryUsage) {
+
+    if (
+      metrics.memoryUsage && metrics.memoryUsage > this.config.maxMemoryUsage
+    ) {
       issues.push('High memory');
     }
-    
+
     if (issues.length === 0) return 'healthy';
     if (issues.length <= 2) return 'warning';
     return 'critical';
   }
-  
+
   /**
    * Generate trend analysis for key metrics
    */
@@ -629,12 +644,12 @@ export class SystemMonitor {
     if (this.metricsHistory.length < 10) {
       return [];
     }
-    
+
     const trends: TrendAnalysis[] = [];
     const recent = this.metricsHistory.slice(-24); // Last 24 metrics
-    
+
     // Analyze comfort score trend
-    const comfortTrend = this.analyzeTrend(recent.map(m => m.comfortScore));
+    const comfortTrend = this.analyzeTrend(recent.map((m) => m.comfortScore));
     if (comfortTrend) {
       trends.push({
         metric: 'comfortScore',
@@ -645,13 +660,15 @@ export class SystemMonitor {
         prediction: {
           nextValue: comfortTrend.prediction,
           confidence: 0.7,
-          timeframe: 1
-        }
+          timeframe: 1,
+        },
       });
     }
-    
+
     // Analyze energy efficiency trend
-    const energyTrend = this.analyzeTrend(recent.map(m => m.energyEfficiency));
+    const energyTrend = this.analyzeTrend(
+      recent.map((m) => m.energyEfficiency),
+    );
     if (energyTrend) {
       trends.push({
         metric: 'energyEfficiency',
@@ -662,14 +679,14 @@ export class SystemMonitor {
         prediction: {
           nextValue: energyTrend.prediction,
           confidence: 0.6,
-          timeframe: 1
-        }
+          timeframe: 1,
+        },
       });
     }
-    
+
     return trends;
   }
-  
+
   /**
    * Analyze trend in metric values
    */
@@ -679,33 +696,40 @@ export class SystemMonitor {
     significance: TrendAnalysis['significance'];
     prediction: number;
   } | null {
-    
     if (values.length < 5) return null;
-    
+
     // Simple linear regression
     const n = values.length;
     const x = Array.from({ length: n }, (_, i) => i);
     const y = values;
-    
+
     const sumX = x.reduce((sum, val) => sum + val, 0);
     const sumY = y.reduce((sum, val) => sum + val, 0);
     const sumXY = x.reduce((sum, val, i) => sum + val * y[i], 0);
     const sumX2 = x.reduce((sum, val) => sum + val * val, 0);
-    
+
     const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
     const intercept = (sumY - slope * sumX) / n;
-    
+
     const changeRate = (slope / (sumY / n)) * 100; // Percentage change
     const prediction = slope * n + intercept;
-    
+
     return {
-      direction: slope > 0.01 ? 'improving' : slope < -0.01 ? 'degrading' : 'stable',
+      direction: slope > 0.01
+        ? 'improving'
+        : slope < -0.01
+        ? 'degrading'
+        : 'stable',
       changeRate: Math.abs(changeRate),
-      significance: Math.abs(changeRate) > 5 ? 'high' : Math.abs(changeRate) > 2 ? 'medium' : 'low',
-      prediction: Math.max(0, Math.min(1, prediction))
+      significance: Math.abs(changeRate) > 5
+        ? 'high'
+        : Math.abs(changeRate) > 2
+        ? 'medium'
+        : 'low',
+      prediction: Math.max(0, Math.min(1, prediction)),
     };
   }
-  
+
   /**
    * Get current memory usage (simulated)
    */
@@ -713,7 +737,7 @@ export class SystemMonitor {
     // In a real implementation, this would get actual memory usage
     return 50 + Math.random() * 30; // 50-80 MB
   }
-  
+
   /**
    * Get current CPU usage (simulated)
    */
@@ -721,18 +745,18 @@ export class SystemMonitor {
     // In a real implementation, this would get actual CPU usage
     return 10 + Math.random() * 20; // 10-30%
   }
-  
+
   /**
    * Get system uptime in hours
    */
   private getSystemUptime(): number {
     // Calculate uptime since first metrics recording
     if (this.metricsHistory.length === 0) return 0;
-    
+
     const firstMetric = this.metricsHistory[0];
     return (Date.now() - firstMetric.timestamp.getTime()) / (1000 * 60 * 60);
   }
-  
+
   /**
    * Prune old metrics to manage memory
    */
@@ -742,19 +766,19 @@ export class SystemMonitor {
       this.metricsHistory = this.metricsHistory.slice(-maxEntries / 2);
     }
   }
-  
+
   /**
    * Update configuration
    */
   updateConfig(newConfig: Partial<AlertConfig>): void {
     this.config = { ...this.config, ...newConfig };
-    
+
     this.logger.info('🔧 [System Monitor] Configuration updated', {
       alertsEnabled: this.config.enabled,
-      changes: Object.keys(newConfig)
+      changes: Object.keys(newConfig),
     });
   }
-  
+
   /**
    * Get monitoring summary for external systems
    */
@@ -766,22 +790,25 @@ export class SystemMonitor {
     components: Record<string, string>;
   } {
     const latest = this.metricsHistory[this.metricsHistory.length - 1];
-    const components = Array.from(this.componentHealth.entries()).reduce((acc, [name, health]) => {
-      acc[name] = health.status;
-      return acc;
-    }, {} as Record<string, string>);
-    
+    const components = Array.from(this.componentHealth.entries()).reduce(
+      (acc, [name, health]) => {
+        acc[name] = health.status;
+        return acc;
+      },
+      {} as Record<string, string>,
+    );
+
     return {
       status: latest?.healthStatus || 'unknown',
       metrics: {
         comfortScore: latest?.comfortScore || 0,
         energyEfficiency: latest?.energyEfficiency || 0,
         aiDecisionLatency: latest?.aiDecisionLatency || 0,
-        memoryUsage: latest?.memoryUsage || 0
+        memoryUsage: latest?.memoryUsage || 0,
       },
       alerts: this.activeAlerts.size,
       uptime: latest?.systemUptime || 0,
-      components
+      components,
     };
   }
 }

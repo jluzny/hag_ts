@@ -1,9 +1,13 @@
 # HAG Project - Development Guide
 
 ## Project Overview
-HAG (Home Assistant aGentic HVAC Automation) is a TypeScript/Deno application that provides intelligent HVAC control through Home Assistant integration with optional AI-powered decision making.
+
+HAG (Home Assistant aGentic HVAC Automation) is a TypeScript/Deno application
+that provides intelligent HVAC control through Home Assistant integration with
+optional AI-powered decision making.
 
 ## Architecture
+
 - **Language**: TypeScript with Deno runtime
 - **Dependency Injection**: @needle-di/core for type-safe DI
 - **State Management**: XState v5 for HVAC state machine
@@ -12,6 +16,7 @@ HAG (Home Assistant aGentic HVAC Automation) is a TypeScript/Deno application th
 - **Configuration**: Zod schemas with YAML/environment variable support
 
 ## Key Dependencies & Versions
+
 - `xstate`: ^5.20.0 (state machine)
 - `@langchain/core`: ^0.3.61 (AI framework)
 - `@langchain/openai`: ^0.5.16 (OpenAI integration)
@@ -22,6 +27,7 @@ HAG (Home Assistant aGentic HVAC Automation) is a TypeScript/Deno application th
 - `yaml`: ^2.8.0 (configuration parsing)
 
 ## Build & Development Commands
+
 ```bash
 # Development
 deno task dev                 # Run in development mode
@@ -41,6 +47,7 @@ deno task test:coverage      # Run tests with coverage report
 ```
 
 ## Configuration Structure
+
 - **Main config**: `deno.json` (compiler options, dependencies, tasks)
 - **Settings schema**: `src/config/settings.ts` (Zod validation)
 - **Default values**: Includes placeholder Home Assistant URLs and sensors
@@ -49,11 +56,15 @@ deno task test:coverage      # Run tests with coverage report
 ## Key Technical Details
 
 ### TypeScript Configuration
-- Uses `experimentalDecorators: true` for dependency injection (generates deprecation warning - this is expected)
+
+- Uses `experimentalDecorators: true` for dependency injection (generates
+  deprecation warning - this is expected)
 - `emitDecoratorMetadata: true` required for @needle-di/core
-- `--no-check` flag used in build to avoid type checking issues during compilation
+- `--no-check` flag used in build to avoid type checking issues during
+  compilation
 
 ### Dependency Injection Pattern
+
 ```typescript
 // Service registration (new @needle-di/core API)
 this.container.bind({ provide: TYPES.Service, useClass: ServiceClass });
@@ -66,16 +77,20 @@ constructor(
 ```
 
 ### XState v5 Changes
+
 - Replace `spawn(machine)` with `createActor(machine)`
 - Call `actor.start()` explicitly after creation
 - Updated event handling for type safety
 
 ### WebSocket Implementation
+
 - Replaced deprecated `@std/ws` with native WebSocket API
 - Uses event-driven pattern (onopen, onmessage, onerror, onclose)
 
 ### Configuration Defaults
+
 Required properties that must be included in `defaultSettings`:
+
 - `hassOptions.wsUrl`, `hassOptions.restUrl`, `hassOptions.token`
 - `hvacOptions.tempSensor`, `hvacOptions.outdoorSensor`
 - `hvacOptions.heating.temperatureThresholds`
@@ -84,19 +99,25 @@ Required properties that must be included in `defaultSettings`:
 ## Development Guidelines
 
 ### Commit Messages
-- **IMPORTANT: Never mention Claude, AI assistants, or automated generation in commit messages**
-- **Never include "Generated with Claude Code" footer or "Co-Authored-By: Claude" lines**
+
+- **IMPORTANT: Never mention Claude, AI assistants, or automated generation in
+  commit messages**
+- **Never include "Generated with Claude Code" footer or "Co-Authored-By:
+  Claude" lines**
 - Use conventional commit format: `type: description`
 - Focus on technical changes and business value
 - Keep commit messages professional and focused on the technical implementation
-- Example: `feat: upgrade dependencies to latest versions` instead of `feat: Claude updated dependencies`
+- Example: `feat: upgrade dependencies to latest versions` instead of
+  `feat: Claude updated dependencies`
 
 ### Error Handling
+
 - Use `{ error }` object wrapping for logger methods
 - Check `error instanceof Error` before accessing `.name` property
 - Use `import type` for decorator parameter types to avoid metadata issues
 
 ### Type Safety
+
 - Use `import type` for types used only in decorators
 - Cast types as `any` when needed for library compatibility (e.g., LangChain)
 - Add `override` modifier for inherited properties like `Error.cause`
@@ -104,21 +125,25 @@ Required properties that must be included in `defaultSettings`:
 ## Common Issues & Solutions
 
 ### Build Warnings
+
 - `experimentalDecorators` deprecation warning is expected and unavoidable
 - Required for @needle-di/core dependency injection to work
 - Will need library updates when new decorator standard is finalized
 
 ### Type Checking
+
 - Use `--no-check` flag for compilation to avoid complex type issues
 - Separate type checking with `deno task check` for development
 - Some type casts (`as any`) are necessary for library compatibility
 
 ### WebSocket Connection
+
 - Native WebSocket API requires different error handling pattern
 - Use event listeners instead of async iteration
 - Connection state management needs manual tracking
 
 ## Project Structure
+
 ```
 src/
 ├── ai/           # LangChain AI agent implementation
@@ -131,12 +156,14 @@ src/
 ```
 
 ## Testing Strategy
+
 - Unit tests in `tests/unit/`
 - Integration tests in `tests/integration/`
 - Use Deno's built-in test runner
 - Mock external dependencies (Home Assistant, OpenAI)
 
 ## Deployment
+
 - Compiles to single binary `hag` (approximately 39MB)
 - Includes all dependencies and Deno runtime
 - Cross-platform executable

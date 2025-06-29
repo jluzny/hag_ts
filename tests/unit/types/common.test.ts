@@ -3,14 +3,14 @@
  */
 
 import { assertEquals, assertInstanceOf } from '@std/assert';
-import { 
-  HVACMode, 
-  SystemMode, 
-  LogLevel, 
-  WebSocketState,
-  type HVACStatus,
-  type OperationResult,
+import {
   type ConnectionStats,
+  HVACMode,
+  type HVACStatus,
+  LogLevel,
+  type OperationResult,
+  SystemMode,
+  WebSocketState,
 } from '../../../src/types/common.ts';
 
 // Test-specific interfaces
@@ -72,7 +72,7 @@ Deno.test('LogLevel enum', async (t) => {
   await t.step('should have hierarchical ordering', () => {
     const levels = Object.values(LogLevel);
     assertEquals(levels.length, 4);
-    
+
     // Should be in order of verbosity
     assertEquals(levels[0], 'debug');
     assertEquals(levels[1], 'info');
@@ -152,7 +152,10 @@ Deno.test('HVACStatus type structure', async (t) => {
       aiAnalysis: 'System is efficiently maintaining target temperature.',
     };
 
-    assertEquals(statusWithAI.aiAnalysis, 'System is efficiently maintaining target temperature.');
+    assertEquals(
+      statusWithAI.aiAnalysis,
+      'System is efficiently maintaining target temperature.',
+    );
     assertEquals(statusWithAI.controller.aiEnabled, true);
   });
 });
@@ -261,14 +264,17 @@ Deno.test('Type compatibility and relationships', async (t) => {
     assertEquals(status.controller.systemMode, SystemMode.HEAT_ONLY);
   });
 
-  await t.step('should allow WebSocketState values in connection status', () => {
-    // This would be used in connection status tracking
-    const connectionState = WebSocketState.CONNECTED;
-    assertEquals(connectionState, 'connected');
-    
-    const errorState = WebSocketState.ERROR;
-    assertEquals(errorState, 'error');
-  });
+  await t.step(
+    'should allow WebSocketState values in connection status',
+    () => {
+      // This would be used in connection status tracking
+      const connectionState = WebSocketState.CONNECTED;
+      assertEquals(connectionState, 'connected');
+
+      const errorState = WebSocketState.ERROR;
+      assertEquals(errorState, 'error');
+    },
+  );
 });
 
 Deno.test('Type guards and validation helpers', async (t) => {

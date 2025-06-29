@@ -1,6 +1,6 @@
 /**
  * LangGraph State Type Definitions for HVAC System
- * 
+ *
  * Defines the state structure for LangGraph-based HVAC state machine
  */
 
@@ -27,7 +27,7 @@ export interface EvaluationHistoryEntry {
  * AI recommendation entry (for future AI enhancement)
  */
 export interface AIRecommendation {
-  action: "idle" | "heating" | "cooling" | "off";
+  action: 'idle' | 'heating' | 'cooling' | 'off';
   confidence: number;
   reasoning: string;
   timestamp: Date;
@@ -47,17 +47,17 @@ export interface PerformanceMetrics {
 
 /**
  * Main LangGraph state for HVAC system
- * 
+ *
  * This replaces the XState context with a more comprehensive state object
  * that supports LangGraph's message-passing architecture
  */
 export interface HVACLangGraphState {
   // Core state (equivalent to XState current state)
-  currentMode: "idle" | "evaluating" | "heating" | "cooling" | "off";
-  
+  currentMode: 'idle' | 'evaluating' | 'heating' | 'cooling' | 'off';
+
   // Previous mode for change detection
   previousMode?: string;
-  
+
   // Context data (equivalent to XState context)
   indoorTemp?: number;
   outdoorTemp?: number;
@@ -65,29 +65,29 @@ export interface HVACLangGraphState {
   currentHour: number;
   isWeekday: boolean;
   lastDefrost?: Date;
-  
+
   // Enhanced tracking for LangGraph
   evaluationHistory: EvaluationHistoryEntry[];
-  
+
   // AI enhancement capabilities (Phase 4)
   aiEnabled?: boolean;
   aiRecommendations?: AIRecommendation[];
-  
+
   // Decision methodology tracking
-  decisionMethod?: "rule_based" | "ai_assisted" | "hybrid";
-  
+  decisionMethod?: 'rule_based' | 'ai_assisted' | 'hybrid';
+
   // Performance monitoring
   performanceMetrics?: PerformanceMetrics;
-  
+
   // State machine metadata
   graphStartTime: Date;
   totalTransitions: number;
-  
+
   // Action timestamps for state machine transition tracking
   lastActionTimestamp?: Date;
   lastIdleTimestamp?: Date;
   lastShutdownTimestamp?: Date;
-  
+
   // Error handling
   lastError?: {
     timestamp: Date;
@@ -95,7 +95,7 @@ export interface HVACLangGraphState {
     node: string;
     recoveryAction?: string;
   };
-  
+
   // Manual override tracking
   manualOverride?: {
     active: boolean;
@@ -105,7 +105,7 @@ export interface HVACLangGraphState {
     timestamp?: Date;
     expiresAt?: Date;
   };
-  
+
   // Shutdown result tracking (for off node)
   shutdownResult?: {
     shutdownActions: string[];
@@ -113,7 +113,7 @@ export interface HVACLangGraphState {
     monitoringActive: boolean;
     emergencyContactsNotified: boolean;
   };
-  
+
   // Action results tracking (for specific nodes)
   lastActionResult?: {
     action: string;
@@ -121,11 +121,11 @@ export interface HVACLangGraphState {
     timestamp: Date;
     details?: Record<string, unknown>;
   };
-  
+
   idleMaintenanceResult?: {
     maintenancePerformed: string[];
     nextMaintenanceIn: string;
-    systemHealthStatus: "good" | "warning" | "error";
+    systemHealthStatus: 'good' | 'warning' | 'error';
     energyUsageOptimal: boolean;
   };
 }
@@ -134,7 +134,12 @@ export interface HVACLangGraphState {
  * Input event types for LangGraph nodes
  */
 export interface HVACInputEvent {
-  type: "TEMPERATURE_UPDATE" | "MANUAL_OVERRIDE" | "SYSTEM_MODE_CHANGE" | "TIME_TICK" | "EVALUATE";
+  type:
+    | 'TEMPERATURE_UPDATE'
+    | 'MANUAL_OVERRIDE'
+    | 'SYSTEM_MODE_CHANGE'
+    | 'TIME_TICK'
+    | 'EVALUATE';
   payload?: {
     sensor?: string;
     value?: number;
@@ -162,11 +167,13 @@ export interface NodeExecutionResult {
 /**
  * Default state factory
  */
-export function createDefaultHVACState(overrides: Partial<HVACLangGraphState> = {}): HVACLangGraphState {
+export function createDefaultHVACState(
+  overrides: Partial<HVACLangGraphState> = {},
+): HVACLangGraphState {
   const now = new Date();
-  
+
   return {
-    currentMode: "idle",
+    currentMode: 'idle',
     systemMode: SystemMode.AUTO,
     currentHour: now.getHours(),
     isWeekday: now.getDay() >= 1 && now.getDay() <= 5,
@@ -174,7 +181,7 @@ export function createDefaultHVACState(overrides: Partial<HVACLangGraphState> = 
     graphStartTime: now,
     totalTransitions: 0,
     aiEnabled: false,
-    decisionMethod: "rule_based",
-    ...overrides
+    decisionMethod: 'rule_based',
+    ...overrides,
   };
 }

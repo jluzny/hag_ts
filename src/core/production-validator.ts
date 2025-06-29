@@ -1,6 +1,6 @@
 /**
  * Production Readiness Validator
- * 
+ *
  * This module provides comprehensive validation and readiness checks
  * for deploying the AI HVAC system to production environments.
  */
@@ -25,26 +25,26 @@ export interface ValidationResult {
  */
 export interface ProductionConfig {
   // Environment requirements
-  minMemory: number;        // MB
+  minMemory: number; // MB
   minCpuCores: number;
   requiredPorts: number[];
   requiredEnvVars: string[];
-  
+
   // Performance requirements
-  maxStartupTime: number;   // seconds
-  maxResponseTime: number;  // ms
-  minUptime: number;        // percentage
-  
+  maxStartupTime: number; // seconds
+  maxResponseTime: number; // ms
+  minUptime: number; // percentage
+
   // Security requirements
   requireHttps: boolean;
   requireAuthentication: boolean;
   requireEncryption: boolean;
-  
+
   // Monitoring requirements
   requireHealthCheck: boolean;
   requireMetrics: boolean;
   requireLogging: boolean;
-  
+
   // Dependency requirements
   requiredServices: string[];
   requiredDatabase: boolean;
@@ -76,17 +76,17 @@ export interface SystemHealth {
 export class ProductionValidator {
   private config: ProductionConfig;
   private logger: LoggerService;
-  
+
   constructor(config: ProductionConfig, logger: LoggerService) {
     this.config = config;
     this.logger = logger;
-    
+
     this.logger.info('🔍 [Production Validator] Initialized', {
       checks: Object.keys(config).length,
-      criticalServices: config.requiredServices.length
+      criticalServices: config.requiredServices.length,
     });
   }
-  
+
   /**
    * Run comprehensive production readiness validation
    */
@@ -102,85 +102,88 @@ export class ProductionValidator {
       critical: number;
     };
   }> {
-    
-    this.logger.info('🔍 [Production Validator] Starting comprehensive validation');
-    
+    this.logger.info(
+      '🔍 [Production Validator] Starting comprehensive validation',
+    );
+
     const results: ValidationResult[] = [];
-    
+
     // Environment validation
     results.push(...await this.validateEnvironment());
-    
+
     // Configuration validation
     results.push(...await this.validateConfiguration());
-    
+
     // Security validation
     results.push(...await this.validateSecurity());
-    
+
     // Performance validation
     results.push(...await this.validatePerformance());
-    
+
     // Dependencies validation
     results.push(...await this.validateDependencies());
-    
+
     // Monitoring validation
     results.push(...await this.validateMonitoring());
-    
+
     // AI components validation
     results.push(...await this.validateAIComponents());
-    
+
     // Calculate summary
     const summary = {
       total: results.length,
-      passed: results.filter(r => r.status === 'pass').length,
-      warnings: results.filter(r => r.status === 'warning').length,
-      failed: results.filter(r => r.status === 'fail').length,
-      critical: results.filter(r => r.status === 'fail' && r.critical).length
+      passed: results.filter((r) => r.status === 'pass').length,
+      warnings: results.filter((r) => r.status === 'warning').length,
+      failed: results.filter((r) => r.status === 'fail').length,
+      critical: results.filter((r) => r.status === 'fail' && r.critical).length,
     };
-    
+
     // Calculate readiness score (0-100)
     const score = Math.round(
-      ((summary.passed * 1.0 + summary.warnings * 0.5) / summary.total) * 100
+      ((summary.passed * 1.0 + summary.warnings * 0.5) / summary.total) * 100,
     );
-    
+
     // System is ready if no critical failures and score >= 80
     const ready = summary.critical === 0 && score >= 80;
-    
+
     this.logger.info('✅ [Production Validator] Validation completed', {
       ready,
       score,
-      summary
+      summary,
     });
-    
+
     return { ready, score, results, summary };
   }
-  
+
   /**
    * Validate environment requirements
    */
   private async validateEnvironment(): Promise<ValidationResult[]> {
     const results: ValidationResult[] = [];
-    
+
     // Memory check
     try {
       const memoryUsage = this.getMemoryUsage();
       const available = this.getTotalMemory() - memoryUsage;
-      
+
       if (available >= this.config.minMemory) {
         results.push({
           category: 'Environment',
           check: 'Memory Availability',
           status: 'pass',
           message: `Sufficient memory available: ${available}MB`,
-          critical: false
+          critical: false,
         });
       } else {
         results.push({
           category: 'Environment',
           check: 'Memory Availability',
           status: 'fail',
-          message: `Insufficient memory: ${available}MB available, ${this.config.minMemory}MB required`,
-          recommendation: 'Increase system memory or reduce memory requirements',
-          critical: true
+          message:
+            `Insufficient memory: ${available}MB available, ${this.config.minMemory}MB required`,
+          recommendation:
+            'Increase system memory or reduce memory requirements',
+          critical: true,
         });
       }
     } catch (error) {
@@ -190,30 +193,32 @@ export class ProductionValidator {
         status: 'fail',
         message: 'Unable to check memory availability',
         details: error,
-        critical: true
+        critical: true,
       });
     }
-    
+
     // CPU cores check
     try {
       const cpuCores = this.getCpuCores();
-      
+
       if (cpuCores >= this.config.minCpuCores) {
         results.push({
           category: 'Environment',
           check: 'CPU Cores',
           status: 'pass',
           message: `Sufficient CPU cores: ${cpuCores}`,
-          critical: false
+          critical: false,
         });
       } else {
         results.push({
           category: 'Environment',
           check: 'CPU Cores',
           status: 'fail',
-          message: `Insufficient CPU cores: ${cpuCores} available, ${this.config.minCpuCores} required`,
-          recommendation: 'Increase CPU cores or reduce processing requirements',
-          critical: true
+          message:
+            `Insufficient CPU cores: ${cpuCores} available, ${this.config.minCpuCores} required`,
+          recommendation:
+            'Increase CPU cores or reduce processing requirements',
+          critical: true,
         });
       }
     } catch (error) {
@@ -223,22 +228,22 @@ export class ProductionValidator {
         status: 'fail',
         message: 'Unable to check CPU cores',
         details: error,
-        critical: true
+        critical: true,
       });
     }
-    
+
     // Port availability
     for (const port of this.config.requiredPorts) {
       try {
         const available = await this.checkPortAvailability(port);
-        
+
         if (available) {
           results.push({
             category: 'Environment',
             check: `Port ${port}`,
             status: 'pass',
             message: `Port ${port} is available`,
-            critical: false
+            critical: false,
           });
         } else {
           results.push({
@@ -246,8 +251,9 @@ export class ProductionValidator {
             check: `Port ${port}`,
             status: 'fail',
             message: `Port ${port} is not available`,
-            recommendation: `Free up port ${port} or configure alternative port`,
-            critical: true
+            recommendation:
+              `Free up port ${port} or configure alternative port`,
+            critical: true,
           });
         }
       } catch (error) {
@@ -257,22 +263,22 @@ export class ProductionValidator {
           status: 'fail',
           message: `Unable to check port ${port} availability`,
           details: error,
-          critical: true
+          critical: true,
         });
       }
     }
-    
+
     // Environment variables
     for (const envVar of this.config.requiredEnvVars) {
       const value = Deno.env.get(envVar);
-      
+
       if (value && value.length > 0) {
         results.push({
           category: 'Environment',
           check: `Environment Variable ${envVar}`,
           status: 'pass',
           message: `${envVar} is configured`,
-          critical: false
+          critical: false,
         });
       } else {
         results.push({
@@ -281,35 +287,35 @@ export class ProductionValidator {
           status: 'fail',
           message: `Required environment variable ${envVar} is not set`,
           recommendation: `Set ${envVar} environment variable`,
-          critical: true
+          critical: true,
         });
       }
     }
-    
+
     return results;
   }
-  
+
   /**
    * Validate configuration
    */
   private async validateConfiguration(): Promise<ValidationResult[]> {
     const results: ValidationResult[] = [];
-    
+
     // Configuration file validation
     try {
       // Check if configuration files exist and are valid
       const configPath = './config.yaml';
-      
+
       try {
         const configStat = await Deno.stat(configPath);
-        
+
         if (configStat.isFile) {
           results.push({
             category: 'Configuration',
             check: 'Configuration File',
             status: 'pass',
             message: 'Configuration file found',
-            critical: false
+            critical: false,
           });
         } else {
           results.push({
@@ -318,7 +324,7 @@ export class ProductionValidator {
             status: 'warning',
             message: 'Configuration file not found, using defaults',
             recommendation: 'Create production configuration file',
-            critical: false
+            critical: false,
           });
         }
       } catch {
@@ -328,10 +334,9 @@ export class ProductionValidator {
           status: 'warning',
           message: 'Configuration file not found, using defaults',
           recommendation: 'Create production configuration file',
-          critical: false
+          critical: false,
         });
       }
-      
     } catch (error) {
       results.push({
         category: 'Configuration',
@@ -339,20 +344,20 @@ export class ProductionValidator {
         status: 'fail',
         message: 'Unable to validate configuration',
         details: error,
-        critical: false
+        critical: false,
       });
     }
-    
+
     // Logging configuration
     const loggingEnabled = true; // Would check actual logging configuration
-    
+
     if (loggingEnabled) {
       results.push({
         category: 'Configuration',
         check: 'Logging Configuration',
         status: 'pass',
         message: 'Logging is properly configured',
-        critical: false
+        critical: false,
       });
     } else {
       results.push({
@@ -361,30 +366,30 @@ export class ProductionValidator {
         status: 'fail',
         message: 'Logging is not configured',
         recommendation: 'Configure structured logging for production',
-        critical: true
+        critical: true,
       });
     }
-    
+
     return results;
   }
-  
+
   /**
    * Validate security requirements
    */
   private async validateSecurity(): Promise<ValidationResult[]> {
     const results: ValidationResult[] = [];
-    
+
     // HTTPS requirement
     if (this.config.requireHttps) {
       const httpsEnabled = true; // Would check actual HTTPS configuration
-      
+
       if (httpsEnabled) {
         results.push({
           category: 'Security',
           check: 'HTTPS',
           status: 'pass',
           message: 'HTTPS is enabled',
-          critical: false
+          critical: false,
         });
       } else {
         results.push({
@@ -393,22 +398,22 @@ export class ProductionValidator {
           status: 'fail',
           message: 'HTTPS is required but not enabled',
           recommendation: 'Enable HTTPS with valid SSL certificates',
-          critical: true
+          critical: true,
         });
       }
     }
-    
+
     // Authentication requirement
     if (this.config.requireAuthentication) {
       const authEnabled = true; // Would check actual authentication configuration
-      
+
       if (authEnabled) {
         results.push({
           category: 'Security',
           check: 'Authentication',
           status: 'pass',
           message: 'Authentication is configured',
-          critical: false
+          critical: false,
         });
       } else {
         results.push({
@@ -417,22 +422,22 @@ export class ProductionValidator {
           status: 'fail',
           message: 'Authentication is required but not configured',
           recommendation: 'Configure authentication mechanism',
-          critical: true
+          critical: true,
         });
       }
     }
-    
+
     // Encryption requirement
     if (this.config.requireEncryption) {
       const encryptionEnabled = true; // Would check actual encryption configuration
-      
+
       if (encryptionEnabled) {
         results.push({
           category: 'Security',
           check: 'Data Encryption',
           status: 'pass',
           message: 'Data encryption is enabled',
-          critical: false
+          critical: false,
         });
       } else {
         results.push({
@@ -441,11 +446,11 @@ export class ProductionValidator {
           status: 'fail',
           message: 'Data encryption is required but not enabled',
           recommendation: 'Enable data encryption for sensitive information',
-          critical: true
+          critical: true,
         });
       }
     }
-    
+
     // API key security
     const openAiKey = Deno.env.get('OPENAI_API_KEY');
     if (openAiKey) {
@@ -455,7 +460,7 @@ export class ProductionValidator {
           check: 'API Keys',
           status: 'pass',
           message: 'API keys are properly configured',
-          critical: false
+          critical: false,
         });
       } else {
         results.push({
@@ -464,7 +469,7 @@ export class ProductionValidator {
           status: 'warning',
           message: 'API key format validation failed',
           recommendation: 'Verify API key format and validity',
-          critical: false
+          critical: false,
         });
       }
     } else {
@@ -474,39 +479,41 @@ export class ProductionValidator {
         status: 'warning',
         message: 'OpenAI API key not configured',
         recommendation: 'Configure API keys for AI functionality',
-        critical: false
+        critical: false,
       });
     }
-    
+
     return results;
   }
-  
+
   /**
    * Validate performance requirements
    */
   private async validatePerformance(): Promise<ValidationResult[]> {
     const results: ValidationResult[] = [];
-    
+
     // Startup time validation
     try {
       const startupTime = await this.measureStartupTime();
-      
+
       if (startupTime <= this.config.maxStartupTime) {
         results.push({
           category: 'Performance',
           check: 'Startup Time',
           status: 'pass',
-          message: `Startup time: ${startupTime}s (within ${this.config.maxStartupTime}s limit)`,
-          critical: false
+          message:
+            `Startup time: ${startupTime}s (within ${this.config.maxStartupTime}s limit)`,
+          critical: false,
         });
       } else {
         results.push({
           category: 'Performance',
           check: 'Startup Time',
           status: 'warning',
-          message: `Startup time: ${startupTime}s (exceeds ${this.config.maxStartupTime}s limit)`,
+          message:
+            `Startup time: ${startupTime}s (exceeds ${this.config.maxStartupTime}s limit)`,
           recommendation: 'Optimize initialization process',
-          critical: false
+          critical: false,
         });
       }
     } catch (error) {
@@ -516,30 +523,32 @@ export class ProductionValidator {
         status: 'fail',
         message: 'Unable to measure startup time',
         details: error,
-        critical: false
+        critical: false,
       });
     }
-    
+
     // Response time validation
     try {
       const responseTime = await this.measureResponseTime();
-      
+
       if (responseTime <= this.config.maxResponseTime) {
         results.push({
           category: 'Performance',
           check: 'Response Time',
           status: 'pass',
-          message: `Response time: ${responseTime}ms (within ${this.config.maxResponseTime}ms limit)`,
-          critical: false
+          message:
+            `Response time: ${responseTime}ms (within ${this.config.maxResponseTime}ms limit)`,
+          critical: false,
         });
       } else {
         results.push({
           category: 'Performance',
           check: 'Response Time',
           status: 'warning',
-          message: `Response time: ${responseTime}ms (exceeds ${this.config.maxResponseTime}ms limit)`,
+          message:
+            `Response time: ${responseTime}ms (exceeds ${this.config.maxResponseTime}ms limit)`,
           recommendation: 'Optimize response processing',
-          critical: false
+          critical: false,
         });
       }
     } catch (error) {
@@ -549,31 +558,31 @@ export class ProductionValidator {
         status: 'fail',
         message: 'Unable to measure response time',
         details: error,
-        critical: false
+        critical: false,
       });
     }
-    
+
     return results;
   }
-  
+
   /**
    * Validate dependencies
    */
   private async validateDependencies(): Promise<ValidationResult[]> {
     const results: ValidationResult[] = [];
-    
+
     // Required services
     for (const service of this.config.requiredServices) {
       try {
         const available = await this.checkServiceAvailability(service);
-        
+
         if (available) {
           results.push({
             category: 'Dependencies',
             check: `Service: ${service}`,
             status: 'pass',
             message: `${service} is available`,
-            critical: false
+            critical: false,
           });
         } else {
           results.push({
@@ -582,7 +591,7 @@ export class ProductionValidator {
             status: 'fail',
             message: `Required service ${service} is not available`,
             recommendation: `Ensure ${service} is running and accessible`,
-            critical: true
+            critical: true,
           });
         }
       } catch (error) {
@@ -592,23 +601,23 @@ export class ProductionValidator {
           status: 'fail',
           message: `Unable to check ${service} availability`,
           details: error,
-          critical: true
+          critical: true,
         });
       }
     }
-    
+
     // External APIs
     for (const api of this.config.requiredExternalAPIs) {
       try {
         const available = await this.checkAPIAvailability(api);
-        
+
         if (available) {
           results.push({
             category: 'Dependencies',
             check: `API: ${api}`,
             status: 'pass',
             message: `${api} API is accessible`,
-            critical: false
+            critical: false,
           });
         } else {
           results.push({
@@ -617,7 +626,7 @@ export class ProductionValidator {
             status: 'warning',
             message: `External API ${api} is not accessible`,
             recommendation: `Check ${api} API status and network connectivity`,
-            critical: false
+            critical: false,
           });
         }
       } catch (error) {
@@ -627,32 +636,32 @@ export class ProductionValidator {
           status: 'warning',
           message: `Unable to check ${api} API`,
           details: error,
-          critical: false
+          critical: false,
         });
       }
     }
-    
+
     return results;
   }
-  
+
   /**
    * Validate monitoring and observability
    */
   private async validateMonitoring(): Promise<ValidationResult[]> {
     const results: ValidationResult[] = [];
-    
+
     // Health check endpoint
     if (this.config.requireHealthCheck) {
       try {
         const healthCheckAvailable = await this.checkHealthEndpoint();
-        
+
         if (healthCheckAvailable) {
           results.push({
             category: 'Monitoring',
             check: 'Health Check',
             status: 'pass',
             message: 'Health check endpoint is available',
-            critical: false
+            critical: false,
           });
         } else {
           results.push({
@@ -661,7 +670,7 @@ export class ProductionValidator {
             status: 'fail',
             message: 'Health check endpoint is not available',
             recommendation: 'Implement health check endpoint',
-            critical: true
+            critical: true,
           });
         }
       } catch (error) {
@@ -671,22 +680,22 @@ export class ProductionValidator {
           status: 'fail',
           message: 'Unable to validate health check endpoint',
           details: error,
-          critical: true
+          critical: true,
         });
       }
     }
-    
+
     // Metrics collection
     if (this.config.requireMetrics) {
       const metricsEnabled = true; // Would check actual metrics configuration
-      
+
       if (metricsEnabled) {
         results.push({
           category: 'Monitoring',
           check: 'Metrics Collection',
           status: 'pass',
           message: 'Metrics collection is enabled',
-          critical: false
+          critical: false,
         });
       } else {
         results.push({
@@ -695,39 +704,39 @@ export class ProductionValidator {
           status: 'fail',
           message: 'Metrics collection is not configured',
           recommendation: 'Enable metrics collection for monitoring',
-          critical: true
+          critical: true,
         });
       }
     }
-    
+
     return results;
   }
-  
+
   /**
    * Validate AI components
    */
   private async validateAIComponents(): Promise<ValidationResult[]> {
     const results: ValidationResult[] = [];
-    
+
     const components = [
       'AI Decision Engine',
       'HVAC Optimizer',
       'Predictive Analytics',
       'Adaptive Learning',
-      'Smart Scheduler'
+      'Smart Scheduler',
     ];
-    
+
     for (const component of components) {
       try {
         const healthy = await this.checkComponentHealth(component);
-        
+
         if (healthy) {
           results.push({
             category: 'AI Components',
             check: component,
             status: 'pass',
             message: `${component} is healthy`,
-            critical: false
+            critical: false,
           });
         } else {
           results.push({
@@ -736,7 +745,7 @@ export class ProductionValidator {
             status: 'warning',
             message: `${component} health check failed`,
             recommendation: `Investigate ${component} health status`,
-            critical: false
+            critical: false,
           });
         }
       } catch (error) {
@@ -746,32 +755,32 @@ export class ProductionValidator {
           status: 'fail',
           message: `Unable to check ${component} health`,
           details: error,
-          critical: true
+          critical: true,
         });
       }
     }
-    
+
     return results;
   }
-  
+
   /**
    * Helper methods for system checks
    */
-  
+
   private getMemoryUsage(): number {
     // Would use actual memory measurement in production
     return 50; // 50 MB placeholder
   }
-  
+
   private getTotalMemory(): number {
     // Would use actual system memory in production
     return 1024; // 1024 MB placeholder
   }
-  
+
   private getCpuCores(): number {
     return navigator.hardwareConcurrency || 4;
   }
-  
+
   private async checkPortAvailability(port: number): Promise<boolean> {
     try {
       // Would use actual port checking in production
@@ -780,37 +789,37 @@ export class ProductionValidator {
       return false;
     }
   }
-  
+
   private async measureStartupTime(): Promise<number> {
     // Would measure actual startup time in production
     return 2.5; // 2.5 seconds placeholder
   }
-  
+
   private async measureResponseTime(): Promise<number> {
     // Would measure actual response time in production
     return 150; // 150ms placeholder
   }
-  
+
   private async checkServiceAvailability(service: string): Promise<boolean> {
     // Would check actual service availability in production
     return Math.random() > 0.2; // 80% success rate for testing
   }
-  
+
   private async checkAPIAvailability(api: string): Promise<boolean> {
     // Would check actual API availability in production
     return Math.random() > 0.3; // 70% success rate for testing
   }
-  
+
   private async checkHealthEndpoint(): Promise<boolean> {
     // Would check actual health endpoint in production
     return true;
   }
-  
+
   private async checkComponentHealth(component: string): Promise<boolean> {
     // Would check actual component health in production
     return Math.random() > 0.1; // 90% success rate for testing
   }
-  
+
   /**
    * Get current system health
    */
@@ -820,46 +829,46 @@ export class ProductionValidator {
         status: 'online' as const,
         lastCheck: new Date(),
         responseTime: 50,
-        errorRate: 0.01
+        errorRate: 0.01,
       },
       'hvac_optimizer': {
         status: 'online' as const,
         lastCheck: new Date(),
         responseTime: 75,
-        errorRate: 0.02
+        errorRate: 0.02,
       },
       'predictive_analytics': {
         status: 'online' as const,
         lastCheck: new Date(),
         responseTime: 100,
-        errorRate: 0.05
+        errorRate: 0.05,
       },
       'adaptive_learning': {
         status: 'online' as const,
         lastCheck: new Date(),
         responseTime: 60,
-        errorRate: 0.01
+        errorRate: 0.01,
       },
       'smart_scheduler': {
         status: 'online' as const,
         lastCheck: new Date(),
         responseTime: 30,
-        errorRate: 0.00
-      }
+        errorRate: 0.00,
+      },
     };
-    
+
     return {
       overall: 'healthy',
       components,
       resources: {
         memory: { used: 50, total: 1024, percentage: 4.9 },
         cpu: { usage: 15, cores: 4 },
-        disk: { used: 100, total: 1000, percentage: 10 }
+        disk: { used: 100, total: 1000, percentage: 10 },
       },
-      uptime: 24 // 24 hours
+      uptime: 24, // 24 hours
     };
   }
-  
+
   /**
    * Generate production deployment checklist
    */
@@ -878,7 +887,7 @@ export class ProductionValidator {
         'Test database connectivity',
         'Verify external API access',
         'Review security settings',
-        'Backup existing configuration'
+        'Backup existing configuration',
       ],
       deployment: [
         'Deploy application with zero-downtime strategy',
@@ -888,7 +897,7 @@ export class ProductionValidator {
         'Validate AI component initialization',
         'Check monitoring and alerting',
         'Verify log collection',
-        'Test failover mechanisms'
+        'Test failover mechanisms',
       ],
       postDeployment: [
         'Monitor system performance for 24 hours',
@@ -898,7 +907,7 @@ export class ProductionValidator {
         'Check security monitoring',
         'Verify data integrity',
         'Test user access and authentication',
-        'Document any configuration changes'
+        'Document any configuration changes',
       ],
       monitoring: [
         'Set up dashboards for key metrics',
@@ -908,8 +917,8 @@ export class ProductionValidator {
         'Configure capacity planning alerts',
         'Enable security monitoring',
         'Set up error tracking',
-        'Configure backup monitoring'
-      ]
+        'Configure backup monitoring',
+      ],
     };
   }
 }

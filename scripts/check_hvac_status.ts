@@ -2,7 +2,7 @@
 
 /**
  * Check HVAC Status Script
- * 
+ *
  * Checks the current status of all HVAC entities
  */
 
@@ -15,17 +15,17 @@ const client = container.get<HomeAssistantClient>(TYPES.HomeAssistantClient);
 
 const hvacEntities = [
   'climate.living_room_ac',
-  'climate.bedroom_ac', 
+  'climate.bedroom_ac',
   'climate.matej_ac',
   'climate.anicka_ac',
-  'climate.radek_ac'
+  'climate.radek_ac',
 ];
 
 try {
   await client.connect();
   console.log('🏠 HVAC Entity Status Check');
   console.log('============================');
-  
+
   for (const entityId of hvacEntities) {
     try {
       const state = await client.getState(entityId);
@@ -34,13 +34,15 @@ try {
       console.log(`  Temperature: ${state.attributes?.temperature || 'N/A'}°C`);
       console.log(`  HVAC Mode: ${state.attributes?.hvac_mode || 'N/A'}`);
       console.log(`  Preset: ${state.attributes?.preset_mode || 'N/A'}`);
-      console.log(`  Current Temp: ${state.attributes?.current_temperature || 'N/A'}°C`);
+      console.log(
+        `  Current Temp: ${state.attributes?.current_temperature || 'N/A'}°C`,
+      );
       console.log('');
     } catch (error) {
       console.log(`❌ Error checking ${entityId}: ${error.message}`);
     }
   }
-  
+
   await client.disconnect();
 } catch (error) {
   console.error('❌ Failed:', error.message);

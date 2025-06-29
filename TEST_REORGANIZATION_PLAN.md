@@ -3,24 +3,29 @@
 ## Current Issues
 
 ### 1. Inconsistent Naming
+
 - Mix of `test_*.ts` (script style) and `*.test.ts` (unit test style)
 - Need consistent naming across all tests
 
 ### 2. Import Path Issues
+
 - Many moved tests still have wrong import paths
 - Need to fix all `../src/` to `../../src/` in moved tests
 
 ### 3. Missing Test Coverage
+
 - No tests for: `performance-optimizer.ts`, `system-monitor.ts`, `dashboard.ts`
 - Incomplete coverage for AI modules
 
 ### 4. Unrunnable Tests
+
 - LangGraph tests reference broken implementations
 - Need to disable or fix these
 
 ## New Test Structure
 
 ### Unit Tests (tests/unit/) - *.test.ts format
+
 ```
 tests/unit/
 ├── ai/
@@ -54,6 +59,7 @@ tests/unit/
 ```
 
 ### Integration Tests (tests/integration/) - *.integration.test.ts format
+
 ```
 tests/integration/
 ├── hvac-system.integration.test.ts      ✅ EXISTS (rename from hvac-integration.test.ts)
@@ -61,7 +67,8 @@ tests/integration/
 └── ai-system.integration.test.ts        ❌ CREATE NEW (full AI system integration)
 ```
 
-### System Tests (tests/system/) - *.system.test.ts format  
+### System Tests (tests/system/) - *.system.test.ts format
+
 ```
 tests/system/
 ├── production-readiness.system.test.ts  ✅ EXISTS (rename + fix imports)
@@ -69,6 +76,7 @@ tests/system/
 ```
 
 ### Performance Tests (tests/performance/) - *.perf.test.ts format
+
 ```
 tests/performance/
 ├── state-machine.perf.test.ts           ✅ EXISTS (rename from benchmark_state_machines.ts)
@@ -77,6 +85,7 @@ tests/performance/
 ```
 
 ### E2E Tests (tests/e2e/) - *.e2e.test.ts format
+
 ```
 tests/e2e/
 ├── hvac-automation.e2e.test.ts          ❌ CREATE NEW
@@ -85,52 +94,57 @@ tests/e2e/
 
 ## Module Coverage Matrix
 
-| Module | Unit Test | Integration Test | Performance Test | Notes |
-|--------|-----------|------------------|------------------|-------|
-| ai/agent.ts | ✅ | ✅ | ✅ | Core AI functionality |
-| ai/decision-engine.ts | ❌ | ✅ | ✅ | Critical AI component |
-| ai/learning/adaptive-learning-engine.ts | ❌ | ✅ | ❌ | Learning capabilities |
-| ai/monitoring/dashboard.ts | ❌ | ❌ | ❌ | Dashboard functionality |
-| ai/monitoring/system-monitor.ts | ❌ | ❌ | ❌ | System monitoring |
-| ai/optimization/hvac-optimizer.ts | ❌ | ✅ | ❌ | Optimization algorithms |
-| ai/optimization/performance-optimizer.ts | ❌ | ✅ | ❌ | Performance optimization |
-| ai/predictive/analytics-engine.ts | ❌ | ✅ | ❌ | Predictive analytics |
-| ai/scheduling/smart-scheduler.ts | ❌ | ✅ | ❌ | Smart scheduling |
-| config/loader.ts | ✅ | ❌ | ❌ | Configuration loading |
-| config/config.ts | ✅ | ❌ | ❌ | Configuration schemas |
-| core/container.ts | ✅ | ✅ | ❌ | Dependency injection |
-| core/exceptions.ts | ✅ | ❌ | ❌ | Error handling |
-| core/logger.ts | ❌ | ❌ | ❌ | Logging system |
-| core/production-validator.ts | ❌ | ✅ | ❌ | Production validation |
-| home-assistant/client.ts | ✅ | ✅ | ❌ | HA client |
-| home-assistant/models.ts | ❌ | ❌ | ❌ | HA models |
-| hvac/controller.ts | ✅ | ✅ | ❌ | HVAC controller |
-| hvac/state-machine.ts | ✅ | ✅ | ✅ | State machine |
-| main.ts | ❌ | ✅ | ❌ | CLI entry point |
-| types/common.ts | ✅ | ❌ | ❌ | Type definitions |
+| Module                                   | Unit Test | Integration Test | Performance Test | Notes                    |
+| ---------------------------------------- | --------- | ---------------- | ---------------- | ------------------------ |
+| ai/agent.ts                              | ✅        | ✅               | ✅               | Core AI functionality    |
+| ai/decision-engine.ts                    | ❌        | ✅               | ✅               | Critical AI component    |
+| ai/learning/adaptive-learning-engine.ts  | ❌        | ✅               | ❌               | Learning capabilities    |
+| ai/monitoring/dashboard.ts               | ❌        | ❌               | ❌               | Dashboard functionality  |
+| ai/monitoring/system-monitor.ts          | ❌        | ❌               | ❌               | System monitoring        |
+| ai/optimization/hvac-optimizer.ts        | ❌        | ✅               | ❌               | Optimization algorithms  |
+| ai/optimization/performance-optimizer.ts | ❌        | ✅               | ❌               | Performance optimization |
+| ai/predictive/analytics-engine.ts        | ❌        | ✅               | ❌               | Predictive analytics     |
+| ai/scheduling/smart-scheduler.ts         | ❌        | ✅               | ❌               | Smart scheduling         |
+| config/loader.ts                         | ✅        | ❌               | ❌               | Configuration loading    |
+| config/config.ts                         | ✅        | ❌               | ❌               | Configuration schemas    |
+| core/container.ts                        | ✅        | ✅               | ❌               | Dependency injection     |
+| core/exceptions.ts                       | ✅        | ❌               | ❌               | Error handling           |
+| core/logger.ts                           | ❌        | ❌               | ❌               | Logging system           |
+| core/production-validator.ts             | ❌        | ✅               | ❌               | Production validation    |
+| home-assistant/client.ts                 | ✅        | ✅               | ❌               | HA client                |
+| home-assistant/models.ts                 | ❌        | ❌               | ❌               | HA models                |
+| hvac/controller.ts                       | ✅        | ✅               | ❌               | HVAC controller          |
+| hvac/state-machine.ts                    | ✅        | ✅               | ✅               | State machine            |
+| main.ts                                  | ❌        | ✅               | ❌               | CLI entry point          |
+| types/common.ts                          | ✅        | ❌               | ❌               | Type definitions         |
 
 ## Actions Required
 
 ### 1. Remove Unrunnable Tests
+
 - Delete all LangGraph tests (broken implementations)
 - Remove: `tests/integration/langgraph/` directory
 
 ### 2. Rename Existing Tests
+
 - Rename script-style tests to unit test format
 - Fix import paths in all moved tests
 - Standardize naming convention
 
 ### 3. Create Missing Tests
+
 - 9 new unit tests needed for AI modules
 - 3 new integration tests needed
 - 2 new performance tests needed
 - 2 new E2E tests needed
 
 ### 4. Fix Import Paths
+
 - Update all `../src/` to `../../src/` in moved tests
 - Verify all imports resolve correctly
 
 ### 5. Test Consolidation
+
 - Merge related tests (HA connection tests)
 - Remove duplicate coverage
 - Ensure comprehensive coverage
@@ -146,7 +160,7 @@ tests/e2e/
 ## Validation Criteria
 
 - [ ] All tests use consistent naming convention
-- [ ] All import paths resolve correctly  
+- [ ] All import paths resolve correctly
 - [ ] All source modules have unit test coverage
 - [ ] Integration tests cover module interactions
 - [ ] Performance tests cover critical paths

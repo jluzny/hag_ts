@@ -2,7 +2,7 @@
 
 /**
  * List Home Assistant Entities Script
- * 
+ *
  * Lists available entities by type to discover what sensors are available
  */
 
@@ -16,10 +16,10 @@ const client = container.get<HomeAssistantClient>(TYPES.HomeAssistantClient);
 try {
   await client.connect();
   console.log('Connected successfully');
-  
+
   // Try some common entity prefixes to see what's available
   const entityPrefixes = ['sensor', 'climate', 'weather', 'sun'];
-  
+
   for (const prefix of entityPrefixes) {
     try {
       const response = await fetch(`http://192.168.0.204:8123/api/states`, {
@@ -28,18 +28,31 @@ try {
           'Content-Type': 'application/json',
         },
       });
-      
+
       if (response.ok) {
         const states = await response.json();
-        const filteredStates = states.filter((state: { entity_id: string }) => 
-          state.entity_id.startsWith(prefix) && 
-          (state.entity_id.includes('temperature') || state.entity_id.includes('temp') || prefix === 'climate')
+        const filteredStates = states.filter((state: { entity_id: string }) =>
+          state.entity_id.startsWith(prefix) &&
+          (state.entity_id.includes('temperature') ||
+            state.entity_id.includes('temp') || prefix === 'climate')
         );
-        
+
         console.log(`\n${prefix.toUpperCase()} entities:`);
-        filteredStates.slice(0, 5).forEach((state: { entity_id: string; state: string; attributes?: { unit_of_measurement?: string } }) => {
-          console.log(`  ${state.entity_id}: ${state.state} ${state.attributes?.unit_of_measurement || ''}`);
-        });
+        filteredStates.slice(0, 5).forEach(
+          (
+            state: {
+              entity_id: string;
+              state: string;
+              attributes?: { unit_of_measurement?: string };
+            },
+          ) => {
+            console.log(
+              `  ${state.entity_id}: ${state.state} ${
+                state.attributes?.unit_of_measurement || ''
+              }`,
+            );
+          },
+        );
         if (filteredStates.length > 5) {
           console.log(`  ... and ${filteredStates.length - 5} more`);
         }
@@ -49,7 +62,7 @@ try {
       console.log(`Error fetching entities: ${error.message}`);
     }
   }
-  
+
   await client.disconnect();
 } catch (error) {
   console.error('Failed:', error.message);

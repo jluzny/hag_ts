@@ -3,16 +3,16 @@
  */
 
 import { assertEquals, assertInstanceOf } from '@std/assert';
-import { 
-  HAGError, 
-  StateError, 
-  ConfigurationError, 
-  ConnectionError, 
-  ValidationError, 
-  HVACOperationError,
+import {
   AIError,
+  ConfigurationError,
+  ConnectionError,
+  extractErrorDetails,
+  HAGError,
+  HVACOperationError,
   isHAGError,
-  extractErrorDetails
+  StateError,
+  ValidationError,
 } from '../../../src/core/exceptions.ts';
 
 Deno.test('HAGError', async (t) => {
@@ -60,7 +60,11 @@ Deno.test('ConfigurationError', async (t) => {
 
 Deno.test('ConnectionError', async (t) => {
   await t.step('should create connection error with endpoint info', () => {
-    const error = new ConnectionError('Connection failed', 'ws://localhost:8123', 3);
+    const error = new ConnectionError(
+      'Connection failed',
+      'ws://localhost:8123',
+      3,
+    );
     assertEquals(error.message, 'Connection failed');
     assertEquals(error.endpoint, 'ws://localhost:8123');
     assertEquals(error.retryAttempt, 3);
@@ -81,7 +85,11 @@ Deno.test('ValidationError', async (t) => {
 
 Deno.test('HVACOperationError', async (t) => {
   await t.step('should create HVAC operation error', () => {
-    const error = new HVACOperationError('Failed to heat', 'heat', 'climate.ac');
+    const error = new HVACOperationError(
+      'Failed to heat',
+      'heat',
+      'climate.ac',
+    );
     assertEquals(error.message, 'Failed to heat');
     assertEquals(error.operation, 'heat');
     assertEquals(error.entityId, 'climate.ac');
@@ -91,7 +99,11 @@ Deno.test('HVACOperationError', async (t) => {
 
 Deno.test('AIError', async (t) => {
   await t.step('should create AI error with model info', () => {
-    const error = new AIError('Model failed', 'gpt-4o-mini', 'temperature_analysis');
+    const error = new AIError(
+      'Model failed',
+      'gpt-4o-mini',
+      'temperature_analysis',
+    );
     assertEquals(error.message, 'Model failed');
     assertEquals(error.model, 'gpt-4o-mini');
     assertEquals(error.context, 'temperature_analysis');
@@ -117,7 +129,7 @@ Deno.test('extractErrorDetails utility', async (t) => {
   await t.step('should extract HAG error details', () => {
     const error = new StateError('Entity not found', 'idle', 'sensor.temp');
     const details = extractErrorDetails(error);
-    
+
     assertEquals(details.message, 'Entity not found');
     assertEquals(details.name, 'StateError');
     assertEquals(details.code, 'STATE_ERROR');
@@ -127,7 +139,7 @@ Deno.test('extractErrorDetails utility', async (t) => {
   await t.step('should extract regular error details', () => {
     const error = new Error('Regular error');
     const details = extractErrorDetails(error);
-    
+
     assertEquals(details.message, 'Regular error');
     assertEquals(details.name, 'Error');
     assertEquals(details.code, undefined);
@@ -136,7 +148,7 @@ Deno.test('extractErrorDetails utility', async (t) => {
 
   await t.step('should handle non-error values', () => {
     const details = extractErrorDetails('String error');
-    
+
     assertEquals(details.message, 'String error');
     assertEquals(details.name, 'UnknownError');
     assertEquals(details.code, undefined);

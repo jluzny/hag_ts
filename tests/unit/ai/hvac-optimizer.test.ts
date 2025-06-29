@@ -3,22 +3,32 @@
  */
 
 import { assertEquals, assertExists, assertInstanceOf } from '@std/assert';
-import { HVACOptimizer, OptimizationConfig } from '../../../src/ai/optimization/hvac-optimizer.ts';
-import { HVACDecisionContext, OptimizationResult } from '../../../src/ai/types/ai-types.ts';
+import {
+  HVACOptimizer,
+  OptimizationConfig,
+} from '../../../src/ai/optimization/hvac-optimizer.ts';
+import {
+  HVACDecisionContext,
+  OptimizationResult,
+} from '../../../src/ai/types/ai-types.ts';
 import { SystemMode } from '../../../src/types/common.ts';
 import { LoggerService } from '../../../src/core/logger.ts';
 
 // Mock logger
 class MockLoggerService implements LoggerService {
   info(_message: string, _data?: Record<string, unknown>): void {}
-  error(_message: string, _error?: unknown, _data?: Record<string, unknown>): void {}
+  error(
+    _message: string,
+    _error?: unknown,
+    _data?: Record<string, unknown>,
+  ): void {}
   debug(_message: string, _data?: Record<string, unknown>): void {}
   warning(_message: string, _data?: Record<string, unknown>): void {}
 }
 
 Deno.test('HVAC Optimizer', async (t) => {
   const mockLogger = new MockLoggerService();
-  
+
   await t.step('should initialize with configuration', () => {
     const config: OptimizationConfig = {
       comfortWeight: 0.5,
@@ -30,13 +40,13 @@ Deno.test('HVAC Optimizer', async (t) => {
       optimizationInterval: 15,
       historyWindow: 24,
       learningRate: 0.1,
-      adaptationEnabled: true
+      adaptationEnabled: true,
     };
-    
+
     const optimizer = new HVACOptimizer(config, mockLogger);
     assertExists(optimizer);
   });
-  
+
   await t.step('should optimize for comfort priority', async () => {
     const config: OptimizationConfig = {
       comfortWeight: 0.8, // High comfort priority
@@ -48,11 +58,11 @@ Deno.test('HVAC Optimizer', async (t) => {
       optimizationInterval: 15,
       historyWindow: 24,
       learningRate: 0.1,
-      adaptationEnabled: true
+      adaptationEnabled: true,
     };
-    
+
     const optimizer = new HVACOptimizer(config, mockLogger);
-    
+
     const context: HVACDecisionContext = {
       indoorTemp: 19.0,
       outdoorTemp: 10.0,
@@ -60,11 +70,11 @@ Deno.test('HVAC Optimizer', async (t) => {
       systemMode: SystemMode.AUTO,
       currentMode: 'idle',
       currentHour: 14,
-      isWeekday: true
+      isWeekday: true,
     };
-    
+
     const result = await optimizer.optimize(context);
-    
+
     assertExists(result);
     assertInstanceOf(result.recommendedAction, String);
     assertInstanceOf(result.comfortScore, Number);
@@ -73,11 +83,11 @@ Deno.test('HVAC Optimizer', async (t) => {
     assertInstanceOf(result.overallScore, Number);
     assertExists(result.reasoning);
     assertEquals(Array.isArray(result.factors), true);
-    
+
     // Should prioritize comfort with high comfort weight
     assertEquals(result.comfortScore >= 0.7, true);
   });
-  
+
   await t.step('should optimize for energy efficiency', async () => {
     const config: OptimizationConfig = {
       comfortWeight: 0.2,
@@ -89,11 +99,11 @@ Deno.test('HVAC Optimizer', async (t) => {
       optimizationInterval: 15,
       historyWindow: 24,
       learningRate: 0.1,
-      adaptationEnabled: true
+      adaptationEnabled: true,
     };
-    
+
     const optimizer = new HVACOptimizer(config, mockLogger);
-    
+
     const context: HVACDecisionContext = {
       indoorTemp: 21.0,
       outdoorTemp: 25.0,
@@ -101,16 +111,16 @@ Deno.test('HVAC Optimizer', async (t) => {
       systemMode: SystemMode.AUTO,
       currentMode: 'cooling',
       currentHour: 14,
-      isWeekday: true
+      isWeekday: true,
     };
-    
+
     const result = await optimizer.optimize(context);
-    
+
     assertExists(result);
     // Should prioritize energy efficiency
     assertEquals(result.energyScore >= 0.6, true);
   });
-  
+
   await t.step('should generate schedule recommendations', async () => {
     const config: OptimizationConfig = {
       comfortWeight: 0.4,
@@ -122,17 +132,17 @@ Deno.test('HVAC Optimizer', async (t) => {
       optimizationInterval: 15,
       historyWindow: 24,
       learningRate: 0.1,
-      adaptationEnabled: true
+      adaptationEnabled: true,
     };
-    
+
     const optimizer = new HVACOptimizer(config, mockLogger);
-    
+
     const schedule = await optimizer.generateOptimalSchedule(8); // 8 hour schedule
-    
+
     assertExists(schedule);
     assertEquals(Array.isArray(schedule), true);
     assertEquals(schedule.length > 0, true);
-    
+
     // Check schedule item structure
     if (schedule.length > 0) {
       const item = schedule[0];
@@ -144,7 +154,7 @@ Deno.test('HVAC Optimizer', async (t) => {
       assertExists(item.reasoning);
     }
   });
-  
+
   await t.step('should calculate energy efficiency', () => {
     const config: OptimizationConfig = {
       comfortWeight: 0.4,
@@ -156,29 +166,32 @@ Deno.test('HVAC Optimizer', async (t) => {
       optimizationInterval: 15,
       historyWindow: 24,
       learningRate: 0.1,
-      adaptationEnabled: true
+      adaptationEnabled: true,
     };
-    
+
     const optimizer = new HVACOptimizer(config, mockLogger);
-    
+
     const efficiency = optimizer.calculateEnergyEfficiency(
       22.0, // target temp
       21.0, // current temp
       15.0, // outdoor temp
-      'heating'
+      'heating',
     );
-    
+
     assertExists(efficiency);
     assertInstanceOf(efficiency.efficiency, Number);
     assertInstanceOf(efficiency.estimatedEnergyUsage, Number);
     assertInstanceOf(efficiency.estimatedCost, Number);
     assertExists(efficiency.factors);
     assertEquals(Array.isArray(efficiency.factors), true);
-    
+
     // Efficiency should be between 0 and 1
-    assertEquals(efficiency.efficiency >= 0 && efficiency.efficiency <= 1, true);
+    assertEquals(
+      efficiency.efficiency >= 0 && efficiency.efficiency <= 1,
+      true,
+    );
   });
-  
+
   await t.step('should track optimization history', async () => {
     const config: OptimizationConfig = {
       comfortWeight: 0.4,
@@ -190,11 +203,11 @@ Deno.test('HVAC Optimizer', async (t) => {
       optimizationInterval: 15,
       historyWindow: 24,
       learningRate: 0.1,
-      adaptationEnabled: true
+      adaptationEnabled: true,
     };
-    
+
     const optimizer = new HVACOptimizer(config, mockLogger);
-    
+
     // Perform multiple optimizations
     const context: HVACDecisionContext = {
       indoorTemp: 20.0,
@@ -203,18 +216,18 @@ Deno.test('HVAC Optimizer', async (t) => {
       systemMode: SystemMode.AUTO,
       currentMode: 'idle',
       currentHour: 14,
-      isWeekday: true
+      isWeekday: true,
     };
-    
+
     await optimizer.optimize(context);
     await optimizer.optimize({ ...context, indoorTemp: 21.0 });
-    
+
     const history = optimizer.getOptimizationHistory();
-    
+
     assertExists(history);
     assertEquals(Array.isArray(history), true);
     assertEquals(history.length >= 2, true);
-    
+
     // Check history item structure
     if (history.length > 0) {
       const item = history[0];
@@ -224,7 +237,7 @@ Deno.test('HVAC Optimizer', async (t) => {
       assertInstanceOf(item.result.overallScore, Number);
     }
   });
-  
+
   await t.step('should handle boundary conditions', async () => {
     const config: OptimizationConfig = {
       comfortWeight: 0.4,
@@ -236,11 +249,11 @@ Deno.test('HVAC Optimizer', async (t) => {
       optimizationInterval: 15,
       historyWindow: 24,
       learningRate: 0.1,
-      adaptationEnabled: true
+      adaptationEnabled: true,
     };
-    
+
     const optimizer = new HVACOptimizer(config, mockLogger);
-    
+
     // Test extreme temperature difference
     const extremeContext: HVACDecisionContext = {
       indoorTemp: 10.0, // Very cold
@@ -249,17 +262,17 @@ Deno.test('HVAC Optimizer', async (t) => {
       systemMode: SystemMode.AUTO,
       currentMode: 'idle',
       currentHour: 14,
-      isWeekday: true
+      isWeekday: true,
     };
-    
+
     const result = await optimizer.optimize(extremeContext);
-    
+
     assertExists(result);
     // Should handle extreme conditions gracefully
     assertInstanceOf(result.overallScore, Number);
     assertEquals(result.overallScore >= 0 && result.overallScore <= 1, true);
   });
-  
+
   await t.step('should provide configuration info', () => {
     const config: OptimizationConfig = {
       comfortWeight: 0.5,
@@ -271,12 +284,12 @@ Deno.test('HVAC Optimizer', async (t) => {
       optimizationInterval: 15,
       historyWindow: 24,
       learningRate: 0.1,
-      adaptationEnabled: true
+      adaptationEnabled: true,
     };
-    
+
     const optimizer = new HVACOptimizer(config, mockLogger);
     const configInfo = optimizer.getConfiguration();
-    
+
     assertExists(configInfo);
     assertEquals(configInfo.comfortWeight, 0.5);
     assertEquals(configInfo.energyWeight, 0.3);

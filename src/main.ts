@@ -80,7 +80,9 @@ async function runApplication(
       TYPES.ApplicationOptions,
     );
     if (logLevel) {
-      appOptions.logLevel = LogLevel[logLevel.toUpperCase() as keyof typeof LogLevel] || LogLevel.INFO;
+      appOptions.logLevel =
+        LogLevel[logLevel.toUpperCase() as keyof typeof LogLevel] ||
+        LogLevel.INFO;
     }
     // deno-lint-ignore no-explicit-any
     setupLogging(appOptions.logLevel as any);
@@ -307,4 +309,3 @@ if (import.meta.main) {
     Deno.exit(1);
   });
 }
-
