@@ -10,7 +10,6 @@ import { HVACStateMachine } from '../../../src/hvac/state-machine.ts';
 import { HomeAssistantClient } from '../../../src/home-assistant/client.ts';
 import { ApplicationOptions, HvacOptions } from '../../../src/config/config.ts';
 import { HVACMode, LogLevel, SystemMode } from '../../../src/types/common.ts';
-// import { AIError } from '../../../src/core/exceptions.ts'; // Unused
 import type { LoggerService } from '../../../src/core/logger.ts';
 
 // Force disable AI tests for fast testing by removing API key
@@ -28,12 +27,19 @@ interface MockHomeAssistantClient {
 }
 
 // Mock logger service
-class MockLoggerService {
+class MockLoggerService implements LoggerService {
+  logger = {
+    info: () => {},
+    error: () => {},
+    debug: () => {},
+    warn: () => {}
+  };
+
   info(_message: string, _data?: Record<string, unknown>): void {
     // console.log(`INFO: ${message}`);
   }
 
-  error(_message: string, _error?: unknown): void {
+  error(_message: string, _error?: unknown, _data?: Record<string, unknown>): void {
     // console.log(`ERROR: ${message}`);
   }
 

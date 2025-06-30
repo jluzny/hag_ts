@@ -9,8 +9,8 @@ import {
   EnergyUsageData,
   TemperatureReading,
   WeatherData,
-} from '../types/ai-types.ts';
-import type { LoggerService } from '../../core/logger.ts';
+} from '../../../../src/ai/types/ai-types.ts';
+import type { LoggerService } from '../../../../src/core/logger.ts';
 
 /**
  * Time series prediction result

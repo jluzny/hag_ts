@@ -9,7 +9,7 @@
 import {
   PerformanceConfig,
   PerformanceOptimizer,
-} from '../../src/ai/optimization/performance-optimizer.ts';
+} from '../../experimental/src/ai/optimization/performance-optimizer.ts';
 import {
   ProductionConfig,
   ProductionValidator,

@@ -7,7 +7,6 @@
  */
 
 import { HVACLangGraphState } from '../lg-types/hvac-state.ts';
-import { HVACMode } from '../../types/common.ts';
 
 /**
  * Cooling node - Execute cooling actions
@@ -117,12 +116,12 @@ function canExecuteCooling(state: HVACLangGraphState): boolean {
 /**
  * Execute cooling action through HVAC controller
  */
-async function executeCoolingAction(state: HVACLangGraphState): Promise<{
+function executeCoolingAction(state: HVACLangGraphState): {
   success: boolean;
   entitiesControlled: number;
   targetTemperature: number;
   presetMode: string;
-}> {
+} {
   const targetTemp = getTargetCoolingTemp(state);
   const presetMode = getCoolingPresetMode(state);
 

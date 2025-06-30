@@ -9,9 +9,9 @@ import {
   EnergyOptimizationResult,
   HVACDecisionContext,
   ScheduleItem,
-} from '../types/ai-types.ts';
-import { SystemMode } from '../../types/common.ts';
-import type { LoggerService } from '../../core/logger.ts';
+} from '../../../../src/ai/types/ai-types.ts';
+import { SystemMode } from '../../../../src/types/common.ts';
+import type { LoggerService } from '../../../../src/core/logger.ts';
 
 /**
  * Optimization configuration
@@ -460,11 +460,11 @@ export class HVACOptimizer {
   /**
    * Get energy price for specific hour
    */
-  private getEnergyPriceForHour(hour: number): { level: string; rate: number } {
+  private getEnergyPriceForHour(hour: number): { level: 'low' | 'medium' | 'high'; rate: number } {
     const isPeakHour = this.config.energyRates.peakHours.includes(hour);
 
     return {
-      level: isPeakHour ? 'peak' : 'off-peak',
+      level: isPeakHour ? 'high' : 'low',
       rate: isPeakHour
         ? this.config.energyRates.peak
         : this.config.energyRates.offPeak,

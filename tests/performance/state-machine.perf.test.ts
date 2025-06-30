@@ -6,10 +6,10 @@
  * to ensure optimal performance under various load conditions.
  */
 
-import { assertEquals, assertExists } from '@std/assert';
+import { assertEquals } from '@std/assert';
 import { createContainer } from '../../src/core/container.ts';
 import { XStateHVACStateMachineAdapter } from '../../src/hvac/state-machine-xstate-adapter.ts';
-import { HVACMode, SystemMode } from '../../src/types/common.ts';
+// Removed unused imports
 
 interface BenchmarkResult {
   operation: string;
@@ -37,11 +37,11 @@ async function benchmarkOperation(
   }
 
   // Force garbage collection if available
-  if ((globalThis as any).gc) {
-    (globalThis as any).gc();
+  if ((globalThis as { gc?: () => void }).gc) {
+    (globalThis as { gc?: () => void }).gc();
   }
 
-  const memoryBefore = (Deno as any).memoryUsage?.() || { rss: 0 };
+  const memoryBefore = (Deno as { memoryUsage?: () => { rss: number } }).memoryUsage?.() || { rss: 0 };
   const startTime = performance.now();
 
   // Benchmark iterations
@@ -53,7 +53,7 @@ async function benchmarkOperation(
   }
 
   const totalTime = performance.now() - startTime;
-  const memoryAfter = (Deno as any).memoryUsage?.() || { rss: 0 };
+  const memoryAfter = (Deno as { memoryUsage?: () => { rss: number } }).memoryUsage?.() || { rss: 0 };
 
   return {
     operation: name,
@@ -99,21 +99,21 @@ async function testXStatePerformance(): Promise<void> {
   results.push(
     await benchmarkOperation(
       'Temperature Update',
-      () => {
-        stateMachine.updateTemperature(20 + Math.random() * 10);
+      async () => {
+        await stateMachine.handleTemperatureChange('indoor_sensor', 20 + Math.random() * 10);
       },
       1000,
     ),
   );
 
   // Test 3: Manual Override
-  const modes = ['heating', 'cooling', 'idle', 'off'] as const;
+  const modes = ['heat', 'cool', 'off', 'auto'] as const;
   results.push(
     await benchmarkOperation(
       'Manual Override',
-      () => {
+      async () => {
         const mode = modes[Math.floor(Math.random() * modes.length)];
-        stateMachine.manualOverride(mode);
+        await stateMachine.manualOverride(mode);
       },
       500,
     ),
@@ -134,8 +134,8 @@ async function testXStatePerformance(): Promise<void> {
   results.push(
     await benchmarkOperation(
       'State Evaluation',
-      async () => {
-        await stateMachine.evaluate();
+      () => {
+        stateMachine.evaluateConditions();
       },
       200,
     ),
@@ -215,9 +215,9 @@ async function testConcurrentOperations(): Promise<void> {
   for (let i = 0; i < concurrentOps; i++) {
     promises.push(
       Promise.all([
-        stateMachine.updateTemperature(20 + Math.random() * 5),
+        stateMachine.handleTemperatureChange('indoor_sensor', 20 + Math.random() * 5),
         stateMachine.getStatus(),
-        stateMachine.evaluate(),
+        Promise.resolve(stateMachine.evaluateConditions()),
       ]),
     );
   }

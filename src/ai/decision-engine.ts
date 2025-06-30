@@ -8,7 +8,6 @@
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import {
-  AIEnhancedState,
   DecisionResult,
   HVACDecisionContext,
 } from './types/ai-types.ts';
@@ -280,7 +279,7 @@ Please provide your decision as JSON.`;
   ): DecisionResult {
     this.logger.warning('⚠️ [AI Engine] Using fallback decision', { reason });
 
-    const { indoorTemp, targetTemp = 22, systemMode, currentMode } = context;
+    const { indoorTemp, targetTemp = 22, systemMode } = context;
 
     // Simple rule-based logic as fallback
     let action = 'idle';
@@ -313,7 +312,7 @@ Please provide your decision as JSON.`;
     }
 
     return {
-      action: action as SystemMode,
+      action: action as 'heating' | 'cooling' | 'idle' | 'off',
       confidence: 0.7, // Lower confidence for rule-based decisions
       reasoning,
       factors: ['temperature_differential', 'system_mode', 'fallback_logic'],

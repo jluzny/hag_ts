@@ -7,7 +7,6 @@
  */
 
 import { HVACLangGraphState } from '../lg-types/hvac-state.ts';
-import { HVACMode } from '../../types/common.ts';
 
 /**
  * Heating node - Execute heating actions
@@ -19,6 +18,9 @@ export async function heatingNode(
   state: HVACLangGraphState,
 ): Promise<HVACLangGraphState> {
   const startTime = performance.now();
+  
+  // Yield control to event loop for async consistency
+  await new Promise((resolve) => setTimeout(resolve, 0));
 
   try {
     // Validate heating conditions
@@ -36,7 +38,7 @@ export async function heatingNode(
 
     // Execute heating through controller
     // Note: In real implementation, this would call the actual HVAC controller
-    const heatingResult = await executeHeatingAction(state);
+    const heatingResult = executeHeatingAction(state);
 
     const executionTime = performance.now() - startTime;
 
@@ -119,12 +121,12 @@ function canExecuteHeating(state: HVACLangGraphState): boolean {
  * Execute heating action through HVAC controller
  * In real implementation, this would interface with the actual controller
  */
-async function executeHeatingAction(state: HVACLangGraphState): Promise<{
+function executeHeatingAction(state: HVACLangGraphState): {
   success: boolean;
   entitiesControlled: number;
   targetTemperature: number;
   presetMode: string;
-}> {
+} {
   // Simulate HVAC controller interaction
   const targetTemp = getTargetHeatingTemp(state);
   const presetMode = getHeatingPresetMode(state);

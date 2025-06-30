@@ -5,8 +5,7 @@
  * and real-time analytics for the AI-enhanced HVAC system.
  */
 
-import { SystemMode } from '../../types/common.ts';
-import type { LoggerService } from '../../core/logger.ts';
+import type { LoggerService } from '../../../../src/core/logger.ts';
 
 /**
  * System performance metrics
@@ -442,7 +441,7 @@ export class SystemMonitor {
           status: 'offline',
           responseTime: 0,
           lastCheck: new Date(),
-          issues: [`Health check failed: ${error.message}`],
+          issues: [`Health check failed: ${error instanceof Error ? error.message : String(error)}`],
         });
       }
     }

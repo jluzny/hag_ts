@@ -10,9 +10,16 @@ import { HassServiceCallImpl } from '../../../src/home-assistant/models.ts';
 import type { LoggerService } from '../../../src/core/logger.ts';
 
 // Mock logger service
-class MockLoggerService {
+class MockLoggerService implements LoggerService {
+  logger = {
+    info: () => {},
+    error: () => {},
+    debug: () => {},
+    warn: () => {}
+  };
+
   info(_message: string, _data?: Record<string, unknown>): void {}
-  error(_message: string, _error?: unknown): void {}
+  error(_message: string, _error?: unknown, _data?: Record<string, unknown>): void {}
   debug(_message: string, _data?: Record<string, unknown>): void {}
   warning(_message: string, _data?: Record<string, unknown>): void {}
 }

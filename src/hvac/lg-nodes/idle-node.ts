@@ -123,9 +123,9 @@ async function performIdleMaintenance(state: HVACLangGraphState): Promise<{
 /**
  * Check if temperature readings are stale
  */
-async function checkTemperatureReadingAge(
-  state: HVACLangGraphState,
-): Promise<boolean> {
+function checkTemperatureReadingAge(
+  _state: HVACLangGraphState,
+): boolean {
   // In real implementation, this would check timestamp of last sensor readings
   // For now, simulate the check
   return true; // Always perform this maintenance task
@@ -134,9 +134,9 @@ async function checkTemperatureReadingAge(
 /**
  * Validate system configuration consistency
  */
-async function validateSystemConfiguration(
+function validateSystemConfiguration(
   state: HVACLangGraphState,
-): Promise<boolean> {
+): boolean {
   // Check system mode validity
   if (!['auto', 'heat_only', 'cool_only', 'off'].includes(state.systemMode)) {
     console.warn(`Invalid system mode: ${state.systemMode}`);
@@ -158,9 +158,9 @@ async function validateSystemConfiguration(
 /**
  * Check if manual override has expired
  */
-async function checkManualOverrideExpiration(
+function checkManualOverrideExpiration(
   state: HVACLangGraphState,
-): Promise<boolean> {
+): boolean {
   if (!state.manualOverride?.active) {
     return false;
   }

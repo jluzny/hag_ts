@@ -11,8 +11,10 @@ import {
   PreferenceWeights,
   UserInteraction,
   UserPattern,
-} from '../types/ai-types.ts';
-import type { LoggerService } from '../../core/logger.ts';
+  TemperatureReading,
+} from '../../../../src/ai/types/ai-types.ts';
+import type { LoggerService } from '../../../../src/core/logger.ts';
+import type { IAdaptiveLearningEngine } from '../../../../src/core/experimental-features.ts';
 
 /**
  * Learning configuration
@@ -79,7 +81,7 @@ export interface BehavioralInsight {
 /**
  * Adaptive Learning Engine
  */
-export class AdaptiveLearningEngine {
+export class AdaptiveLearningEngine implements IAdaptiveLearningEngine {
   private config: LearningConfig;
   private logger: LoggerService;
 
@@ -115,7 +117,14 @@ export class AdaptiveLearningEngine {
   }
 
   /**
-   * Record a user interaction for learning
+   * Record a user interaction for learning (interface implementation)
+   */
+  recordInteraction(interaction: UserInteraction): void {
+    this.recordUserInteraction(interaction);
+  }
+
+  /**
+   * Record a user interaction for learning (internal method)
    */
   recordUserInteraction(interaction: UserInteraction): void {
     this.userInteractions.push(interaction);
@@ -129,7 +138,7 @@ export class AdaptiveLearningEngine {
 
     // Trigger learning if we have enough data
     if (this.userInteractions.length % 10 === 0) {
-      this.triggerLearningUpdate();
+      this.triggerLearningUpdateAsync();
     }
   }
 
@@ -160,13 +169,13 @@ export class AdaptiveLearningEngine {
   /**
    * Get personalized recommendations for a given context
    */
-  async getPersonalizedRecommendations(context: HVACDecisionContext): Promise<{
+  getPersonalizedRecommendations(context: HVACDecisionContext): {
     targetTemp: number;
     tolerance: number;
-    optimizationWeights: PreferenceWeights;
+    optimizationWeights: Record<string, number>;
     confidence: number;
     reasoning: string;
-  }> {
+  } {
     this.logger.debug(
       '🎯 [Learning Engine] Generating personalized recommendations',
       {
@@ -200,16 +209,21 @@ export class AdaptiveLearningEngine {
       this.logger.info(
         '✅ [Learning Engine] Personalized recommendations generated',
         {
-          targetTemp: weightedPreference.targetTemp,
+          targetTemp: weightedPreference.preference.targetTemp,
           confidence: weightedPreference.confidence,
           matchingPatterns: matchingPreferences.length,
         },
       );
 
       return {
-        targetTemp: weightedPreference.targetTemp,
-        tolerance: weightedPreference.tolerance,
-        optimizationWeights: personalizedWeights,
+        targetTemp: weightedPreference.preference.targetTemp,
+        tolerance: weightedPreference.preference.tolerance,
+        optimizationWeights: {
+          comfort: personalizedWeights.comfort,
+          energyEfficiency: personalizedWeights.energyEfficiency,
+          cost: personalizedWeights.cost,
+          convenience: personalizedWeights.convenience,
+        },
         confidence: weightedPreference.confidence,
         reasoning,
       };
@@ -225,7 +239,11 @@ export class AdaptiveLearningEngine {
   /**
    * Analyze user behavior and generate insights
    */
-  async generateBehavioralInsights(): Promise<BehavioralInsight[]> {
+  generateBehavioralInsights(): Array<{
+    category: string;
+    description: string;
+    confidence: number;
+  }> {
     const now = new Date();
     const timeSinceLastAnalysis = now.getTime() -
       this.lastAnalysisTime.getTime();
@@ -234,7 +252,11 @@ export class AdaptiveLearningEngine {
     if (
       timeSinceLastAnalysis < 60 * 60 * 1000 && this.cachedInsights.length > 0
     ) {
-      return this.cachedInsights;
+      return this.cachedInsights.map(insight => ({
+        category: insight.type,
+        description: insight.description,
+        confidence: insight.confidence,
+      }));
     }
 
     this.logger.debug('🔍 [Learning Engine] Analyzing user behavior');
@@ -266,7 +288,11 @@ export class AdaptiveLearningEngine {
         actionableInsights: insights.filter((i) => i.actionable).length,
       });
 
-      return insights;
+      return insights.map(insight => ({
+        category: insight.type,
+        description: insight.description,
+        confidence: insight.confidence,
+      }));
     } catch (error) {
       this.logger.error(
         '❌ [Learning Engine] Failed to generate insights',
@@ -276,32 +302,11 @@ export class AdaptiveLearningEngine {
     }
   }
 
-  /**
-   * Trigger learning update based on recent interactions
-   */
-  private async triggerLearningUpdate(): Promise<void> {
-    this.logger.debug('🔄 [Learning Engine] Triggering learning update');
-
-    try {
-      // Update patterns
-      await this.updateLearnedPatterns();
-
-      // Update preferences
-      await this.updateLearnedPreferences();
-
-      // Update weights
-      await this.updatePreferenceWeights();
-
-      this.logger.info('✅ [Learning Engine] Learning update completed');
-    } catch (error) {
-      this.logger.error('❌ [Learning Engine] Learning update failed', error);
-    }
-  }
 
   /**
    * Update learned patterns from user interactions
    */
-  private async updateLearnedPatterns(): Promise<void> {
+  private updateLearnedPatterns(): void {
     const recentInteractions = this.getRecentInteractions();
 
     // Group interactions by similar contexts
@@ -336,7 +341,7 @@ export class AdaptiveLearningEngine {
   /**
    * Update learned preferences from patterns and feedback
    */
-  private async updateLearnedPreferences(): Promise<void> {
+  private updateLearnedPreferences(): void {
     const contextGroups = this.groupInteractionsByDetailedContext();
 
     for (const [contextKey, interactions] of contextGroups.entries()) {
@@ -363,7 +368,7 @@ export class AdaptiveLearningEngine {
   /**
    * Update global preference weights based on learning
    */
-  private async updatePreferenceWeights(): Promise<void> {
+  private updatePreferenceWeights(): void {
     if (this.feedbackHistory.length < 5) {
       return; // Need minimum feedback for weight updates
     }
@@ -486,7 +491,7 @@ export class AdaptiveLearningEngine {
     learnedContext: LearnedPreference['context'],
     currentContext: HVACDecisionContext,
   ): number {
-    let similarities: number[] = [];
+    const similarities: number[] = [];
 
     // Time of day similarity
     if (
@@ -677,7 +682,7 @@ export class AdaptiveLearningEngine {
     if (energyFeedback.length < 3) return null;
 
     // Correlation between energy use and satisfaction
-    let correlation = 0;
+    // Correlation calculation removed as it was unused
     // Simplified correlation calculation
     const avgEnergy = energyFeedback.reduce(
       (sum, f) => sum + (f.actualOutcome.energyUsed || 0),
@@ -851,7 +856,7 @@ export class AdaptiveLearningEngine {
     };
   }
 
-  private parseContextKey(contextKey: string): LearnedPreference['context'] {
+  private parseContextKey(_contextKey: string): LearnedPreference['context'] {
     // Parse context key back to context object
     // This is a simplified implementation
     return {
@@ -930,7 +935,7 @@ export class AdaptiveLearningEngine {
       pattern1.action === pattern2.action;
   }
 
-  private contextsAreSimilar(context1: any, context2: any): boolean {
+  private contextsAreSimilar(context1: LearnedPreference['context'], context2: LearnedPreference['context']): boolean {
     return Math.abs((context1.timeOfDay || 0) - (context2.timeOfDay || 0)) < 2;
   }
 
@@ -992,9 +997,7 @@ export class AdaptiveLearningEngine {
   }
 
   private pruneOutdatedPatterns(): void {
-    const cutoff = new Date(
-      Date.now() - this.config.patternValidityPeriod * 24 * 60 * 60 * 1000,
-    );
+    // Removed unused cutoff variable
 
     this.learnedPatterns = this.learnedPatterns.filter((pattern) => {
       // Remove patterns that haven't been reinforced recently
@@ -1002,11 +1005,22 @@ export class AdaptiveLearningEngine {
     });
   }
 
-  private getDefaultRecommendations(context: HVACDecisionContext): any {
+  private getDefaultRecommendations(context: HVACDecisionContext): {
+    targetTemp: number;
+    tolerance: number;
+    optimizationWeights: Record<string, number>;
+    confidence: number;
+    reasoning: string;
+  } {
     return {
       targetTemp: context.targetTemp || 22,
       tolerance: 1.5,
-      optimizationWeights: this.currentWeights,
+      optimizationWeights: {
+        comfort: this.currentWeights.comfort,
+        energyEfficiency: this.currentWeights.energyEfficiency,
+        cost: this.currentWeights.cost,
+        convenience: this.currentWeights.convenience,
+      },
       confidence: 0.3,
       reasoning:
         'Using default recommendations due to insufficient learning data',
@@ -1050,5 +1064,169 @@ export class AdaptiveLearningEngine {
       learningCapability:
         this.userInteractions.length >= this.config.minInteractionsForPattern,
     };
+  }
+
+  // Interface implementations required by IAdaptiveLearningEngine
+
+  /**
+   * Detect patterns from temperature readings (interface implementation)
+   */
+  detectPatterns(readings: TemperatureReading[]): Array<{
+    type: string;
+    confidence: number;
+    description: string;
+  }> {
+    try {
+      const patterns: Array<{
+        type: string;
+        confidence: number;
+        description: string;
+      }> = [];
+
+      if (readings.length < 3) {
+        return patterns;
+      }
+
+      // Detect temperature trends
+      const tempTrend = this.detectTemperatureTrend(readings);
+      if (tempTrend) {
+        patterns.push(tempTrend);
+      }
+
+      // Detect cycling patterns
+      const cyclingPattern = this.detectCyclingPattern(readings);
+      if (cyclingPattern) {
+        patterns.push(cyclingPattern);
+      }
+
+      return patterns;
+    } catch (error) {
+      this.logger.error('❌ [Learning Engine] Pattern detection failed', { error });
+      return [];
+    }
+  }
+
+  /**
+   * Get user profile (interface implementation)
+   */
+  getUserProfile(): {
+    totalInteractions: number;
+    averageSatisfaction: number;
+    lastInteraction?: Date;
+  } {
+    const interactions = this.userInteractions;
+    const lastInteraction = interactions.length > 0
+      ? interactions[interactions.length - 1].timestamp
+      : undefined;
+    
+    const avgSatisfaction = interactions.length > 0
+      ? interactions.reduce((sum, i) => sum + (i.details.satisfaction || 0.5), 0) / interactions.length
+      : 0.5;
+
+    return {
+      totalInteractions: interactions.length,
+      averageSatisfaction: avgSatisfaction,
+      lastInteraction,
+    };
+  }
+
+  /**
+   * Get user preferences (interface implementation)
+   */
+  getUserPreferences(): Record<string, unknown> {
+    return {
+      temperaturePreferences: this.learnedPreferences.map(p => ({
+        context: p.context,
+        targetTemp: p.preference.targetTemp,
+        confidence: p.confidence,
+      })),
+      weights: this.currentWeights,
+      patterns: this.learnedPatterns.length,
+    };
+  }
+
+  /**
+   * Trigger learning update (interface implementation)
+   */
+  triggerLearningUpdate(): void {
+    // Call the private async method without awaiting (fire and forget)
+    this.triggerLearningUpdateAsync().catch(error => {
+      this.logger.error('❌ [Learning Engine] Learning update failed', { error });
+    });
+  }
+
+  /**
+   * Alias for the private async method to avoid naming conflicts
+   */
+  private async triggerLearningUpdateAsync(): Promise<void> {
+    this.logger.debug('🔄 [Learning Engine] Triggering learning update');
+
+    try {
+      // Update patterns
+      this.updateLearnedPatterns();
+
+      // Update preferences
+      this.updateLearnedPreferences();
+
+      // Update weights
+      await this.updatePreferenceWeights();
+
+      this.logger.info('✅ [Learning Engine] Learning update completed');
+    } catch (error) {
+      this.logger.error('❌ [Learning Engine] Learning update failed', { error });
+    }
+  }
+
+  // Helper methods for pattern detection
+
+  private detectTemperatureTrend(readings: TemperatureReading[]): {
+    type: string;
+    confidence: number;
+    description: string;
+  } | null {
+    if (readings.length < 3) return null;
+
+    const tempChanges = [];
+    for (let i = 1; i < readings.length; i++) {
+      tempChanges.push(readings[i].indoorTemp - readings[i - 1].indoorTemp);
+    }
+
+    const avgChange = tempChanges.reduce((sum, change) => sum + change, 0) / tempChanges.length;
+    const isIncreasing = avgChange > 0.1;
+    const isDecreasing = avgChange < -0.1;
+
+    if (isIncreasing || isDecreasing) {
+      return {
+        type: isIncreasing ? 'temperature_rising' : 'temperature_falling',
+        confidence: Math.min(Math.abs(avgChange) / 2, 1.0),
+        description: `Temperature ${isIncreasing ? 'rising' : 'falling'} at ${Math.abs(avgChange).toFixed(1)}°C per reading`,
+      };
+    }
+
+    return null;
+  }
+
+  private detectCyclingPattern(readings: TemperatureReading[]): {
+    type: string;
+    confidence: number;
+    description: string;
+  } | null {
+    if (readings.length < 6) return null;
+
+    // Note: Mode information not available in TemperatureReading
+    // Could be enhanced if mode tracking is added to readings
+    let cycles = 0;
+
+    const cycleRate = cycles / readings.length;
+    
+    if (cycleRate > 0.3) {
+      return {
+        type: 'frequent_cycling',
+        confidence: Math.min(cycleRate, 1.0),
+        description: `Frequent HVAC cycling detected (${cycles} changes in ${readings.length} readings)`,
+      };
+    }
+
+    return null;
   }
 }

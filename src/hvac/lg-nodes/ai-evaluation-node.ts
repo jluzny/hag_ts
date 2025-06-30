@@ -106,7 +106,7 @@ function buildDecisionContext(state: HVACLangGraphState): HVACDecisionContext {
     currentHour: state.currentHour,
     isWeekday: state.isWeekday,
     manualOverride: state.manualOverride,
-    lastTransitionTime: state.lastTransitionTime,
+    lastTransitionTime: state.lastActionTimestamp,
     recentTransitions: state.totalTransitions,
 
     // Energy context (future enhancement)
@@ -138,7 +138,7 @@ function applyDecision(
       source: decision.source,
     },
     totalTransitions: state.totalTransitions + (stateChanged ? 1 : 0),
-    lastTransitionTime: stateChanged ? now : state.lastTransitionTime,
+    lastActionTimestamp: stateChanged ? now : state.lastActionTimestamp,
 
     // Update evaluation history
     evaluationHistory: [
@@ -155,9 +155,6 @@ function applyDecision(
           isWeekday: state.isWeekday,
         },
         executionTimeMs: decision.executionTimeMs,
-        confidence: decision.confidence,
-        source: decision.source,
-        factors: decision.factors,
       },
     ],
   };
@@ -257,7 +254,7 @@ function makeFallbackDecision(state: HVACLangGraphState): DecisionResult {
   }
 
   return {
-    action: action as any,
+    action: action as string,
     confidence: 0.7,
     reasoning,
     factors: ['temperature_differential', 'system_mode', 'manual_override'],
@@ -278,6 +275,6 @@ export function createAIEvaluationNode(
   logger: LoggerService,
 ) {
   return async (state: HVACLangGraphState): Promise<HVACLangGraphState> => {
-    return aiEvaluationNode(state, aiEngine, logger);
+    return await aiEvaluationNode(state, aiEngine, logger);
   };
 }

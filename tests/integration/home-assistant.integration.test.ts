@@ -13,7 +13,6 @@ import { HassOptions } from '../../src/config/config.ts';
 import { LoggerService } from '../../src/core/logger.ts';
 
 // Test configuration
-const TEST_TIMEOUT = 10000; // 10 seconds
 
 // Skip integration tests if no Home Assistant credentials available
 const hasHassCredentials =
@@ -74,7 +73,7 @@ Deno.test('Home Assistant Integration', async (t) => {
       assertEquals(Array.isArray(states), true, 'States should be an array');
 
       // Find temperature sensors
-      const tempSensors = states.filter((state: any) =>
+      const tempSensors = states.filter((state: { entity_id: string; attributes?: { unit_of_measurement?: string } }) =>
         state.entity_id.includes('temperature') ||
         (state.attributes?.unit_of_measurement === '°C' ||
           state.attributes?.unit_of_measurement === '°F')
@@ -84,7 +83,7 @@ Deno.test('Home Assistant Integration', async (t) => {
 
       if (tempSensors.length > 0) {
         console.log('📋 Available temperature sensors:');
-        tempSensors.slice(0, 5).forEach((sensor: any) => {
+        tempSensors.slice(0, 5).forEach((sensor: { entity_id: string; state: string; attributes?: { unit_of_measurement?: string } }) => {
           console.log(
             `   - ${sensor.entity_id}: ${sensor.state}${
               sensor.attributes?.unit_of_measurement || ''

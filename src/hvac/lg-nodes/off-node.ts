@@ -132,7 +132,7 @@ async function performShutdownProcedures(state: HVACLangGraphState): Promise<{
  * Shutdown all HVAC entities
  */
 async function shutdownHVACEntities(
-  state: HVACLangGraphState,
+  _state: HVACLangGraphState,
 ): Promise<boolean> {
   try {
     // In real implementation:
@@ -168,9 +168,9 @@ async function shutdownHVACEntities(
 /**
  * Shutdown individual HVAC entity
  */
-async function shutdownEntity(
+function shutdownEntity(
   entityId: string,
-): Promise<{ success: boolean; entityId: string }> {
+): { success: boolean; entityId: string } {
   // Simulate entity shutdown
   console.log(`🛑 Shutting down ${entityId}`);
 
@@ -186,9 +186,9 @@ async function shutdownEntity(
 /**
  * Disable any active heating/cooling operations
  */
-async function disableActiveOperations(
+function disableActiveOperations(
   state: HVACLangGraphState,
-): Promise<boolean> {
+): boolean {
   const previousMode = state.previousMode;
 
   if (previousMode === 'heating' || previousMode === 'cooling') {
@@ -207,7 +207,7 @@ async function disableActiveOperations(
  * Setup minimal monitoring for safety during shutdown
  */
 async function setupMinimalMonitoring(
-  state: HVACLangGraphState,
+  _state: HVACLangGraphState,
 ): Promise<boolean> {
   console.log('👁️ Setting up minimal safety monitoring');
 
@@ -228,7 +228,7 @@ async function checkEmergencyConditions(state: HVACLangGraphState): Promise<{
   severity: 'low' | 'medium' | 'high';
   message?: string;
 }> {
-  const { indoorTemp, outdoorTemp } = state;
+  const { indoorTemp } = state;
 
   // Check for extreme temperature conditions
   if (indoorTemp !== undefined) {

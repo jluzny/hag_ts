@@ -145,7 +145,7 @@ export interface UserPattern {
   timeOfDay: number; // Hour of day
   dayOfWeek: number; // 0-6
   action: 'manual_override' | 'schedule_change' | 'mode_change';
-  context: Record<string, any>;
+  context: Record<string, unknown>;
   frequency: number; // How often this pattern occurs
   confidence: number; // 0.0 to 1.0
 }
@@ -155,8 +155,8 @@ export interface UserPattern {
  */
 export interface EnvironmentalPattern {
   pattern: string;
-  conditions: Record<string, any>;
-  outcomes: Record<string, any>;
+  conditions: Record<string, unknown>;
+  outcomes: Record<string, unknown>;
   accuracy: number; // Historical accuracy of this pattern
   lastUpdated: Date;
 }
@@ -204,7 +204,7 @@ export interface UserInteraction {
     | 'schedule_change'
     | 'mode_change'
     | 'preference_update';
-  details: Record<string, any>;
+  details: Record<string, unknown>;
   context: {
     indoorTemp?: number;
     outdoorTemp?: number;
@@ -239,7 +239,7 @@ export interface AIAgent {
   /**
    * Process input and generate output
    */
-  process(input: any): Promise<any>;
+  process(input: unknown): Promise<unknown>;
 
   /**
    * Check agent health and availability
@@ -249,7 +249,7 @@ export interface AIAgent {
   /**
    * Get agent configuration
    */
-  getConfig(): Record<string, any>;
+  getConfig(): Record<string, unknown>;
 }
 
 /**
@@ -257,7 +257,7 @@ export interface AIAgent {
  */
 export interface AgentCoordinationResult {
   primaryDecision: DecisionResult;
-  agentInputs: Record<string, any>;
+  agentInputs: Record<string, unknown>;
   consensusScore: number; // 0.0 to 1.0
   conflictResolution?: string;
   executionPlan: {

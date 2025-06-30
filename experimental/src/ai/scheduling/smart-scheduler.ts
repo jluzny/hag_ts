@@ -6,15 +6,14 @@
  */
 
 import {
-  EnergyOptimizationResult,
   HVACDecisionContext,
   ScheduleItem,
-} from '../types/ai-types.ts';
+} from '../../../../src/ai/types/ai-types.ts';
 import { HVACOptimizer } from '../optimization/hvac-optimizer.ts';
 import { PredictiveAnalyticsEngine } from '../predictive/analytics-engine.ts';
-import { AdaptiveLearningEngine } from '../learning/adaptive-learning-engine.ts';
-import { SystemMode } from '../../types/common.ts';
-import type { LoggerService } from '../../core/logger.ts';
+import type { IAdaptiveLearningEngine } from '../../../../src/core/experimental-features.ts';
+import { SystemMode } from '../../../../src/types/common.ts';
+import type { LoggerService } from '../../../../src/core/logger.ts';
 
 /**
  * Schedule rule configuration
@@ -125,7 +124,7 @@ export class SmartScheduler {
   // AI components
   private optimizer?: HVACOptimizer;
   private analytics?: PredictiveAnalyticsEngine;
-  private learning?: AdaptiveLearningEngine;
+  private learning?: IAdaptiveLearningEngine;
 
   // Scheduling data
   private scheduleRules: Map<string, ScheduleRule> = new Map();
@@ -146,7 +145,7 @@ export class SmartScheduler {
     logger: LoggerService,
     optimizer?: HVACOptimizer,
     analytics?: PredictiveAnalyticsEngine,
-    learning?: AdaptiveLearningEngine,
+    learning?: IAdaptiveLearningEngine,
   ) {
     this.config = config;
     this.logger = logger;
@@ -335,7 +334,7 @@ export class SmartScheduler {
           } catch (error) {
             this.logger.debug(
               '⚠️ [Smart Scheduler] Weather prediction failed',
-              error,
+              { error },
             );
           }
         }
@@ -370,7 +369,7 @@ export class SmartScheduler {
           } catch (error) {
             this.logger.debug(
               '⚠️ [Smart Scheduler] Optimization failed for item',
-              error,
+              { error },
             );
           }
         });
@@ -662,7 +661,7 @@ export class SmartScheduler {
       // Apply optimization if it suggests a change
       if (optimization.overallScore > 0.7) {
         await this.triggerAutomation(
-          'system_optimization',
+          'user_override',
           context,
           `Auto-optimization suggested ${optimization.action} (score: ${
             optimization.overallScore.toFixed(2)
@@ -670,7 +669,7 @@ export class SmartScheduler {
         );
       }
     } catch (error) {
-      this.logger.debug('⚠️ [Smart Scheduler] Auto-optimization failed', error);
+      this.logger.debug('⚠️ [Smart Scheduler] Auto-optimization failed', { error });
     }
   }
 
@@ -704,7 +703,7 @@ export class SmartScheduler {
     } catch (error) {
       this.logger.debug(
         '⚠️ [Smart Scheduler] Weather automation update failed',
-        error,
+        { error },
       );
     }
   }

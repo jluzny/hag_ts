@@ -62,7 +62,7 @@ export class ValidationHelper {
   /**
    * Log validation step with timestamp
    */
-  logStep(step: string, details?: any) {
+  logStep(step: string, details?: Record<string, unknown>) {
     this.logger.info(`🔍 [Validation] ${step}`, details);
   }
 

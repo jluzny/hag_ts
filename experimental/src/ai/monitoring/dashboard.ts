@@ -15,9 +15,9 @@ import {
 } from './system-monitor.ts';
 import { HVACOptimizer } from '../optimization/hvac-optimizer.ts';
 import { PredictiveAnalyticsEngine } from '../predictive/analytics-engine.ts';
-import { AdaptiveLearningEngine } from '../learning/adaptive-learning-engine.ts';
+import type { IAdaptiveLearningEngine } from '../../../../src/core/experimental-features.ts';
 import { SmartScheduler } from '../scheduling/smart-scheduler.ts';
-import type { LoggerService } from '../../core/logger.ts';
+import type { LoggerService } from '../../../../src/core/logger.ts';
 
 /**
  * Dashboard configuration
@@ -93,7 +93,7 @@ export class AIHVACDashboard {
   private monitor: SystemMonitor;
   private optimizer?: HVACOptimizer;
   private analytics?: PredictiveAnalyticsEngine;
-  private learning?: AdaptiveLearningEngine;
+  private learning?: IAdaptiveLearningEngine;
   private scheduler?: SmartScheduler;
 
   // Dashboard state
@@ -112,7 +112,7 @@ export class AIHVACDashboard {
     logger: LoggerService,
     optimizer?: HVACOptimizer,
     analytics?: PredictiveAnalyticsEngine,
-    learning?: AdaptiveLearningEngine,
+    learning?: IAdaptiveLearningEngine,
     scheduler?: SmartScheduler,
   ) {
     this.config = config;
@@ -360,8 +360,8 @@ export class AIHVACDashboard {
       },
       learning: {
         status: getComponentStatus('learning'),
-        interactions: this.learning?.getLearningStats().interactions || 0,
-        patterns: this.learning?.getLearningStats().patterns || 0,
+        interactions: this.learning?.getUserProfile().totalInteractions || 0,
+        patterns: 0, // Pattern count not available in interface
         adaptations: 0, // Would be tracked separately
       },
       scheduler: {

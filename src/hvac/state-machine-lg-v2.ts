@@ -8,7 +8,6 @@
 import { StateGraph } from '@langchain/langgraph';
 import {
   createDefaultHVACState,
-  HVACInputEvent,
   HVACLangGraphState,
 } from './lg-types/hvac-state.ts';
 import { evaluationNode } from './lg-nodes/evaluation-node.ts';
@@ -136,7 +135,7 @@ export class HVACLangGraphStateMachineV2 {
   /**
    * Stop the state machine
    */
-  async stop(): Promise<void> {
+  stop(): void {
     if (!this.isRunning) {
       return;
     }
@@ -231,10 +230,10 @@ export class HVACLangGraphStateMachineV2 {
   /**
    * Execute the actual HVAC action (placeholder for controller integration)
    */
-  private async executeAction(
+  private executeAction(
     mode: string,
     state: HVACLangGraphState,
-  ): Promise<void> {
+  ): void {
     this.logger.info(`⚡ [LangGraph v2] Executing ${mode} action`, {
       mode,
       indoorTemp: state.indoorTemp,

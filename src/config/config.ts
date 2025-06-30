@@ -6,6 +6,7 @@
 
 import { z } from 'zod';
 import { LogLevel, SystemMode } from '../types/common.ts';
+import type { ExperimentalFeatures as _ExperimentalFeatures } from '../core/experimental-features.ts';
 
 /**
  * Home Assistant connection options schema
@@ -137,6 +138,24 @@ export const HvacOptionsSchema = z.object({
 });
 
 /**
+ * Experimental features configuration schema
+ */
+export const ExperimentalFeaturesSchema = z.object({
+  adaptiveLearning: z.object({
+    enabled: z.boolean().default(false),
+    config: z.record(z.unknown()).optional(),
+  }).default({ enabled: false }),
+  advancedAnalytics: z.object({
+    enabled: z.boolean().default(false),
+    config: z.record(z.unknown()).optional(),
+  }).default({ enabled: false }).optional(),
+  predictiveModeling: z.object({
+    enabled: z.boolean().default(false),
+    config: z.record(z.unknown()).optional(),
+  }).default({ enabled: false }).optional(),
+});
+
+/**
  * Application-level configuration schema
  */
 export const ApplicationOptionsSchema = z.object({
@@ -154,8 +173,11 @@ export const ApplicationOptionsSchema = z.object({
   dryRun: z.boolean().default(false).describe(
     'Enable dry run mode (no actual HA calls)',
   ),
-  experimentalFeatures: z.array(z.string()).optional().describe(
-    'Experimental features to enable (e.g., ["langgraph-state-machine"])',
+  experimentalFeatures: z.union([
+    z.array(z.string()),
+    ExperimentalFeaturesSchema,
+  ]).optional().describe(
+    'Experimental features configuration (legacy string array or structured config)',
   ),
 });
 

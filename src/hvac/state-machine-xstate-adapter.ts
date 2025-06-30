@@ -31,6 +31,7 @@ export class XStateHVACStateMachineAdapter implements IHVACStateMachine {
   async start(): Promise<void> {
     this.logger.info('🚀 [XState Adapter] Starting HVAC state machine');
     this.xstateStateMachine.start();
+    await Promise.resolve(); // Make async compliant
   }
 
   /**
@@ -39,6 +40,7 @@ export class XStateHVACStateMachineAdapter implements IHVACStateMachine {
   async stop(): Promise<void> {
     this.logger.info('🛑 [XState Adapter] Stopping HVAC state machine');
     this.xstateStateMachine.stop();
+    await Promise.resolve(); // Make async compliant
   }
 
   /**
@@ -115,6 +117,7 @@ export class XStateHVACStateMachineAdapter implements IHVACStateMachine {
     if (indoor !== undefined && outdoor !== undefined) {
       this.xstateStateMachine.updateTemperatures(indoor, outdoor);
     }
+    await Promise.resolve(); // Make async compliant
   }
 
   /**
@@ -128,6 +131,7 @@ export class XStateHVACStateMachineAdapter implements IHVACStateMachine {
     });
 
     this.xstateStateMachine.manualOverride(mode, temperature);
+    await Promise.resolve(); // Make async compliant
   }
 
   /**
@@ -136,6 +140,7 @@ export class XStateHVACStateMachineAdapter implements IHVACStateMachine {
   async clearManualOverride(): Promise<void> {
     this.logger.info('🔄 [XState Adapter] Clearing manual override');
     this.xstateStateMachine.evaluateConditions();
+    await Promise.resolve(); // Make async compliant
   }
 
   /**
@@ -154,6 +159,7 @@ export class XStateHVACStateMachineAdapter implements IHVACStateMachine {
 
     // Trigger evaluation to apply new system mode
     this.xstateStateMachine.evaluateConditions();
+    await Promise.resolve(); // Make async compliant
   }
 
   /**
@@ -166,7 +172,7 @@ export class XStateHVACStateMachineAdapter implements IHVACStateMachine {
   /**
    * Send event to XState machine (XState specific method)
    */
-  send(event: any): void {
+  send(event: Record<string, unknown>): void {
     this.xstateStateMachine.send(event);
   }
 }

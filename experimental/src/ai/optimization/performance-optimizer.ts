@@ -6,7 +6,7 @@
  * caching strategies, and resource utilization improvements.
  */
 
-import type { LoggerService } from '../../core/logger.ts';
+import type { LoggerService } from '../../../../src/core/logger.ts';
 
 /**
  * Performance optimization configuration
@@ -528,7 +528,7 @@ export class PerformanceOptimizer {
     } catch (error) {
       this.logger.debug(
         '⚠️ [Performance] Garbage collection not available',
-        error,
+        { error: error instanceof Error ? error.message : String(error) },
       );
     }
   }

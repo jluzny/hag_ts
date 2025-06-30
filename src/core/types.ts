@@ -30,4 +30,13 @@ export const TYPES = {
   TemperatureMonitorTool: Symbol.for('TemperatureMonitorTool'),
   HVACControlTool: Symbol.for('HVACControlTool'),
   SensorReaderTool: Symbol.for('SensorReaderTool'),
+
+  // Experimental Features
+  AdaptiveLearningEngine: Symbol.for('AdaptiveLearningEngine'),
+  HVACOptimizer: Symbol.for('HVACOptimizer'),
+  PredictiveAnalyticsEngine: Symbol.for('PredictiveAnalyticsEngine'),
+  SystemMonitor: Symbol.for('SystemMonitor'),
+  SmartScheduler: Symbol.for('SmartScheduler'),
+  PerformanceOptimizer: Symbol.for('PerformanceOptimizer'),
+  ExperimentalFeatures: Symbol.for('ExperimentalFeatures'),
 } as const;

@@ -235,7 +235,7 @@ export class ProductionValidator {
     // Port availability
     for (const port of this.config.requiredPorts) {
       try {
-        const available = await this.checkPortAvailability(port);
+        const available = this.checkPortAvailability(port);
 
         if (available) {
           results.push({
@@ -494,7 +494,7 @@ export class ProductionValidator {
 
     // Startup time validation
     try {
-      const startupTime = await this.measureStartupTime();
+      const startupTime = this.measureStartupTime();
 
       if (startupTime <= this.config.maxStartupTime) {
         results.push({
@@ -529,7 +529,7 @@ export class ProductionValidator {
 
     // Response time validation
     try {
-      const responseTime = await this.measureResponseTime();
+      const responseTime = this.measureResponseTime();
 
       if (responseTime <= this.config.maxResponseTime) {
         results.push({
@@ -574,7 +574,7 @@ export class ProductionValidator {
     // Required services
     for (const service of this.config.requiredServices) {
       try {
-        const available = await this.checkServiceAvailability(service);
+        const available = this.checkServiceAvailability(service);
 
         if (available) {
           results.push({
@@ -609,7 +609,7 @@ export class ProductionValidator {
     // External APIs
     for (const api of this.config.requiredExternalAPIs) {
       try {
-        const available = await this.checkAPIAvailability(api);
+        const available = this.checkAPIAvailability(api);
 
         if (available) {
           results.push({
@@ -653,7 +653,7 @@ export class ProductionValidator {
     // Health check endpoint
     if (this.config.requireHealthCheck) {
       try {
-        const healthCheckAvailable = await this.checkHealthEndpoint();
+        const healthCheckAvailable = this.checkHealthEndpoint();
 
         if (healthCheckAvailable) {
           results.push({
@@ -728,7 +728,7 @@ export class ProductionValidator {
 
     for (const component of components) {
       try {
-        const healthy = await this.checkComponentHealth(component);
+        const healthy = this.checkComponentHealth(component);
 
         if (healthy) {
           results.push({
@@ -781,7 +781,7 @@ export class ProductionValidator {
     return navigator.hardwareConcurrency || 4;
   }
 
-  private async checkPortAvailability(port: number): Promise<boolean> {
+  private checkPortAvailability(_port: number): boolean {
     try {
       // Would use actual port checking in production
       return Math.random() > 0.1; // 90% success rate for testing
@@ -790,32 +790,32 @@ export class ProductionValidator {
     }
   }
 
-  private async measureStartupTime(): Promise<number> {
+  private measureStartupTime(): number {
     // Would measure actual startup time in production
     return 2.5; // 2.5 seconds placeholder
   }
 
-  private async measureResponseTime(): Promise<number> {
+  private measureResponseTime(): number {
     // Would measure actual response time in production
     return 150; // 150ms placeholder
   }
 
-  private async checkServiceAvailability(service: string): Promise<boolean> {
+  private checkServiceAvailability(_service: string): boolean {
     // Would check actual service availability in production
     return Math.random() > 0.2; // 80% success rate for testing
   }
 
-  private async checkAPIAvailability(api: string): Promise<boolean> {
+  private checkAPIAvailability(_api: string): boolean {
     // Would check actual API availability in production
     return Math.random() > 0.3; // 70% success rate for testing
   }
 
-  private async checkHealthEndpoint(): Promise<boolean> {
+  private checkHealthEndpoint(): boolean {
     // Would check actual health endpoint in production
     return true;
   }
 
-  private async checkComponentHealth(component: string): Promise<boolean> {
+  private checkComponentHealth(_component: string): boolean {
     // Would check actual component health in production
     return Math.random() > 0.1; // 90% success rate for testing
   }

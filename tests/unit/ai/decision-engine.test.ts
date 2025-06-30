@@ -8,22 +8,25 @@ import {
   AIDecisionEngine,
 } from '../../../src/ai/decision-engine.ts';
 import {
-  DecisionResult,
   HVACDecisionContext,
 } from '../../../src/ai/types/ai-types.ts';
 import { SystemMode } from '../../../src/types/common.ts';
 import { LoggerService } from '../../../src/core/logger.ts';
 
 // Mock logger
-class MockLoggerService implements LoggerService {
-  info(_message: string, _data?: Record<string, unknown>): void {}
-  error(
+class MockLoggerService extends LoggerService {
+  constructor() {
+    super('TEST');
+  }
+  
+  override info(_message: string, _data?: Record<string, unknown>): void {}
+  override error(
     _message: string,
     _error?: unknown,
     _data?: Record<string, unknown>,
   ): void {}
-  debug(_message: string, _data?: Record<string, unknown>): void {}
-  warning(_message: string, _data?: Record<string, unknown>): void {}
+  override debug(_message: string, _data?: Record<string, unknown>): void {}
+  override warning(_message: string, _data?: Record<string, unknown>): void {}
 }
 
 // Skip AI tests if no OpenAI API key available

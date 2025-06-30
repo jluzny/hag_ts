@@ -17,11 +17,15 @@ import { HVACAgent } from '../ai/agent.ts';
 import { TYPES } from './types.ts';
 import { LoggerService } from './logger.ts';
 import { HVACStateMachine } from '../hvac/state-machine.ts';
-import { HVACLangGraphStateMachine } from '../hvac/state-machine-lg.ts';
 import { XStateHVACStateMachineAdapter } from '../hvac/state-machine-xstate-adapter.ts';
 import { LangGraphHVACStateMachineAdapter } from '../hvac/state-machine-lg-adapter.ts';
 import { IHVACStateMachine } from '../hvac/state-machine-interface.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
+import {
+  type ExperimentalFeatures,
+  defaultExperimentalFeatures,
+} from './experimental-features.ts';
+import { configureExperimentalFeatures } from './experimental-container.ts';
 
 // Re-export for backward compatibility
 export { LoggerService, TYPES };
@@ -62,6 +66,9 @@ export class ApplicationContainer {
         // TODO : Uncomment when tools are implemented
         // this.registerTools();
       }
+
+      // Register experimental features
+      await this.registerExperimentalFeatures();
     } catch (error) {
       throw error;
     }
@@ -172,9 +179,9 @@ export class ApplicationContainer {
         const logger = new LoggerService('HAG.hvac.state-machine-factory');
 
         // Check for LangGraph experiment feature flag
-        const useLangGraph = appOptions.experimentalFeatures?.includes(
-          'langgraph-state-machine',
-        ) || false;
+        const useLangGraph = Array.isArray(appOptions.experimentalFeatures)
+          ? appOptions.experimentalFeatures.includes('langgraph-state-machine')
+          : false;
 
         if (useLangGraph) {
           logger.info(
@@ -302,6 +309,40 @@ export class ApplicationContainer {
       throw new Error('Settings not loaded');
     }
     return this.settings;
+  }
+
+  /**
+   * Register experimental features
+   */
+  private async registerExperimentalFeatures(): Promise<void> {
+    if (!this.settings) {
+      throw new Error('Settings not loaded');
+    }
+
+    const logger = new LoggerService('HAG.experimental');
+    
+    // Get experimental features configuration from settings
+    const rawFeatures = this.settings.appOptions.experimentalFeatures;
+    let experimentalFeatures = defaultExperimentalFeatures;
+    
+    if (rawFeatures) {
+      if (Array.isArray(rawFeatures)) {
+        // Legacy string array format - convert to structured format
+        experimentalFeatures = {
+          ...defaultExperimentalFeatures,
+          adaptiveLearning: {
+            enabled: (rawFeatures as string[]).includes('adaptive-learning'),
+          },
+        };
+        logger.debug('🔄 Converted legacy experimental features format', { features: rawFeatures });
+      } else {
+        // New structured format
+        experimentalFeatures = rawFeatures as ExperimentalFeatures;
+      }
+    }
+    
+    // Configure experimental features using the dedicated container
+    await configureExperimentalFeatures(this.container, experimentalFeatures, logger);
   }
 
   /**

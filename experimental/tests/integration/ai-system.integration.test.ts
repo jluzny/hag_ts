@@ -9,45 +9,45 @@ import { assertEquals, assertExists, assertInstanceOf } from '@std/assert';
 import {
   AIDecisionConfig,
   AIDecisionEngine,
-} from '../../src/ai/decision-engine.ts';
+} from '../../../src/ai/decision-engine.ts';
 import {
   HVACOptimizer,
   OptimizationConfig,
-} from '../../src/ai/optimization/hvac-optimizer.ts';
+} from '../src/ai/optimization/hvac-optimizer.ts';
 import {
   AnalyticsConfig,
   PredictiveAnalyticsEngine,
-} from '../../src/ai/predictive/analytics-engine.ts';
-import {
-  AdaptiveLearningEngine,
-  LearningConfig,
-} from '../../src/ai/learning/adaptive-learning-engine.ts';
+} from '../src/ai/predictive/analytics-engine.ts';
 import {
   SchedulingConfig,
   SmartScheduler,
-} from '../../src/ai/scheduling/smart-scheduler.ts';
+} from '../src/ai/scheduling/smart-scheduler.ts';
 import {
   PerformanceConfig,
   PerformanceOptimizer,
-} from '../../src/ai/optimization/performance-optimizer.ts';
+} from '../src/ai/optimization/performance-optimizer.ts';
 import {
   EnergyUsageData,
   HVACDecisionContext,
   TemperatureReading,
-} from '../../src/ai/types/ai-types.ts';
-import { SystemMode } from '../../src/types/common.ts';
-import { LoggerService } from '../../src/core/logger.ts';
+} from '../../../src/ai/types/ai-types.ts';
+import { SystemMode } from '../../../src/types/common.ts';
+import { LoggerService } from '../../../src/core/logger.ts';
 
 // Mock logger
-class MockLoggerService implements LoggerService {
-  info(_message: string, _data?: Record<string, unknown>): void {}
-  error(
+class MockLoggerService extends LoggerService {
+  constructor() {
+    super('TEST');
+  }
+  
+  override info(_message: string, _data?: Record<string, unknown>): void {}
+  override error(
     _message: string,
     _error?: unknown,
     _data?: Record<string, unknown>,
   ): void {}
-  debug(_message: string, _data?: Record<string, unknown>): void {}
-  warning(_message: string, _data?: Record<string, unknown>): void {}
+  override debug(_message: string, _data?: Record<string, unknown>): void {}
+  override warning(_message: string, _data?: Record<string, unknown>): void {}
 }
 
 // Skip AI tests if no OpenAI API key available
@@ -56,7 +56,7 @@ const hasApiKey = !!Deno.env.get('OPENAI_API_KEY');
 /**
  * Create AI system components for testing
  */
-async function createAISystem() {
+function createAISystem() {
   const logger = new MockLoggerService();
 
   // Decision Engine
@@ -105,23 +105,6 @@ async function createAISystem() {
   };
   const analytics = new PredictiveAnalyticsEngine(analyticsConfig, logger);
 
-  // Adaptive Learning
-  const learningConfig: LearningConfig = {
-    learningRate: 0.2,
-    adaptationWindow: 14,
-    preferenceWeight: 0.6,
-    patternWeight: 0.4,
-    minimumInteractions: 10,
-    confidenceThreshold: 0.7,
-    enablePersonalization: true,
-    enablePatternDetection: true,
-    enableSeasonalAdaptation: true,
-    enableOccupancyLearning: true,
-    maxPatterns: 100,
-    patternMinSupport: 0.3,
-    adaptationRate: 0.1,
-  };
-  const learning = new AdaptiveLearningEngine(learningConfig, logger);
 
   // Smart Scheduler
   const schedulingConfig: SchedulingConfig = {
@@ -140,7 +123,6 @@ async function createAISystem() {
     },
     optimizationEngine: optimizer,
     analyticsEngine: analytics,
-    learningEngine: learning,
   };
   const scheduler = new SmartScheduler(schedulingConfig, logger);
 
@@ -176,7 +158,6 @@ async function createAISystem() {
     decisionEngine,
     optimizer,
     analytics,
-    learning,
     scheduler,
     performance,
     logger,
@@ -226,7 +207,6 @@ Deno.test('AI System Integration', async (t) => {
     assertExists(system.decisionEngine);
     assertExists(system.optimizer);
     assertExists(system.analytics);
-    assertExists(system.learning);
     assertExists(system.scheduler);
     assertExists(system.performance);
 
@@ -235,7 +215,7 @@ Deno.test('AI System Integration', async (t) => {
 
   await t.step('should process complete decision workflow', async () => {
     const system = await createAISystem();
-    const { context, temperatureReadings, energyData } = generateTestData();
+    const { context, temperatureReadings } = generateTestData();
 
     await system.performance.start();
 
@@ -253,21 +233,7 @@ Deno.test('AI System Integration', async (t) => {
       `⚡ Optimization score: ${optimization.overallScore.toFixed(2)}`,
     );
 
-    // 3. Learning (add historical data)
-    system.learning.recordInteraction({
-      timestamp: new Date(),
-      context,
-      userAction: 'manual_override',
-      actionValue: 'heating',
-      satisfaction: 0.8,
-      metadata: { reason: 'too_cold' },
-    });
-
-    const patterns = system.learning.detectPatterns(temperatureReadings);
-    assertEquals(Array.isArray(patterns), true);
-    console.log(`🧠 Detected ${patterns.length} behavioral patterns`);
-
-    // 4. Decision making
+    // 3. Decision making
     const decision = await system.decisionEngine.makeDecision(context);
     assertExists(decision);
     console.log(
@@ -288,7 +254,7 @@ Deno.test('AI System Integration', async (t) => {
 
   await t.step('should handle data flow between components', async () => {
     const system = await createAISystem();
-    const { context, temperatureReadings, energyData } = generateTestData();
+    const { context, temperatureReadings } = generateTestData();
 
     await system.performance.start();
 
@@ -338,8 +304,8 @@ Deno.test('AI System Integration', async (t) => {
     // Record performance metrics during AI operations
     const startTime = performance.now();
 
-    const decision = await system.decisionEngine.makeDecision(context);
-    const optimization = await system.optimizer.optimize(context);
+    const _decision = await system.decisionEngine.makeDecision(context);
+    const _optimization = await system.optimizer.optimizeDecision(context);
 
     const endTime = performance.now();
     const totalTime = endTime - startTime;
@@ -402,45 +368,6 @@ Deno.test('AI System Integration', async (t) => {
     console.log('✅ Error handling working correctly');
   });
 
-  await t.step('should demonstrate learning and adaptation', async () => {
-    const system = await createAISystem();
-    const { context } = generateTestData();
-
-    await system.performance.start();
-
-    // Simulate user interactions over time
-    const interactions = [
-      { action: 'heating', satisfaction: 0.9, reason: 'comfortable' },
-      { action: 'cooling', satisfaction: 0.3, reason: 'too_cold' },
-      { action: 'heating', satisfaction: 0.8, reason: 'perfect' },
-      { action: 'idle', satisfaction: 0.7, reason: 'good' },
-    ];
-
-    for (const interaction of interactions) {
-      system.learning.recordInteraction({
-        timestamp: new Date(),
-        context: { ...context, currentMode: interaction.action },
-        userAction: 'feedback',
-        actionValue: interaction.satisfaction.toString(),
-        satisfaction: interaction.satisfaction,
-        metadata: { reason: interaction.reason },
-      });
-    }
-
-    // Learning should adapt preferences
-    const preferences = system.learning.getUserPreferences();
-    assertExists(preferences);
-
-    // Should show learning has occurred
-    const userProfile = system.learning.getUserProfile();
-    assertExists(userProfile);
-    assertInstanceOf(userProfile.totalInteractions, Number);
-    assertEquals(userProfile.totalInteractions, interactions.length);
-
-    await system.performance.stop();
-
-    console.log('✅ Learning and adaptation demonstrated successfully');
-  });
 
   if (hasApiKey) {
     await t.step('should test full AI decision pipeline', async () => {

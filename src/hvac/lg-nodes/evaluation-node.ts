@@ -11,7 +11,6 @@ import {
   HVACLangGraphState,
 } from '../lg-types/hvac-state.ts';
 import { SystemMode } from '../../types/common.ts';
-import { CoolingStrategy, HeatingStrategy } from '../state-machine.ts';
 
 /**
  * Evaluation node - Core decision making logic
@@ -42,14 +41,14 @@ export async function evaluationNode(
       const now = new Date();
       if (manualOverride.expiresAt && now > manualOverride.expiresAt) {
         // Override expired, clear it
-        newMode = await evaluateAutomaticMode(state);
+        newMode = evaluateAutomaticMode(state);
         reasoning = 'Manual override expired, resuming automatic operation';
       } else {
         newMode = manualOverride.mode || 'idle';
         reasoning = `Manual override active: ${newMode}`;
       }
     } else {
-      newMode = await evaluateAutomaticMode(state);
+      newMode = evaluateAutomaticMode(state);
       reasoning = await getEvaluationReasoning(state, newMode);
     }
 
@@ -79,7 +78,7 @@ export async function evaluationNode(
 
     return {
       ...state,
-      currentMode: newMode as any,
+      currentMode: newMode as 'heating' | 'cooling' | 'idle' | 'off',
       previousMode: state.currentMode,
       evaluationHistory: [
         ...state.evaluationHistory.slice(-19), // Keep last 20 entries
@@ -110,9 +109,9 @@ export async function evaluationNode(
  * Core automatic mode evaluation logic
  * Replicates XState guard conditions
  */
-async function evaluateAutomaticMode(
+function evaluateAutomaticMode(
   state: HVACLangGraphState,
-): Promise<string> {
+): string {
   const { systemMode, indoorTemp, outdoorTemp } = state;
 
   // System is turned off
@@ -161,11 +160,11 @@ async function evaluateAutomaticMode(
 /**
  * Generate human-readable reasoning for the decision
  */
-async function getEvaluationReasoning(
+function getEvaluationReasoning(
   state: HVACLangGraphState,
   decision: string,
-): Promise<string> {
-  const { indoorTemp, outdoorTemp, systemMode } = state;
+): string {
+  const { indoorTemp, outdoorTemp } = state;
 
   switch (decision) {
     case 'off':
@@ -234,7 +233,7 @@ function updatePerformanceMetrics(
  */
 function createMockHeatingStrategy() {
   return {
-    shouldHeat: (data: any) => {
+    shouldHeat: (data: { currentTemp: number; weatherTemp: number }) => {
       // Simple threshold logic - replace with actual heating strategy
       return data.currentTemp < 20.0 && data.weatherTemp < 15.0;
     },
@@ -243,7 +242,7 @@ function createMockHeatingStrategy() {
 
 function createMockCoolingStrategy() {
   return {
-    shouldCool: (data: any) => {
+    shouldCool: (data: { currentTemp: number; weatherTemp: number }) => {
       // Simple threshold logic - replace with actual cooling strategy
       return data.currentTemp > 24.0 && data.weatherTemp > 22.0;
     },

@@ -223,7 +223,7 @@ export class LangGraphHVACStateMachineAdapter implements IHVACStateMachine {
   /**
    * Send event (compatibility method - maps to appropriate LangGraph method)
    */
-  async send(event: any): Promise<void> {
+  async send(event: Record<string, unknown>): Promise<void> {
     this.logger.debug('📤 [LangGraph Adapter] Sending event (compatibility)', {
       event,
     });

@@ -11,7 +11,7 @@ try {
   // Test 1: Empty constructor
   console.log('Test 1: Empty constructor');
   try {
-    const graph1 = new StateGraph({});
+    new StateGraph({});
     console.log('✅ Empty object works');
   } catch (error) {
     console.log('❌ Empty object failed:', error.message);
@@ -20,7 +20,7 @@ try {
   // Test 2: Object with annotation
   console.log('\nTest 2: Object with annotation');
   try {
-    const graph2 = new StateGraph({ annotation: {} });
+    new StateGraph({ annotation: {} });
     console.log('✅ annotation property works');
   } catch (error) {
     console.log('❌ annotation property failed:', error.message);
@@ -29,7 +29,7 @@ try {
   // Test 3: Different state schema format
   console.log('\nTest 3: Different state schema format');
   try {
-    const graph3 = new StateGraph({
+    new StateGraph({
       channels: {
         currentMode: {
           value: (x: string, y: string) => y || x,
@@ -49,7 +49,7 @@ try {
       currentMode: string;
       temperature: number;
     }
-    const graph4 = new StateGraph<TestState>({});
+    new StateGraph<TestState>({});
     console.log('✅ TypeScript interface works');
   } catch (error) {
     console.log('❌ TypeScript interface failed:', error.message);
