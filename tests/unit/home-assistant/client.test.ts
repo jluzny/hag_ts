@@ -7,21 +7,18 @@ import { HomeAssistantClient } from '../../../src/home-assistant/client.ts';
 import { HassOptions } from '../../../src/config/config.ts';
 import { ConnectionError } from '../../../src/core/exceptions.ts';
 import { HassServiceCallImpl } from '../../../src/home-assistant/models.ts';
-import type { LoggerService } from '../../../src/core/logger.ts';
+import { LoggerService } from '../../../src/core/logger.ts';
 
 // Mock logger service
-class MockLoggerService implements LoggerService {
-  logger = {
-    info: () => {},
-    error: () => {},
-    debug: () => {},
-    warn: () => {}
-  };
+class MockLoggerService extends LoggerService {
+  constructor() {
+    super('TEST');
+  }
 
-  info(_message: string, _data?: Record<string, unknown>): void {}
-  error(_message: string, _error?: unknown, _data?: Record<string, unknown>): void {}
-  debug(_message: string, _data?: Record<string, unknown>): void {}
-  warning(_message: string, _data?: Record<string, unknown>): void {}
+  override info(_message: string, _data?: Record<string, unknown>): void {}
+  override error(_message: string, _error?: unknown, _data?: Record<string, unknown>): void {}
+  override debug(_message: string, _data?: Record<string, unknown>): void {}
+  override warning(_message: string, _data?: Record<string, unknown>): void {}
 }
 
 // Mock WebSocket implementation
@@ -110,7 +107,6 @@ const mockHassOptions: HassOptions = {
 
 Deno.test({
   name: 'Home Assistant Client - Connection Management',
-  ignore: true, // Skip for fast testing due to timing issues
 }, async (t) => {
   let mockWs: MockWebSocket;
   const logger = new MockLoggerService();
@@ -132,22 +128,20 @@ Deno.test({
       // Start connection asynchronously
       const connectPromise = client.connect();
 
-      // Wait for WebSocket to be created and then immediately simulate connection
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      // Wait a bit for WebSocket to be created
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
       if (mockWs) {
-        // Simulate immediate connection success
+        // Simulate connection and authentication flow
         mockWs.connect();
+        await new Promise((resolve) => setTimeout(resolve, 10));
         mockWs.receiveMessage({ type: 'auth_required' });
+        await new Promise((resolve) => setTimeout(resolve, 10));
         mockWs.receiveMessage({ type: 'auth_ok' });
       }
 
-      // Add timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Connection test timeout')), 1000)
-      );
-
-      await Promise.race([connectPromise, timeoutPromise]);
+      // Wait for connection to complete
+      await connectPromise;
       assertEquals(client.connected, true);
     } finally {
       await client.disconnect();
@@ -155,11 +149,14 @@ Deno.test({
   });
 
   await t.step('should handle connection failure', async () => {
-    const client = clientFactory({ ...mockHassOptions, maxRetries: 2 });
+    const client = clientFactory({ ...mockHassOptions, maxRetries: 1 });
     const connectPromise = client.connect();
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    mockWs.failConnection();
+    // Wait for WebSocket to be created then fail it
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    if (mockWs) {
+      mockWs.failConnection();
+    }
 
     await assertRejects(() => connectPromise, ConnectionError);
   });
@@ -167,7 +164,6 @@ Deno.test({
 
 Deno.test({
   name: 'Home Assistant Client - Messaging',
-  ignore: true, // Skip for fast testing due to timing issues
 }, async (t) => {
   let mockWs: MockWebSocket;
   const logger = new MockLoggerService();
@@ -186,9 +182,11 @@ Deno.test({
   async function setupConnectedClient() {
     const client = clientFactory();
     const connectPromise = client.connect();
-    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 50));
     mockWs.connect();
+    await new Promise((resolve) => setTimeout(resolve, 10));
     mockWs.receiveMessage({ type: 'auth_required' });
+    await new Promise((resolve) => setTimeout(resolve, 10));
     mockWs.receiveMessage({ type: 'auth_ok' });
     await connectPromise;
     return client;
@@ -204,10 +202,12 @@ Deno.test({
 
     const callPromise = client.callService(serviceCall);
 
-    await Promise.resolve();
+    // Wait for message to be sent
+    await new Promise((resolve) => setTimeout(resolve, 50));
     const sentMessage = mockWs.getLastSentMessage();
     assertExists(sentMessage);
 
+    // Send response
     mockWs.receiveMessage({
       id: sentMessage.id,
       type: 'result',

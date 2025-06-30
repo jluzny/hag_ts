@@ -86,16 +86,16 @@ export class HVACLangGraphStateMachineV2 {
       },
     };
 
-    const graph = new StateGraph(stateSchema);
+    const graph = new StateGraph(stateSchema as any);
 
     // Single evaluation node that determines the next action
     graph.addNode('evaluate', evaluationNode);
 
     // Set entry point and terminate after evaluation
-    graph.setEntryPoint('evaluate');
-    graph.addEdge('evaluate', '__end__');
+    (graph as any).setEntryPoint('evaluate');
+    (graph as any).addEdge('evaluate', '__end__');
 
-    return graph;
+    return graph as any;
   }
 
   /**
@@ -386,7 +386,13 @@ export class HVACLangGraphStateMachineV2 {
     canHeat: boolean;
     canCool: boolean;
     systemMode: SystemMode;
-    evaluationHistory: typeof this.currentState.evaluationHistory;
+    evaluationHistory: Array<{
+      timestamp: Date;
+      decision: string;
+      reasoning: string;
+      conditions: any;
+      executionTimeMs: number;
+    }>;
     performanceMetrics: any;
     totalTransitions: number;
     lastEvaluationTime?: Date;

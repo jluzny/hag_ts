@@ -101,7 +101,7 @@ async function testPerformanceOptimizer(): Promise<boolean> {
         console.log(`  ❌ Performance monitoring failed`);
       }
     } catch (error) {
-      console.log(`  ❌ Performance monitoring failed: ${error.message}`);
+      console.log(`  ❌ Performance monitoring failed: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     // Test 2: Caching System
@@ -149,7 +149,7 @@ async function testPerformanceOptimizer(): Promise<boolean> {
         console.log(`  ❌ Caching system failed`);
       }
     } catch (error) {
-      console.log(`  ❌ Caching system failed: ${error.message}`);
+      console.log(`  ❌ Caching system failed: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     // Test 3: Task Optimization
@@ -193,7 +193,7 @@ async function testPerformanceOptimizer(): Promise<boolean> {
         console.log(`  ❌ Task optimization failed`);
       }
     } catch (error) {
-      console.log(`  ❌ Task optimization failed: ${error.message}`);
+      console.log(`  ❌ Task optimization failed: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     // Test 4: Performance Analysis and Recommendations
@@ -245,7 +245,7 @@ async function testPerformanceOptimizer(): Promise<boolean> {
         console.log(`  ❌ Performance analysis failed`);
       }
     } catch (error) {
-      console.log(`  ❌ Performance analysis failed: ${error.message}`);
+      console.log(`  ❌ Performance analysis failed: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     await optimizer.stop();
@@ -326,7 +326,7 @@ async function testProductionValidator(): Promise<boolean> {
         console.log(`  ❌ Environment validation failed`);
       }
     } catch (error) {
-      console.log(`  ❌ Environment validation failed: ${error.message}`);
+      console.log(`  ❌ Environment validation failed: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     // Test 2: System Health Check
@@ -368,7 +368,7 @@ async function testProductionValidator(): Promise<boolean> {
         console.log(`  ❌ System health check failed`);
       }
     } catch (error) {
-      console.log(`  ❌ System health check failed: ${error.message}`);
+      console.log(`  ❌ System health check failed: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     // Test 3: Deployment Checklist Generation
@@ -404,7 +404,7 @@ async function testProductionValidator(): Promise<boolean> {
       }
     } catch (error) {
       console.log(
-        `  ❌ Deployment checklist generation failed: ${error.message}`,
+        `  ❌ Deployment checklist generation failed: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
 
@@ -460,7 +460,7 @@ async function testProductionValidator(): Promise<boolean> {
       }
     } catch (error) {
       console.log(
-        `  ❌ Validation categories analysis failed: ${error.message}`,
+        `  ❌ Validation categories analysis failed: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
 

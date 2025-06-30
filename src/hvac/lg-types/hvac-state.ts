@@ -114,6 +114,15 @@ export interface HVACLangGraphState {
     emergencyContactsNotified: boolean;
   };
 
+  // Last decision tracking
+  lastDecision?: {
+    action: string;
+    timestamp: Date;
+    reasoning: string;
+    confidence: number;
+    source: string;
+  };
+
   // Action results tracking (for specific nodes)
   lastActionResult?: {
     action: string;

@@ -27,12 +27,7 @@ export async function aiEvaluationNode(
   const startTime = performance.now();
 
   // Default logger if not provided
-  const log = logger || {
-    debug: () => {},
-    info: () => {},
-    warning: () => {},
-    error: () => {},
-  } as LoggerService;
+  const log = logger || new LoggerService('ai-eval');
 
   log.debug('🧠 [AI Evaluation] Starting AI-enhanced evaluation', {
     currentMode: state.currentMode,
@@ -254,7 +249,7 @@ function makeFallbackDecision(state: HVACLangGraphState): DecisionResult {
   }
 
   return {
-    action: action as string,
+    action: action as 'heating' | 'cooling' | 'idle' | 'off',
     confidence: 0.7,
     reasoning,
     factors: ['temperature_differential', 'system_mode', 'manual_override'],

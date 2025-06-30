@@ -11,8 +11,8 @@ import type {
   TemperatureReading,
   ScheduleItem,
   EnergyOptimizationResult,
-  EnergyUsageData,
-  WeatherData
+  EnergyUsageData as _EnergyUsageData,
+  WeatherData as _WeatherData
 } from '../ai/types/ai-types.ts';
 
 /**
@@ -278,20 +278,24 @@ export interface IPerformanceOptimizer {
  * Null object implementations for when features are disabled
  */
 export class NullHVACOptimizer implements IHVACOptimizer {
-  async optimizeDecision(context: HVACDecisionContext): Promise<EnergyOptimizationResult> {
-    return {
-      action: 'maintain',
-      targetTemp: context.targetTemp || 22,
-      overallScore: 0.5,
-      comfortScore: 0.5,
-      energyScore: 0.5,
-      costScore: 0.5,
-      reasoning: 'Default optimization - experimental optimizer disabled',
-    };
+  optimizeDecision(_context: HVACDecisionContext): Promise<EnergyOptimizationResult> {
+    return Promise.resolve({
+      recommendedSchedule: [],
+      projectedSavings: {
+        energy: 0,
+        cost: 0,
+        percentage: 0,
+      },
+      tradeoffs: {
+        comfortImpact: 'minimal',
+        convenienceImpact: 'minimal',
+      },
+      confidence: 0.0,
+    });
   }
   
-  async optimizeSchedule(schedule: ScheduleItem[]): Promise<ScheduleItem[]> {
-    return schedule;
+  optimizeSchedule(schedule: ScheduleItem[]): Promise<ScheduleItem[]> {
+    return Promise.resolve(schedule);
   }
   
   calculateEnergyScore(_context: HVACDecisionContext): number {
@@ -308,40 +312,40 @@ export class NullHVACOptimizer implements IHVACOptimizer {
 }
 
 export class NullPredictiveAnalyticsEngine implements IPredictiveAnalyticsEngine {
-  async predictIndoorTemperature(_hours: number): Promise<{
+  predictIndoorTemperature(_hours: number): Promise<{
     predictedValue: number;
     confidence: number;
     trend: string;
   }> {
-    return {
+    return Promise.resolve({
       predictedValue: 21,
       confidence: 0.5,
       trend: 'stable',
-    };
+    });
   }
   
-  async predictEnergyUsage(_hours: number): Promise<{
+  predictEnergyUsage(_hours: number): Promise<{
     predictedUsage: number;
     confidence: number;
     factors: Record<string, number>;
   }> {
-    return {
+    return Promise.resolve({
       predictedUsage: 2.0,
       confidence: 0.5,
       factors: {},
-    };
+    });
   }
   
-  async analyzeHistoricalPatterns(): Promise<{
+  analyzeHistoricalPatterns(): Promise<{
     seasonalTrends: Record<string, number>;
     dailyPatterns: Record<string, number>;
     correlations: Record<string, number>;
   }> {
-    return {
+    return Promise.resolve({
       seasonalTrends: {},
       dailyPatterns: {},
       correlations: {},
-    };
+    });
   }
   
   getAnalyticsSummary(): {

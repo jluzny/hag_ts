@@ -1120,7 +1120,10 @@ export class AdaptiveLearningEngine implements IAdaptiveLearningEngine {
       : undefined;
     
     const avgSatisfaction = interactions.length > 0
-      ? interactions.reduce((sum, i) => sum + (i.details.satisfaction || 0.5), 0) / interactions.length
+      ? interactions.reduce((sum, i) => {
+          const satisfaction = typeof i.details.satisfaction === 'number' ? i.details.satisfaction : 0.5;
+          return sum + satisfaction;
+        }, 0) / interactions.length
       : 0.5;
 
     return {

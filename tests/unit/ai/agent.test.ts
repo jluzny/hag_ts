@@ -10,7 +10,7 @@ import { HVACStateMachine } from '../../../src/hvac/state-machine.ts';
 import { HomeAssistantClient } from '../../../src/home-assistant/client.ts';
 import { ApplicationOptions, HvacOptions } from '../../../src/config/config.ts';
 import { HVACMode, LogLevel, SystemMode } from '../../../src/types/common.ts';
-import type { LoggerService } from '../../../src/core/logger.ts';
+import { LoggerService } from '../../../src/core/logger.ts';
 
 // Force disable AI tests for fast testing by removing API key
 Deno.env.delete('OPENAI_API_KEY');
@@ -27,27 +27,24 @@ interface MockHomeAssistantClient {
 }
 
 // Mock logger service
-class MockLoggerService implements LoggerService {
-  logger = {
-    info: () => {},
-    error: () => {},
-    debug: () => {},
-    warn: () => {}
-  };
+class MockLoggerService extends LoggerService {
+  constructor() {
+    super('TEST');
+  }
 
-  info(_message: string, _data?: Record<string, unknown>): void {
+  override info(_message: string, _data?: Record<string, unknown>): void {
     // console.log(`INFO: ${message}`);
   }
 
-  error(_message: string, _error?: unknown, _data?: Record<string, unknown>): void {
-    // console.log(`ERROR: ${message}`);
+  override error(_message: string, _error?: unknown, _data?: Record<string, unknown>): void {
+    // console.error(`ERROR: ${message}`, error);
   }
 
-  debug(_message: string, _data?: Record<string, unknown>): void {
+  override debug(_message: string, _data?: Record<string, unknown>): void {
     // console.log(`DEBUG: ${message}`);
   }
 
-  warning(_message: string, _data?: Record<string, unknown>): void {
+  override warning(_message: string, _data?: Record<string, unknown>): void {
     // console.log(`WARNING: ${message}`);
   }
 }

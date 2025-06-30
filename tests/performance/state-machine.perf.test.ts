@@ -9,7 +9,7 @@
 import { assertEquals } from '@std/assert';
 import { createContainer } from '../../src/core/container.ts';
 import { XStateHVACStateMachineAdapter } from '../../src/hvac/state-machine-xstate-adapter.ts';
-// Removed unused imports
+import { HVACMode } from '../../src/types/common.ts';
 
 interface BenchmarkResult {
   operation: string;
@@ -38,7 +38,7 @@ async function benchmarkOperation(
 
   // Force garbage collection if available
   if ((globalThis as { gc?: () => void }).gc) {
-    (globalThis as { gc?: () => void }).gc();
+    (globalThis as { gc?: () => void }).gc!();
   }
 
   const memoryBefore = (Deno as { memoryUsage?: () => { rss: number } }).memoryUsage?.() || { rss: 0 };
@@ -107,7 +107,7 @@ async function testXStatePerformance(): Promise<void> {
   );
 
   // Test 3: Manual Override
-  const modes = ['heat', 'cool', 'off', 'auto'] as const;
+  const modes = [HVACMode.HEAT, HVACMode.COOL, HVACMode.OFF, HVACMode.AUTO] as const;
   results.push(
     await benchmarkOperation(
       'Manual Override',
@@ -259,7 +259,7 @@ if (import.meta.main) {
 
     console.log('\n🎉 All performance tests passed!');
   } catch (error) {
-    console.error('❌ Performance test failed:', error.message);
+    console.error('❌ Performance test failed:', error instanceof Error ? error.message : String(error));
     Deno.exit(1);
   }
 }

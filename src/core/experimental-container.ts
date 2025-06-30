@@ -283,12 +283,9 @@ async function configureSystemMonitor(
       maxErrorRate: 5,
       maxMemoryUsage: 500,
       maxCpuUsage: 80,
+      maxNetworkLatency: 500,
       alertCooldown: 300,
       escalationThreshold: 3,
-      notificationChannels: [],
-      metricsRetentionDays: 7,
-      alertRetentionDays: 30,
-      batchSize: 100,
       ...config,
     };
     
@@ -329,19 +326,23 @@ async function configureSmartScheduler(
       occupancyDetectionEnabled: true,
       adaptScheduleFromLearning: true,
       learningInfluenceWeight: 0.7,
-      minTempSetpointDelta: 1.0,
-      maxSetpointChangePerHour: 3.0,
+      maxTempChange: 3.0,
+      minComfortScore: 0.7,
       emergencyOverrideEnabled: true,
-      debugMode: false,
       ...config,
     };
     
-    // Get dependencies
+    // Get dependencies - these may be null implementations
     const optimizer = container.get<IHVACOptimizer>(TYPES.HVACOptimizer);
     const analytics = container.get<IPredictiveAnalyticsEngine>(TYPES.PredictiveAnalyticsEngine);
     const learning = container.get<IAdaptiveLearningEngine>(TYPES.AdaptiveLearningEngine);
     
-    const scheduler = new SmartScheduler(schedulerConfig, logger, optimizer, analytics, learning);
+    // SmartScheduler expects concrete classes, but we may have interfaces
+    // Only pass if they're actual implementations, not null objects
+    const concreteOptimizer = (optimizer instanceof NullHVACOptimizer) ? undefined : optimizer as any;
+    const concreteAnalytics = (analytics instanceof NullPredictiveAnalyticsEngine) ? undefined : analytics as any;
+    
+    const scheduler = new SmartScheduler(schedulerConfig, logger, concreteOptimizer, concreteAnalytics, learning);
     
     container.bind({
       provide: TYPES.SmartScheduler,

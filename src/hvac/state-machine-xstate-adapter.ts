@@ -173,6 +173,6 @@ export class XStateHVACStateMachineAdapter implements IHVACStateMachine {
    * Send event to XState machine (XState specific method)
    */
   send(event: Record<string, unknown>): void {
-    this.xstateStateMachine.send(event);
+    this.xstateStateMachine.send(event as any);
   }
 }
