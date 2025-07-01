@@ -16,7 +16,11 @@ class MockLoggerService extends LoggerService {
   }
 
   override info(_message: string, _data?: Record<string, unknown>): void {}
-  override error(_message: string, _error?: unknown, _data?: Record<string, unknown>): void {}
+  override error(
+    _message: string,
+    _error?: unknown,
+    _data?: Record<string, unknown>,
+  ): void {}
   override debug(_message: string, _data?: Record<string, unknown>): void {}
   override warning(_message: string, _data?: Record<string, unknown>): void {}
 }

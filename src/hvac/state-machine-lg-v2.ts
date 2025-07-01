@@ -9,6 +9,7 @@ import { StateGraph } from '@langchain/langgraph';
 import {
   createDefaultHVACState,
   HVACLangGraphState,
+  type PerformanceMetrics,
 } from './lg-types/hvac-state.ts';
 import { evaluationNode } from './lg-nodes/evaluation-node.ts';
 import { HVACMode, SystemMode } from '../types/common.ts';
@@ -23,10 +24,11 @@ import type { LoggerService } from '../core/logger.ts';
  */
 export class HVACLangGraphStateMachineV2 {
   private graph: StateGraph<HVACLangGraphState>;
-  private compiledGraph: any;
+  private compiledGraph:
+    | { invoke: (state: unknown) => Promise<unknown> }
+    | null = null;
   private currentState: HVACLangGraphState;
   private isRunning: boolean = false;
-  private evaluationInterval?: number;
 
   constructor(
     private hvacOptions: HvacOptions,
@@ -68,11 +70,11 @@ export class HVACLangGraphStateMachineV2 {
           default: () => undefined,
         },
         systemMode: {
-          value: (x: any, y: any) => y || x,
+          value: (x: unknown, y: unknown) => y || x,
           default: () => this.hvacOptions.systemMode,
         },
         evaluationHistory: {
-          value: (x: any[], y: any[]) => y || x,
+          value: (x: unknown[], y: unknown[]) => y || x,
           default: () => [],
         },
         totalTransitions: {
@@ -80,27 +82,32 @@ export class HVACLangGraphStateMachineV2 {
           default: () => 0,
         },
         lastDecision: {
-          value: (x: any, y: any) => y || x,
+          value: (x: unknown, y: unknown) => y || x,
           default: () => null,
         },
       },
     };
 
+    // deno-lint-ignore no-explicit-any
     const graph = new StateGraph(stateSchema as any);
 
     // Single evaluation node that determines the next action
     graph.addNode('evaluate', evaluationNode);
 
     // Set entry point and terminate after evaluation
+    // deno-lint-ignore no-explicit-any
     (graph as any).setEntryPoint('evaluate');
+    // deno-lint-ignore no-explicit-any
     (graph as any).addEdge('evaluate', '__end__');
 
+    // deno-lint-ignore no-explicit-any
     return graph as any;
   }
 
   /**
    * Start the state machine
    */
+  // deno-lint-ignore require-await
   async start(): Promise<void> {
     if (this.isRunning) {
       this.logger.warning('🔄 [LangGraph v2] State machine already running');
@@ -108,7 +115,9 @@ export class HVACLangGraphStateMachineV2 {
     }
 
     try {
-      this.compiledGraph = this.graph.compile();
+      this.compiledGraph = this.graph.compile() as unknown as {
+        invoke: (state: unknown) => Promise<unknown>;
+      };
       this.isRunning = true;
 
       this.logger.info('🚀 [LangGraph v2] Starting HVAC state machine', {
@@ -117,11 +126,11 @@ export class HVACLangGraphStateMachineV2 {
         approach: 'event-driven',
       });
 
-      // Perform initial evaluation
-      await this.performEvaluation('STARTUP');
-
-      // Set up periodic evaluation (like XState)
-      this.setupPeriodicEvaluation();
+      // Pure event-driven approach (Rust HAG pattern) - no initial evaluation
+      this.logger.info('✅ [LangGraph v2] State machine ready for events', {
+        approach: 'pure_event_driven',
+        note: 'Will respond only to temperature events',
+      });
     } catch (error) {
       this.logger.error(
         '❌ [LangGraph v2] Failed to start state machine',
@@ -146,11 +155,6 @@ export class HVACLangGraphStateMachineV2 {
     });
 
     this.isRunning = false;
-
-    if (this.evaluationInterval) {
-      clearInterval(this.evaluationInterval);
-      this.evaluationInterval = undefined;
-    }
   }
 
   /**
@@ -181,7 +185,9 @@ export class HVACLangGraphStateMachineV2 {
       });
 
       // Execute graph once
-      const result = await this.compiledGraph.invoke(inputState);
+      const result = await this.compiledGraph.invoke(
+        inputState,
+      ) as HVACLangGraphState;
 
       const executionTime = performance.now() - startTime;
 
@@ -195,10 +201,15 @@ export class HVACLangGraphStateMachineV2 {
         ...result,
         totalTransitions: this.currentState.totalTransitions +
           (stateChanged ? 1 : 0),
-        lastEvaluationTime: now,
-        lastEvaluationTrigger: trigger,
-        lastEvaluationDuration: executionTime,
       };
+
+      // Store evaluation metadata separately (not part of the state interface)
+      // deno-lint-ignore no-explicit-any
+      (this.currentState as any).lastEvaluationTime = now;
+      // deno-lint-ignore no-explicit-any
+      (this.currentState as any).lastEvaluationTrigger = trigger;
+      // deno-lint-ignore no-explicit-any
+      (this.currentState as any).lastEvaluationDuration = executionTime;
 
       this.logger.info(
         `${stateChanged ? '🔄' : '✅'} [LangGraph v2] Evaluation completed`,
@@ -254,17 +265,6 @@ export class HVACLangGraphStateMachineV2 {
         this.logger.debug('🛑 [LangGraph v2] Would turn off HVAC');
         break;
     }
-  }
-
-  /**
-   * Set up periodic evaluation (every 5 minutes like XState)
-   */
-  private setupPeriodicEvaluation(): void {
-    this.evaluationInterval = setInterval(async () => {
-      if (this.isRunning) {
-        await this.performEvaluation('PERIODIC');
-      }
-    }, 300000); // 5 minutes
   }
 
   /**
@@ -390,10 +390,10 @@ export class HVACLangGraphStateMachineV2 {
       timestamp: Date;
       decision: string;
       reasoning: string;
-      conditions: any;
+      conditions: Record<string, unknown>;
       executionTimeMs: number;
     }>;
-    performanceMetrics: any;
+    performanceMetrics: PerformanceMetrics | Record<string, unknown>;
     totalTransitions: number;
     lastEvaluationTime?: Date;
     lastEvaluationTrigger?: string;
@@ -406,15 +406,18 @@ export class HVACLangGraphStateMachineV2 {
       canCool: this.currentState.systemMode !== SystemMode.HEAT_ONLY,
       systemMode: this.currentState.systemMode,
       evaluationHistory: this.currentState.evaluationHistory,
-      performanceMetrics: this.currentState.performanceMetrics || {
+      performanceMetrics: (this.currentState.performanceMetrics || {
         nodeExecutionTimes: {},
         totalTransitions: 0,
         lastEvaluationDuration: 0,
         avgDecisionTime: 0,
-      },
+      }) as unknown as Record<string, unknown>,
       totalTransitions: this.currentState.totalTransitions,
+      // deno-lint-ignore no-explicit-any
       lastEvaluationTime: (this.currentState as any).lastEvaluationTime,
+      // deno-lint-ignore no-explicit-any
       lastEvaluationTrigger: (this.currentState as any).lastEvaluationTrigger,
+      // deno-lint-ignore no-explicit-any
       lastEvaluationDuration: (this.currentState as any).lastEvaluationDuration,
     };
   }

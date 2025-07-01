@@ -7,10 +7,7 @@
 
 import { ChatOpenAI } from '@langchain/openai';
 import { HumanMessage, SystemMessage } from '@langchain/core/messages';
-import {
-  DecisionResult,
-  HVACDecisionContext,
-} from './types/ai-types.ts';
+import { DecisionResult, HVACDecisionContext } from './types/ai-types.ts';
 import { SystemMode } from '../types/common.ts';
 import type { LoggerService } from '../core/logger.ts';
 

@@ -5,7 +5,6 @@
  */
 
 import { injectable } from '@needle-di/core';
-import { delay } from '@std/async';
 import { LoggerService } from '../core/logger.ts';
 import type { ApplicationOptions, HvacOptions } from '../config/config.ts';
 import { HVACStateMachine } from './state-machine.ts';
@@ -14,6 +13,7 @@ import {
   HassEventImpl,
   HassServiceCallImpl,
 } from '../home-assistant/models.ts';
+import { eventBus } from '../core/event-system.ts';
 import {
   HassStateChangeData,
   HVACMode,
@@ -50,7 +50,6 @@ export interface HVACAgentInterface {
 @injectable()
 export class HVACController {
   private running = false;
-  private monitoringTask?: Promise<void>;
   private abortController?: AbortController;
 
   private hvacOptions: HvacOptions;
@@ -133,14 +132,13 @@ export class HVACController {
       await this.setupEventSubscriptions();
       this.logger.info('✅ Step 3 completed: Event subscriptions configured');
 
-      // Start monitoring loop
-      this.logger.info('🔄 Step 4: Starting monitoring loop', {
-        monitoringInterval: '5 minutes',
-        periodicEvaluation: true,
+      // Event-driven approach: no monitoring loop needed
+      this.logger.info('🔄 Step 4: Pure event-driven mode (Rust HAG pattern)', {
+        approach: 'event_only',
+        note: 'System responds only to Home Assistant state change events',
       });
       this.abortController = new AbortController();
-      this.monitoringTask = this.monitoringLoop();
-      this.logger.info('✅ Step 4 completed: Monitoring loop started');
+      this.logger.info('✅ Step 4 completed: Event-driven mode activated');
 
       // Trigger initial evaluation
       this.logger.info('🎯 Step 5: Triggering initial evaluation', {
@@ -184,26 +182,10 @@ export class HVACController {
 
     this.running = false;
 
-    // Cancel monitoring loop
+    // Event-driven cleanup
     if (this.abortController) {
-      this.logger.debug('🔄 Aborting monitoring loop');
+      this.logger.debug('🔄 Aborting event-driven operations');
       this.abortController.abort();
-    }
-
-    // Wait for monitoring task to complete
-    if (this.monitoringTask) {
-      try {
-        this.logger.debug('⏳ Waiting for monitoring task to complete');
-        await this.monitoringTask;
-        this.logger.debug('✅ Monitoring task completed');
-      } catch (error) {
-        // Ignore cancellation errors
-        if (error instanceof Error && error.name !== 'AbortError') {
-          this.logger.error('❌ Error stopping monitoring task', error);
-        } else {
-          this.logger.debug('✅ Monitoring task aborted successfully');
-        }
-      }
     }
 
     // Stop state machine
@@ -447,65 +429,90 @@ export class HVACController {
   }
 
   /**
-   * Setup Home Assistant event subscriptions
+   * Setup Home Assistant event subscriptions using event bus (Rust HAG pattern)
    */
   private async setupEventSubscriptions(): Promise<void> {
     // Subscribe to state change events
     await this.haClient.subscribeEvents('state_changed');
 
-    // Add event handler for temperature sensor changes
+    // Route Home Assistant events through event bus
     this.haClient.addEventHandler(
       'state_changed',
-      this.handleStateChange.bind(this),
+      (event: HassEventImpl) => {
+        eventBus.publish(event);
+      },
     );
 
-    this.logger.debug('Event subscriptions configured', {
-      tempSensor: this.hvacOptions.tempSensor,
+    // Setup subscribers for different entity types
+    this.setupTemperatureSensorSubscriber();
+    this.setupOutdoorSensorSubscriber();
+
+    this.logger.debug('Event bus subscriptions configured', {
+      watchedEntities: [
+        this.hvacOptions.tempSensor,
+        this.hvacOptions.outdoorSensor,
+      ],
+      approach: 'pure_event_driven_rust_pattern',
     });
   }
 
   /**
-   * Handle Home Assistant state change events
+   * Setup temperature sensor subscriber (indoor temperature)
    */
-  private async handleStateChange(event: HassEventImpl): Promise<void> {
-    this.logger.debug('📨 Received state change event', {
-      eventType: event.eventType,
-      timeFired: event.timeFired,
-      origin: event.origin,
+  private setupTemperatureSensorSubscriber(): void {
+    eventBus.subscribe('state_changed', (event) => {
+      if (!event.isStateChanged()) return;
+
+      const stateChange = event.getStateChangeData();
+      if (
+        !stateChange || stateChange.entityId !== this.hvacOptions.tempSensor
+      ) return;
+
+      this.logger.info('🌡️ Temperature sensor event received', {
+        entityId: stateChange.entityId,
+        newTemp: stateChange.newState?.state,
+        oldTemp: stateChange.oldState?.state,
+      });
+
+      this.processTemperatureEvent(stateChange).catch((error) => {
+        this.logger.error('Failed to process temperature event', error);
+      });
     });
+  }
 
-    if (!event.isStateChanged()) {
-      this.logger.debug('🔍 Event is not a state change, ignoring');
-      return;
-    }
+  /**
+   * Setup outdoor sensor subscriber
+   */
+  private setupOutdoorSensorSubscriber(): void {
+    eventBus.subscribe('state_changed', (event) => {
+      if (!event.isStateChanged()) return;
 
-    const stateChange = event.getStateChangeData();
-    if (!stateChange) {
-      this.logger.debug('🔍 No state change data available, ignoring');
-      return;
-    }
+      const stateChange = event.getStateChangeData();
+      if (
+        !stateChange || stateChange.entityId !== this.hvacOptions.outdoorSensor
+      ) return;
 
-    // Log all state changes for debugging, but only process temperature sensor
-    this.logger.debug('🔄 Entity state changed', {
-      entityId: stateChange.entityId,
-      oldState: stateChange.oldState?.state,
-      newState: stateChange.newState?.state,
-      isTemperatureSensor: stateChange.entityId === this.hvacOptions.tempSensor,
-      isOutdoorSensor: stateChange.entityId === this.hvacOptions.outdoorSensor,
+      this.logger.debug('🌡️ Outdoor sensor event received', {
+        entityId: stateChange.entityId,
+        newTemp: stateChange.newState?.state,
+      });
+
+      // Outdoor sensor changes don't trigger immediate evaluation
+      // They're used when indoor temperature events trigger evaluation
     });
+  }
 
-    if (stateChange.entityId !== this.hvacOptions.tempSensor) {
-      return;
-    }
-
+  /**
+   * Process temperature sensor events (Rust HAG pattern - event-driven only)
+   */
+  private async processTemperatureEvent(
+    stateChange: HassStateChangeData,
+  ): Promise<void> {
     if (!stateChange.newState) {
-      this.logger.warning(
-        '⚠️ Temperature sensor state change with no new state',
-        {
-          entityId: stateChange.entityId,
-          oldState: stateChange.oldState?.state,
-        },
-      );
+      this.logger.warning('⚠️ Temperature sensor event with no new state', {
+        entityId: stateChange.entityId,
+        oldState: stateChange.oldState?.state,
+      });
       return;
     }
 
@@ -517,10 +524,8 @@ export class HVACController {
         stateChange.oldState?.state && stateChange.newState?.state
           ? parseFloat(stateChange.newState.state) -
             parseFloat(stateChange.oldState.state)
-          : 'unknown',
+          : 'initial',
       currentHVACState: this.stateMachine?.getCurrentState(),
-      lastChanged: stateChange.newState.lastChanged,
-      attributes: stateChange.newState.attributes,
     });
 
     try {
@@ -530,23 +535,16 @@ export class HVACController {
           entityId: stateChange.entityId,
           newState: stateChange.newState.state,
           oldState: stateChange.oldState?.state,
-          timestamp: event.timeFired.toISOString(),
+          timestamp: new Date().toISOString(),
           attributes: stateChange.newState.attributes,
         };
 
-        this.logger.debug('🤖 Delegating temperature change to AI agent', {
-          eventData,
-          aiAgentAvailable: !!this.hvacAgent,
-        });
-
+        this.logger.debug('🤖 Delegating temperature change to AI agent');
         await this.hvacAgent.processTemperatureChange(eventData);
-
         this.logger.debug('✅ AI agent processed temperature change');
       } else {
         // Use direct state machine logic
-        this.logger.debug(
-          '⚙️ Processing temperature change with direct state machine logic',
-        );
+        this.logger.debug('⚙️ Processing with direct state machine logic');
         await this.processStateChangeDirect(stateChange);
         this.logger.debug('✅ Direct state machine processing completed');
       }
@@ -685,78 +683,6 @@ export class HVACController {
   }
 
   /**
-   * Monitoring loop for periodic evaluation
-   */
-  private async monitoringLoop(): Promise<void> {
-    const interval = 300000; // 5 minutes
-    let loopIteration = 0;
-
-    this.logger.info('🔄 Starting HVAC monitoring loop', {
-      intervalMinutes: interval / 60000,
-      intervalMs: interval,
-      startTime: new Date().toISOString(),
-    });
-
-    try {
-      while (!this.abortController?.signal.aborted) {
-        const loopStart = Date.now();
-        loopIteration++;
-
-        try {
-          this.logger.debug('🔍 Monitoring loop iteration', {
-            iteration: loopIteration,
-            startTime: new Date().toISOString(),
-            currentState: this.stateMachine?.getCurrentState(),
-            haConnected: this.haClient?.connected,
-          });
-
-          await this.performEvaluation();
-
-          const loopTime = Date.now() - loopStart;
-
-          this.logger.debug('✅ Monitoring loop iteration completed', {
-            iteration: loopIteration,
-            evaluationTimeMs: loopTime,
-            nextEvaluationIn: interval / 1000 + 's',
-          });
-
-          await delay(interval, { signal: this.abortController!.signal });
-        } catch (error) {
-          if (error instanceof Error && error.name === 'AbortError') {
-            this.logger.debug('🛑 Monitoring loop aborted', {
-              iteration: loopIteration,
-              reason: 'abort_signal',
-            });
-            break;
-          }
-
-          const loopTime = Date.now() - loopStart;
-
-          this.logger.error('❌ Error in monitoring loop', error, {
-            iteration: loopIteration,
-            evaluationTimeMs: loopTime,
-            errorType: error instanceof Error ? error.name : 'Unknown',
-            retryIn: '1 minute',
-          });
-
-          await delay(60000, { signal: this.abortController!.signal }); // Wait 1 minute before retry
-        }
-      }
-    } catch (error) {
-      this.logger.error('❌ Monitoring loop failed catastrophically', error, {
-        totalIterations: loopIteration,
-        errorType: error instanceof Error ? error.name : 'Unknown',
-      });
-    } finally {
-      this.logger.info('🛑 Monitoring loop stopped', {
-        totalIterations: loopIteration,
-        finalState: this.stateMachine?.getCurrentState(),
-        stopTime: new Date().toISOString(),
-      });
-    }
-  }
-
-  /**
    * Perform periodic HVAC evaluation
    */
   private async performEvaluation(): Promise<void> {
@@ -831,31 +757,84 @@ export class HVACController {
   }
 
   /**
-   * Trigger initial evaluation on startup
+   * Trigger initial temperature state reading (following Rust HAG pattern)
+   * Both AI and non-AI paths follow event-driven approach
    */
   private async triggerInitialEvaluation(): Promise<void> {
-    this.logger.info('Triggering initial HVAC evaluation');
+    this.logger.info(
+      '🎯 Triggering initial temperature state reading (Rust HAG pattern)',
+      {
+        tempSensor: this.hvacOptions.tempSensor,
+        aiEnabled: this.appOptions.useAi,
+        approach: 'event_driven_only',
+        note: 'Will request current state to trigger initial event processing',
+      },
+    );
 
     try {
-      if (this.appOptions.useAi && this.hvacAgent) {
-        const initialEvent = {
-          entityId: this.hvacOptions.tempSensor,
-          newState: 'initial_check',
-          oldState: undefined,
-          timestamp: new Date().toISOString(),
-        };
-
-        await this.hvacAgent.processTemperatureChange(initialEvent);
-      } else {
-        await this.evaluateStateMachineDirect();
-      }
+      // Follow Rust pattern for both AI and non-AI: trigger a state read that will generate an event
+      // This is equivalent to publish_state_oneshot() in Rust HAG
+      this.logger.debug(
+        '⚙️ Using event-driven pattern for initial temperature reading',
+      );
+      await this.publishStateOneshot(this.hvacOptions.tempSensor);
     } catch (error) {
-      this.logger.warning('Initial evaluation failed', { error });
+      this.logger.warning('❌ Initial state trigger failed', { error });
     }
   }
 
   /**
-   * Evaluate state machine directly without AI
+   * Trigger a state read to generate initial event (Rust HAG pattern)
+   * Equivalent to publish_state_oneshot() in Rust
+   */
+  private async publishStateOneshot(entityId: string): Promise<void> {
+    this.logger.info('📡 Publishing state oneshot request', {
+      entityId,
+    });
+
+    try {
+      // Read current state and manually trigger a state change event
+      const currentState = await this.haClient.getState(entityId);
+
+      // Create a synthetic state change event to trigger the event processing pipeline
+      // This mimics what Home Assistant would send via WebSocket
+      const eventData = {
+        entity_id: entityId,
+        old_state: null,
+        new_state: {
+          entity_id: entityId,
+          state: currentState.state,
+          attributes: currentState.attributes,
+          last_changed: currentState.lastChanged.toISOString(),
+          last_updated: currentState.lastUpdated.toISOString(),
+        },
+      };
+
+      const syntheticEvent = new HassEventImpl(
+        'state_changed',
+        eventData,
+        'local',
+        new Date(),
+      );
+
+      this.logger.debug('✅ Triggering synthetic state change event', {
+        entityId,
+        currentValue: currentState.state,
+      });
+
+      // Process the synthetic event through the event bus
+      eventBus.publish(syntheticEvent);
+    } catch (error) {
+      this.logger.error('❌ Failed to publish state oneshot', error, {
+        entityId,
+        errorType: error instanceof Error ? error.name : 'Unknown',
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Evaluate state machine directly without AI (legacy method - now event-only)
    */
   private async evaluateStateMachineDirect(): Promise<void> {
     const evaluationStart = Date.now();
@@ -958,11 +937,9 @@ export class HVACController {
       this.logger.debug('✅ State machine temperatures updated', {
         newState: stateAfterUpdate,
         temperatures: { indoor: indoorTemp, outdoor: outdoorTemp },
+        note:
+          'State machine populated with initial data - waiting for temperature events to trigger changes',
       });
-
-      // Evaluate and execute actions
-      this.logger.debug('🎯 Triggering evaluation and execution');
-      await this.evaluateAndExecute();
 
       const totalEvaluationTime = Date.now() - evaluationStart;
 

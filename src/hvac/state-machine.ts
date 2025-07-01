@@ -403,10 +403,6 @@ export function createHVACMachine(
             target: 'manualOverride',
           },
         },
-        after: {
-          // Re-evaluate every 5 minutes during heating
-          300000: 'evaluating',
-        },
       },
       cooling: {
         entry: ['logStateEntry', 'logCoolingStart'],
@@ -428,10 +424,6 @@ export function createHVACMachine(
           MANUAL_OVERRIDE: {
             target: 'manualOverride',
           },
-        },
-        after: {
-          // Re-evaluate every 5 minutes during cooling
-          300000: 'evaluating',
         },
       },
       defrosting: {
@@ -461,10 +453,6 @@ export function createHVACMachine(
           UPDATE_TEMPERATURES: {
             actions: 'updateTemperatures',
           },
-        },
-        after: {
-          // Return to auto mode after 30 minutes
-          1800000: 'evaluating',
         },
       },
     },

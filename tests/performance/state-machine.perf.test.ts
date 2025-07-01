@@ -41,7 +41,9 @@ async function benchmarkOperation(
     (globalThis as { gc?: () => void }).gc!();
   }
 
-  const memoryBefore = (Deno as { memoryUsage?: () => { rss: number } }).memoryUsage?.() || { rss: 0 };
+  const memoryBefore =
+    (Deno as { memoryUsage?: () => { rss: number } }).memoryUsage?.() ||
+    { rss: 0 };
   const startTime = performance.now();
 
   // Benchmark iterations
@@ -53,7 +55,9 @@ async function benchmarkOperation(
   }
 
   const totalTime = performance.now() - startTime;
-  const memoryAfter = (Deno as { memoryUsage?: () => { rss: number } }).memoryUsage?.() || { rss: 0 };
+  const memoryAfter =
+    (Deno as { memoryUsage?: () => { rss: number } }).memoryUsage?.() ||
+    { rss: 0 };
 
   return {
     operation: name,
@@ -100,14 +104,22 @@ async function testXStatePerformance(): Promise<void> {
     await benchmarkOperation(
       'Temperature Update',
       async () => {
-        await stateMachine.handleTemperatureChange('indoor_sensor', 20 + Math.random() * 10);
+        await stateMachine.handleTemperatureChange(
+          'indoor_sensor',
+          20 + Math.random() * 10,
+        );
       },
       1000,
     ),
   );
 
   // Test 3: Manual Override
-  const modes = [HVACMode.HEAT, HVACMode.COOL, HVACMode.OFF, HVACMode.AUTO] as const;
+  const modes = [
+    HVACMode.HEAT,
+    HVACMode.COOL,
+    HVACMode.OFF,
+    HVACMode.AUTO,
+  ] as const;
   results.push(
     await benchmarkOperation(
       'Manual Override',
@@ -215,7 +227,10 @@ async function testConcurrentOperations(): Promise<void> {
   for (let i = 0; i < concurrentOps; i++) {
     promises.push(
       Promise.all([
-        stateMachine.handleTemperatureChange('indoor_sensor', 20 + Math.random() * 5),
+        stateMachine.handleTemperatureChange(
+          'indoor_sensor',
+          20 + Math.random() * 5,
+        ),
         stateMachine.getStatus(),
         Promise.resolve(stateMachine.evaluateConditions()),
       ]),
@@ -259,7 +274,10 @@ if (import.meta.main) {
 
     console.log('\n🎉 All performance tests passed!');
   } catch (error) {
-    console.error('❌ Performance test failed:', error instanceof Error ? error.message : String(error));
+    console.error(
+      '❌ Performance test failed:',
+      error instanceof Error ? error.message : String(error),
+    );
     Deno.exit(1);
   }
 }

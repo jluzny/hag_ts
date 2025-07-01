@@ -22,8 +22,8 @@ import { LangGraphHVACStateMachineAdapter } from '../hvac/state-machine-lg-adapt
 import { IHVACStateMachine } from '../hvac/state-machine-interface.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
 import {
-  type ExperimentalFeatures,
   defaultExperimentalFeatures,
+  type ExperimentalFeatures,
 } from './experimental-features.ts';
 import { configureExperimentalFeatures } from './experimental-container.ts';
 
@@ -320,11 +320,11 @@ export class ApplicationContainer {
     }
 
     const logger = new LoggerService('HAG.experimental');
-    
+
     // Get experimental features configuration from settings
     const rawFeatures = this.settings.appOptions.experimentalFeatures;
     let experimentalFeatures = defaultExperimentalFeatures;
-    
+
     if (rawFeatures) {
       if (Array.isArray(rawFeatures)) {
         // Legacy string array format - convert to structured format
@@ -334,15 +334,21 @@ export class ApplicationContainer {
             enabled: (rawFeatures as string[]).includes('adaptive-learning'),
           },
         };
-        logger.debug('🔄 Converted legacy experimental features format', { features: rawFeatures });
+        logger.debug('🔄 Converted legacy experimental features format', {
+          features: rawFeatures,
+        });
       } else {
         // New structured format
         experimentalFeatures = rawFeatures as ExperimentalFeatures;
       }
     }
-    
+
     // Configure experimental features using the dedicated container
-    await configureExperimentalFeatures(this.container, experimentalFeatures, logger);
+    await configureExperimentalFeatures(
+      this.container,
+      experimentalFeatures,
+      logger,
+    );
   }
 
   /**

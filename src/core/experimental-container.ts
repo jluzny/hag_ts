@@ -1,6 +1,6 @@
 /**
  * Experimental features container configuration
- * 
+ *
  * Extends the base container with experimental components when enabled.
  */
 
@@ -12,15 +12,12 @@ import {
   type IAdaptiveLearningEngine,
   type IHVACOptimizer,
   type IPredictiveAnalyticsEngine,
-  type ISystemMonitor,
-  type ISmartScheduler,
-  type IPerformanceOptimizer,
   NullAdaptiveLearningEngine,
   NullHVACOptimizer,
-  NullPredictiveAnalyticsEngine,
-  NullSystemMonitor,
-  NullSmartScheduler,
   NullPerformanceOptimizer,
+  NullPredictiveAnalyticsEngine,
+  NullSmartScheduler,
+  NullSystemMonitor,
 } from './experimental-features.ts';
 
 /**
@@ -43,7 +40,11 @@ export async function configureExperimentalFeatures(
   // Configure Adaptive Learning Engine
   if (features.adaptiveLearning.enabled) {
     logger.info('🧠 Enabling adaptive learning engine');
-    await configureAdaptiveLearning(container, features.adaptiveLearning.config || {}, logger);
+    await configureAdaptiveLearning(
+      container,
+      features.adaptiveLearning.config || {},
+      logger,
+    );
   } else {
     logger.debug('🚫 Adaptive learning disabled - using null implementation');
     container.bind({
@@ -55,7 +56,11 @@ export async function configureExperimentalFeatures(
   // Configure HVAC Optimizer
   if (features.hvacOptimization?.enabled) {
     logger.info('⚡ Enabling HVAC optimization engine');
-    await configureHVACOptimizer(container, features.hvacOptimization.config || {}, logger);
+    await configureHVACOptimizer(
+      container,
+      features.hvacOptimization.config || {},
+      logger,
+    );
   } else {
     logger.debug('🚫 HVAC optimization disabled - using null implementation');
     container.bind({
@@ -67,9 +72,15 @@ export async function configureExperimentalFeatures(
   // Configure Predictive Analytics Engine
   if (features.predictiveAnalytics?.enabled) {
     logger.info('🔮 Enabling predictive analytics engine');
-    await configurePredictiveAnalytics(container, features.predictiveAnalytics.config || {}, logger);
+    await configurePredictiveAnalytics(
+      container,
+      features.predictiveAnalytics.config || {},
+      logger,
+    );
   } else {
-    logger.debug('🚫 Predictive analytics disabled - using null implementation');
+    logger.debug(
+      '🚫 Predictive analytics disabled - using null implementation',
+    );
     container.bind({
       provide: TYPES.PredictiveAnalyticsEngine,
       useValue: new NullPredictiveAnalyticsEngine(),
@@ -79,7 +90,11 @@ export async function configureExperimentalFeatures(
   // Configure System Monitor
   if (features.systemMonitoring?.enabled) {
     logger.info('📊 Enabling system monitoring');
-    await configureSystemMonitor(container, features.systemMonitoring.config || {}, logger);
+    await configureSystemMonitor(
+      container,
+      features.systemMonitoring.config || {},
+      logger,
+    );
   } else {
     logger.debug('🚫 System monitoring disabled - using null implementation');
     container.bind({
@@ -91,7 +106,11 @@ export async function configureExperimentalFeatures(
   // Configure Smart Scheduler
   if (features.smartScheduling?.enabled) {
     logger.info('🗓️ Enabling smart scheduling');
-    await configureSmartScheduler(container, features.smartScheduling.config || {}, logger);
+    await configureSmartScheduler(
+      container,
+      features.smartScheduling.config || {},
+      logger,
+    );
   } else {
     logger.debug('🚫 Smart scheduling disabled - using null implementation');
     container.bind({
@@ -103,9 +122,15 @@ export async function configureExperimentalFeatures(
   // Configure Performance Optimizer
   if (features.performanceOptimization?.enabled) {
     logger.info('🚀 Enabling performance optimization');
-    await configurePerformanceOptimizer(container, features.performanceOptimization.config || {}, logger);
+    await configurePerformanceOptimizer(
+      container,
+      features.performanceOptimization.config || {},
+      logger,
+    );
   } else {
-    logger.debug('🚫 Performance optimization disabled - using null implementation');
+    logger.debug(
+      '🚫 Performance optimization disabled - using null implementation',
+    );
     container.bind({
       provide: TYPES.PerformanceOptimizer,
       useValue: new NullPerformanceOptimizer(),
@@ -150,7 +175,7 @@ async function configureAdaptiveLearning(
 
     // Create and register the learning engine
     const learningEngine = new AdaptiveLearningEngine(learningConfig, logger);
-    
+
     container.bind({
       provide: TYPES.AdaptiveLearningEngine,
       useValue: learningEngine,
@@ -159,7 +184,7 @@ async function configureAdaptiveLearning(
     logger.info('✅ Adaptive learning engine configured successfully');
   } catch (error) {
     logger.error('❌ Failed to configure adaptive learning engine', { error });
-    
+
     // Fallback to null implementation
     logger.warning('🔄 Falling back to null adaptive learning implementation');
     container.bind({
@@ -178,8 +203,10 @@ async function configureHVACOptimizer(
   logger: LoggerService,
 ): Promise<void> {
   try {
-    const { HVACOptimizer } = await import('../../experimental/src/ai/optimization/hvac-optimizer.ts');
-    
+    const { HVACOptimizer } = await import(
+      '../../experimental/src/ai/optimization/hvac-optimizer.ts'
+    );
+
     const optimizerConfig = {
       comfortWeight: 0.6,
       energyWeight: 0.3,
@@ -204,14 +231,14 @@ async function configureHVACOptimizer(
       updateInterval: 15,
       ...config,
     };
-    
+
     const optimizer = new HVACOptimizer(optimizerConfig, logger);
-    
+
     container.bind({
       provide: TYPES.HVACOptimizer,
       useValue: optimizer,
     });
-    
+
     logger.info('✅ HVAC optimizer configured successfully');
   } catch (error) {
     logger.error('❌ Failed to configure HVAC optimizer', { error });
@@ -231,8 +258,10 @@ async function configurePredictiveAnalytics(
   logger: LoggerService,
 ): Promise<void> {
   try {
-    const { PredictiveAnalyticsEngine } = await import('../../experimental/src/ai/predictive/analytics-engine.ts');
-    
+    const { PredictiveAnalyticsEngine } = await import(
+      '../../experimental/src/ai/predictive/analytics-engine.ts'
+    );
+
     const analyticsConfig = {
       maxHistoricalDays: 30,
       minDataPointsForPrediction: 24,
@@ -247,17 +276,19 @@ async function configurePredictiveAnalytics(
       enableWeatherIntegration: true,
       ...config,
     };
-    
+
     const analytics = new PredictiveAnalyticsEngine(analyticsConfig, logger);
-    
+
     container.bind({
       provide: TYPES.PredictiveAnalyticsEngine,
       useValue: analytics,
     });
-    
+
     logger.info('✅ Predictive analytics engine configured successfully');
   } catch (error) {
-    logger.error('❌ Failed to configure predictive analytics engine', { error });
+    logger.error('❌ Failed to configure predictive analytics engine', {
+      error,
+    });
     container.bind({
       provide: TYPES.PredictiveAnalyticsEngine,
       useValue: new NullPredictiveAnalyticsEngine(),
@@ -274,8 +305,10 @@ async function configureSystemMonitor(
   logger: LoggerService,
 ): Promise<void> {
   try {
-    const { SystemMonitor } = await import('../../experimental/src/ai/monitoring/system-monitor.ts');
-    
+    const { SystemMonitor } = await import(
+      '../../experimental/src/ai/monitoring/system-monitor.ts'
+    );
+
     const monitorConfig = {
       enabled: true,
       maxDecisionLatency: 1000,
@@ -288,14 +321,14 @@ async function configureSystemMonitor(
       escalationThreshold: 3,
       ...config,
     };
-    
+
     const monitor = new SystemMonitor(monitorConfig, logger);
-    
+
     container.bind({
       provide: TYPES.SystemMonitor,
       useValue: monitor,
     });
-    
+
     logger.info('✅ System monitor configured successfully');
   } catch (error) {
     logger.error('❌ Failed to configure system monitor', { error });
@@ -315,8 +348,10 @@ async function configureSmartScheduler(
   logger: LoggerService,
 ): Promise<void> {
   try {
-    const { SmartScheduler } = await import('../../experimental/src/ai/scheduling/smart-scheduler.ts');
-    
+    const { SmartScheduler } = await import(
+      '../../experimental/src/ai/scheduling/smart-scheduler.ts'
+    );
+
     const schedulerConfig = {
       defaultLookaheadHours: 24,
       maxConcurrentEvents: 10,
@@ -331,24 +366,41 @@ async function configureSmartScheduler(
       emergencyOverrideEnabled: true,
       ...config,
     };
-    
+
     // Get dependencies - these may be null implementations
     const optimizer = container.get<IHVACOptimizer>(TYPES.HVACOptimizer);
-    const analytics = container.get<IPredictiveAnalyticsEngine>(TYPES.PredictiveAnalyticsEngine);
-    const learning = container.get<IAdaptiveLearningEngine>(TYPES.AdaptiveLearningEngine);
-    
+    const analytics = container.get<IPredictiveAnalyticsEngine>(
+      TYPES.PredictiveAnalyticsEngine,
+    );
+    const learning = container.get<IAdaptiveLearningEngine>(
+      TYPES.AdaptiveLearningEngine,
+    );
+
     // SmartScheduler expects concrete classes, but we may have interfaces
     // Only pass if they're actual implementations, not null objects
-    const concreteOptimizer = (optimizer instanceof NullHVACOptimizer) ? undefined : optimizer as any;
-    const concreteAnalytics = (analytics instanceof NullPredictiveAnalyticsEngine) ? undefined : analytics as any;
-    
-    const scheduler = new SmartScheduler(schedulerConfig, logger, concreteOptimizer, concreteAnalytics, learning);
-    
+    const concreteOptimizer = (optimizer instanceof NullHVACOptimizer)
+      ? undefined
+      : optimizer;
+    const concreteAnalytics =
+      (analytics instanceof NullPredictiveAnalyticsEngine)
+        ? undefined
+        : analytics;
+
+    const scheduler = new SmartScheduler(
+      schedulerConfig,
+      logger,
+      // deno-lint-ignore no-explicit-any
+      concreteOptimizer as any,
+      // deno-lint-ignore no-explicit-any
+      concreteAnalytics as any,
+      learning,
+    );
+
     container.bind({
       provide: TYPES.SmartScheduler,
       useValue: scheduler,
     });
-    
+
     logger.info('✅ Smart scheduler configured successfully');
   } catch (error) {
     logger.error('❌ Failed to configure smart scheduler', { error });
@@ -368,8 +420,10 @@ async function configurePerformanceOptimizer(
   logger: LoggerService,
 ): Promise<void> {
   try {
-    const { PerformanceOptimizer } = await import('../../experimental/src/ai/optimization/performance-optimizer.ts');
-    
+    const { PerformanceOptimizer } = await import(
+      '../../experimental/src/ai/optimization/performance-optimizer.ts'
+    );
+
     const perfConfig = {
       maxMemoryUsage: 512,
       gcThreshold: 400,
@@ -396,14 +450,14 @@ async function configurePerformanceOptimizer(
       },
       ...config,
     };
-    
+
     const perfOptimizer = new PerformanceOptimizer(perfConfig, logger);
-    
+
     container.bind({
       provide: TYPES.PerformanceOptimizer,
       useValue: perfOptimizer,
     });
-    
+
     logger.info('✅ Performance optimizer configured successfully');
   } catch (error) {
     logger.error('❌ Failed to configure performance optimizer', { error });
@@ -430,7 +484,9 @@ export async function checkExperimentalAvailability(): Promise<{
 
   try {
     // Try to import adaptive learning
-    await import('../../experimental/src/ai/learning/adaptive-learning-engine.ts');
+    await import(
+      '../../experimental/src/ai/learning/adaptive-learning-engine.ts'
+    );
     availability.adaptiveLearning = true;
   } catch {
     // Module not available

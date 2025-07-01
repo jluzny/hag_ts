@@ -1,18 +1,18 @@
 /**
  * Experimental Features Interface
- * 
+ *
  * Defines interfaces for optional experimental components that can be
  * injected into the system when experimental features are enabled.
  */
 
-import type { 
-  HVACDecisionContext, 
-  UserInteraction, 
-  TemperatureReading,
-  ScheduleItem,
+import type {
   EnergyOptimizationResult,
   EnergyUsageData as _EnergyUsageData,
-  WeatherData as _WeatherData
+  HVACDecisionContext,
+  ScheduleItem,
+  TemperatureReading,
+  UserInteraction,
+  WeatherData as _WeatherData,
 } from '../ai/types/ai-types.ts';
 
 /**
@@ -141,7 +141,9 @@ export class NullAdaptiveLearningEngine implements IAdaptiveLearningEngine {
  * Interface for HVAC optimization functionality
  */
 export interface IHVACOptimizer {
-  optimizeDecision(context: HVACDecisionContext): Promise<EnergyOptimizationResult>;
+  optimizeDecision(
+    context: HVACDecisionContext,
+  ): Promise<EnergyOptimizationResult>;
   optimizeSchedule(schedule: ScheduleItem[]): Promise<ScheduleItem[]>;
   calculateEnergyScore(context: HVACDecisionContext): number;
   calculateComfortScore(context: HVACDecisionContext): number;
@@ -186,7 +188,7 @@ export interface ISystemMonitor {
     healthStatus: string;
     errorRate: number;
   }): void;
-  
+
   triggerAlert(alert: {
     id: string;
     severity: 'info' | 'warning' | 'critical';
@@ -194,7 +196,7 @@ export interface ISystemMonitor {
     description: string;
     component: string;
   }): void;
-  
+
   getDashboard(): {
     overview: {
       healthStatus: string;
@@ -223,7 +225,7 @@ export interface ISystemMonitor {
 export interface ISmartScheduler {
   start(): Promise<void>;
   stop(): Promise<void>;
-  
+
   addScheduleRule(rule: {
     id: string;
     name: string;
@@ -232,16 +234,16 @@ export interface ISmartScheduler {
     triggers: Record<string, unknown>;
     actions: Record<string, unknown>;
   }): void;
-  
+
   removeScheduleRule(ruleId: string): boolean;
   generateSchedule(horizonHours?: number): Promise<ScheduleItem[]>;
-  
+
   triggerAutomation(
     eventType: string,
     context: HVACDecisionContext,
-    reason: string
+    reason: string,
   ): Promise<{ id: string; status: string } | null>;
-  
+
   getScheduleStatus(): {
     isRunning: boolean;
     scheduleItems: number;
@@ -257,20 +259,20 @@ export interface ISmartScheduler {
 export interface IPerformanceOptimizer {
   start(): Promise<void>;
   stop(): Promise<void>;
-  
+
   optimizeMemoryUsage(): Promise<{
     memoryFreed: number;
     cacheHitRate: number;
     optimizationsApplied: number;
   }>;
-  
+
   getPerformanceMetrics(): {
     memoryUsage: number;
     cpuUsage: number;
     cacheEfficiency: number;
     responseTimes: Record<string, number>;
   };
-  
+
   scheduleOptimization(intervalMinutes: number): void;
 }
 
@@ -278,7 +280,9 @@ export interface IPerformanceOptimizer {
  * Null object implementations for when features are disabled
  */
 export class NullHVACOptimizer implements IHVACOptimizer {
-  optimizeDecision(_context: HVACDecisionContext): Promise<EnergyOptimizationResult> {
+  optimizeDecision(
+    _context: HVACDecisionContext,
+  ): Promise<EnergyOptimizationResult> {
     return Promise.resolve({
       recommendedSchedule: [],
       projectedSavings: {
@@ -293,25 +297,26 @@ export class NullHVACOptimizer implements IHVACOptimizer {
       confidence: 0.0,
     });
   }
-  
+
   optimizeSchedule(schedule: ScheduleItem[]): Promise<ScheduleItem[]> {
     return Promise.resolve(schedule);
   }
-  
+
   calculateEnergyScore(_context: HVACDecisionContext): number {
     return 0.5;
   }
-  
+
   calculateComfortScore(_context: HVACDecisionContext): number {
     return 0.5;
   }
-  
+
   calculateCostScore(_context: HVACDecisionContext): number {
     return 0.5;
   }
 }
 
-export class NullPredictiveAnalyticsEngine implements IPredictiveAnalyticsEngine {
+export class NullPredictiveAnalyticsEngine
+  implements IPredictiveAnalyticsEngine {
   predictIndoorTemperature(_hours: number): Promise<{
     predictedValue: number;
     confidence: number;
@@ -323,7 +328,7 @@ export class NullPredictiveAnalyticsEngine implements IPredictiveAnalyticsEngine
       trend: 'stable',
     });
   }
-  
+
   predictEnergyUsage(_hours: number): Promise<{
     predictedUsage: number;
     confidence: number;
@@ -335,7 +340,7 @@ export class NullPredictiveAnalyticsEngine implements IPredictiveAnalyticsEngine
       factors: {},
     });
   }
-  
+
   analyzeHistoricalPatterns(): Promise<{
     seasonalTrends: Record<string, number>;
     dailyPatterns: Record<string, number>;
@@ -347,7 +352,7 @@ export class NullPredictiveAnalyticsEngine implements IPredictiveAnalyticsEngine
       correlations: {},
     });
   }
-  
+
   getAnalyticsSummary(): {
     dataPoints: Record<string, number>;
     accuracy: Record<string, number>;
@@ -372,7 +377,7 @@ export class NullSystemMonitor implements ISystemMonitor {
   }): void {
     // No-op
   }
-  
+
   triggerAlert(_alert: {
     id: string;
     severity: 'info' | 'warning' | 'critical';
@@ -382,7 +387,7 @@ export class NullSystemMonitor implements ISystemMonitor {
   }): void {
     // No-op
   }
-  
+
   getDashboard(): {
     overview: {
       healthStatus: string;
@@ -424,11 +429,11 @@ export class NullSmartScheduler implements ISmartScheduler {
   async start(): Promise<void> {
     // No-op
   }
-  
+
   async stop(): Promise<void> {
     // No-op
   }
-  
+
   addScheduleRule(_rule: {
     id: string;
     name: string;
@@ -439,23 +444,23 @@ export class NullSmartScheduler implements ISmartScheduler {
   }): void {
     // No-op
   }
-  
+
   removeScheduleRule(_ruleId: string): boolean {
     return false;
   }
-  
-  async generateSchedule(_horizonHours?: number): Promise<ScheduleItem[]> {
-    return [];
+
+  generateSchedule(_horizonHours?: number): Promise<ScheduleItem[]> {
+    return Promise.resolve([]);
   }
-  
-  async triggerAutomation(
+
+  triggerAutomation(
     _eventType: string,
     _context: HVACDecisionContext,
-    _reason: string
+    _reason: string,
   ): Promise<{ id: string; status: string } | null> {
-    return null;
+    return Promise.resolve(null);
   }
-  
+
   getScheduleStatus(): {
     isRunning: boolean;
     scheduleItems: number;
@@ -477,23 +482,23 @@ export class NullPerformanceOptimizer implements IPerformanceOptimizer {
   async start(): Promise<void> {
     // No-op
   }
-  
+
   async stop(): Promise<void> {
     // No-op
   }
-  
-  async optimizeMemoryUsage(): Promise<{
+
+  optimizeMemoryUsage(): Promise<{
     memoryFreed: number;
     cacheHitRate: number;
     optimizationsApplied: number;
   }> {
-    return {
+    return Promise.resolve({
       memoryFreed: 0,
       cacheHitRate: 0.5,
       optimizationsApplied: 0,
-    };
+    });
   }
-  
+
   getPerformanceMetrics(): {
     memoryUsage: number;
     cpuUsage: number;
@@ -507,7 +512,7 @@ export class NullPerformanceOptimizer implements IPerformanceOptimizer {
       responseTimes: {},
     };
   }
-  
+
   scheduleOptimization(_intervalMinutes: number): void {
     // No-op
   }

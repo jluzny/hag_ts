@@ -15,7 +15,7 @@ export interface ValidationResult {
   check: string;
   status: 'pass' | 'warning' | 'fail';
   message: string;
-  details?: any;
+  details?: Record<string, unknown>;
   recommendation?: string;
   critical: boolean;
 }
@@ -158,6 +158,7 @@ export class ProductionValidator {
   /**
    * Validate environment requirements
    */
+  // deno-lint-ignore require-await
   private async validateEnvironment(): Promise<ValidationResult[]> {
     const results: ValidationResult[] = [];
 
@@ -192,7 +193,9 @@ export class ProductionValidator {
         check: 'Memory Availability',
         status: 'fail',
         message: 'Unable to check memory availability',
-        details: error,
+        details: error instanceof Error
+          ? { message: error.message, name: error.name }
+          : { error: String(error) },
         critical: true,
       });
     }
@@ -227,7 +230,9 @@ export class ProductionValidator {
         check: 'CPU Cores',
         status: 'fail',
         message: 'Unable to check CPU cores',
-        details: error,
+        details: error instanceof Error
+          ? { message: error.message, name: error.name }
+          : { error: String(error) },
         critical: true,
       });
     }
@@ -262,7 +267,9 @@ export class ProductionValidator {
           check: `Port ${port}`,
           status: 'fail',
           message: `Unable to check port ${port} availability`,
-          details: error,
+          details: error instanceof Error
+            ? { message: error.message, name: error.name }
+            : { error: String(error) },
           critical: true,
         });
       }
@@ -343,7 +350,9 @@ export class ProductionValidator {
         check: 'Configuration File',
         status: 'fail',
         message: 'Unable to validate configuration',
-        details: error,
+        details: error instanceof Error
+          ? { message: error.message, name: error.name }
+          : { error: String(error) },
         critical: false,
       });
     }
@@ -376,6 +385,7 @@ export class ProductionValidator {
   /**
    * Validate security requirements
    */
+  // deno-lint-ignore require-await
   private async validateSecurity(): Promise<ValidationResult[]> {
     const results: ValidationResult[] = [];
 
@@ -489,6 +499,7 @@ export class ProductionValidator {
   /**
    * Validate performance requirements
    */
+  // deno-lint-ignore require-await
   private async validatePerformance(): Promise<ValidationResult[]> {
     const results: ValidationResult[] = [];
 
@@ -522,7 +533,9 @@ export class ProductionValidator {
         check: 'Startup Time',
         status: 'fail',
         message: 'Unable to measure startup time',
-        details: error,
+        details: error instanceof Error
+          ? { message: error.message, name: error.name }
+          : { error: String(error) },
         critical: false,
       });
     }
@@ -557,7 +570,9 @@ export class ProductionValidator {
         check: 'Response Time',
         status: 'fail',
         message: 'Unable to measure response time',
-        details: error,
+        details: error instanceof Error
+          ? { message: error.message, name: error.name }
+          : { error: String(error) },
         critical: false,
       });
     }
@@ -568,6 +583,7 @@ export class ProductionValidator {
   /**
    * Validate dependencies
    */
+  // deno-lint-ignore require-await
   private async validateDependencies(): Promise<ValidationResult[]> {
     const results: ValidationResult[] = [];
 
@@ -600,7 +616,9 @@ export class ProductionValidator {
           check: `Service: ${service}`,
           status: 'fail',
           message: `Unable to check ${service} availability`,
-          details: error,
+          details: error instanceof Error
+            ? { message: error.message, name: error.name }
+            : { error: String(error) },
           critical: true,
         });
       }
@@ -635,7 +653,9 @@ export class ProductionValidator {
           check: `API: ${api}`,
           status: 'warning',
           message: `Unable to check ${api} API`,
-          details: error,
+          details: error instanceof Error
+            ? { message: error.message, name: error.name }
+            : { error: String(error) },
           critical: false,
         });
       }
@@ -647,6 +667,7 @@ export class ProductionValidator {
   /**
    * Validate monitoring and observability
    */
+  // deno-lint-ignore require-await
   private async validateMonitoring(): Promise<ValidationResult[]> {
     const results: ValidationResult[] = [];
 
@@ -679,7 +700,9 @@ export class ProductionValidator {
           check: 'Health Check',
           status: 'fail',
           message: 'Unable to validate health check endpoint',
-          details: error,
+          details: error instanceof Error
+            ? { message: error.message, name: error.name }
+            : { error: String(error) },
           critical: true,
         });
       }
@@ -715,6 +738,7 @@ export class ProductionValidator {
   /**
    * Validate AI components
    */
+  // deno-lint-ignore require-await
   private async validateAIComponents(): Promise<ValidationResult[]> {
     const results: ValidationResult[] = [];
 
@@ -754,7 +778,9 @@ export class ProductionValidator {
           check: component,
           status: 'fail',
           message: `Unable to check ${component} health`,
-          details: error,
+          details: error instanceof Error
+            ? { message: error.message, name: error.name }
+            : { error: String(error) },
           critical: true,
         });
       }
@@ -823,6 +849,7 @@ export class ProductionValidator {
   /**
    * Get current system health
    */
+  // deno-lint-ignore require-await
   async getSystemHealth(): Promise<SystemHealth> {
     const components = {
       'ai_decision_engine': {

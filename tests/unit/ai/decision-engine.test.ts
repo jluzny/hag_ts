@@ -2,14 +2,12 @@
  * Unit tests for AI Decision Engine
  */
 
-import { assertEquals, assertExists, assertInstanceOf } from '@std/assert';
+import { assertEquals, assertExists } from '@std/assert';
 import {
   AIDecisionConfig,
   AIDecisionEngine,
 } from '../../../src/ai/decision-engine.ts';
-import {
-  HVACDecisionContext,
-} from '../../../src/ai/types/ai-types.ts';
+import { HVACDecisionContext } from '../../../src/ai/types/ai-types.ts';
 import { SystemMode } from '../../../src/types/common.ts';
 import { LoggerService } from '../../../src/core/logger.ts';
 
@@ -18,7 +16,7 @@ class MockLoggerService extends LoggerService {
   constructor() {
     super('TEST');
   }
-  
+
   override info(_message: string, _data?: Record<string, unknown>): void {}
   override error(
     _message: string,

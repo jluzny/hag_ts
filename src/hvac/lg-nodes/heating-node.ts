@@ -18,7 +18,7 @@ export async function heatingNode(
   state: HVACLangGraphState,
 ): Promise<HVACLangGraphState> {
   const startTime = performance.now();
-  
+
   // Yield control to event loop for async consistency
   await new Promise((resolve) => setTimeout(resolve, 0));
 

@@ -200,28 +200,24 @@ Deno.test('HVAC Integration Tests', async (t) => {
 
   await t.step('should read initial temperatures', async () => {
     // Give the controller a moment to read temperatures after starting
-    await new Promise(resolve => setTimeout(resolve, 50));
-    
-    // Force a temperature update to ensure sensors are read
-    try {
-      await controller.updateTemperatures();
-    } catch {
-      // If updateTemperatures doesn't exist, continue
-    }
-    
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // In event-driven architecture, temperatures are read via events
+    // The system will have already triggered initial temperature reading via publishStateOneshot
+
     const status = await controller.getStatus();
 
     // Should have temperature conditions from mock sensors
     assertExists(status.stateMachine.conditions);
-    
+
     // In a mock environment, automatic temperature reading may not work
     // This test validates that the system can handle temperature data when available
     // Either the temperatures are read automatically or can be set manually
     console.log('Temperature status:', {
       indoorTemp: status.stateMachine.conditions.indoorTemp,
-      outdoorTemp: status.stateMachine.conditions.outdoorTemp
+      outdoorTemp: status.stateMachine.conditions.outdoorTemp,
     });
-    
+
     // Test passes if the status structure is correct
     // The actual temperature reading is tested in other integration scenarios
     assertEquals(typeof status.stateMachine.conditions, 'object');

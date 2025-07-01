@@ -170,7 +170,7 @@ async function shutdownHVACEntities(
  */
 function shutdownEntity(
   entityId: string,
-): { success: boolean; entityId: string } {
+): Promise<{ success: boolean; entityId: string }> {
   // Simulate entity shutdown
   console.log(`🛑 Shutting down ${entityId}`);
 
@@ -180,7 +180,7 @@ function shutdownEntity(
   //   hvac_mode: "off"
   // });
 
-  return { success: true, entityId };
+  return Promise.resolve({ success: true, entityId });
 }
 
 /**
@@ -188,7 +188,7 @@ function shutdownEntity(
  */
 function disableActiveOperations(
   state: HVACLangGraphState,
-): boolean {
+): Promise<boolean> {
   const previousMode = state.previousMode;
 
   if (previousMode === 'heating' || previousMode === 'cooling') {
@@ -197,16 +197,16 @@ function disableActiveOperations(
     // In real implementation, ensure all operations are stopped
     // This might include stopping fans, closing dampers, etc.
 
-    return true;
+    return Promise.resolve(true);
   }
 
-  return true; // No active operations to disable
+  return Promise.resolve(true); // No active operations to disable
 }
 
 /**
  * Setup minimal monitoring for safety during shutdown
  */
-async function setupMinimalMonitoring(
+function setupMinimalMonitoring(
   _state: HVACLangGraphState,
 ): Promise<boolean> {
   console.log('👁️ Setting up minimal safety monitoring');
@@ -216,12 +216,13 @@ async function setupMinimalMonitoring(
   // - System health status
   // - Emergency override capabilities
 
-  return true;
+  return Promise.resolve(true);
 }
 
 /**
  * Check for emergency conditions during shutdown
  */
+// deno-lint-ignore require-await
 async function checkEmergencyConditions(state: HVACLangGraphState): Promise<{
   hasEmergency: boolean;
   emergencyType?: string;
@@ -234,22 +235,22 @@ async function checkEmergencyConditions(state: HVACLangGraphState): Promise<{
   if (indoorTemp !== undefined) {
     // Fire risk
     if (indoorTemp > 40) {
-      return {
+      return Promise.resolve({
         hasEmergency: true,
         emergencyType: 'extreme_heat',
         severity: 'high',
         message: `Dangerous indoor temperature: ${indoorTemp}°C`,
-      };
+      });
     }
 
     // Freeze risk
     if (indoorTemp < 5) {
-      return {
+      return Promise.resolve({
         hasEmergency: true,
         emergencyType: 'freeze_risk',
         severity: 'high',
         message: `Freeze risk: indoor temperature ${indoorTemp}°C`,
-      };
+      });
     }
   }
 
@@ -259,24 +260,24 @@ async function checkEmergencyConditions(state: HVACLangGraphState): Promise<{
     .filter((evaluation) => evaluation.reasoning.includes('error'));
 
   if (recentErrors.length >= 3) {
-    return {
+    return Promise.resolve({
       hasEmergency: true,
       emergencyType: 'equipment_malfunction',
       severity: 'medium',
       message: 'Multiple system errors detected before shutdown',
-    };
+    });
   }
 
-  return {
+  return Promise.resolve({
     hasEmergency: false,
-    severity: 'low',
-  };
+    severity: 'low' as const,
+  });
 }
 
 /**
  * Notify emergency contacts if required
  */
-async function notifyEmergencyContacts(emergency: {
+function notifyEmergencyContacts(emergency: {
   emergencyType: string;
   severity: string;
   message: string;
@@ -291,7 +292,7 @@ async function notifyEmergencyContacts(emergency: {
   // - Potentially contact building management
   // - Create service tickets
 
-  return true; // Simulate successful notification
+  return Promise.resolve(true); // Simulate successful notification
 }
 
 /**

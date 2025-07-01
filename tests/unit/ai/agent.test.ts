@@ -36,7 +36,11 @@ class MockLoggerService extends LoggerService {
     // console.log(`INFO: ${message}`);
   }
 
-  override error(_message: string, _error?: unknown, _data?: Record<string, unknown>): void {
+  override error(
+    _message: string,
+    _error?: unknown,
+    _data?: Record<string, unknown>,
+  ): void {
     // console.error(`ERROR: ${message}`, error);
   }
 

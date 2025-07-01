@@ -1,10 +1,10 @@
 /**
  * Main application entry point for HAG JavaScript variant.
  *
- * CLI application using @cliffy/command with traditional dependency injection.
+ * CLI application using @std/cli/parse-args with traditional dependency injection.
  */
 
-import { Command } from '@cliffy/command';
+import { parseArgs } from '@std/cli/parse-args';
 import {
   ApplicationContainer,
   createContainer,
@@ -234,59 +234,138 @@ function showEnvironment(): void {
 }
 
 /**
+ * Show help message
+ */
+function showHelp(): void {
+  console.log(`🏠 HAG - Home Assistant aGentic HVAC Automation v1.0.0
+
+Usage: hag [command] [options]
+
+Commands:
+  (default)             Start the HAG HVAC automation system
+  validate              Validate configuration file
+  status                Get system status
+  override <action>     Manual HVAC override (heat, cool, off)
+  env                   Show environment information
+
+Options:
+  -c, --config <file>   Configuration file path
+  --log-level <level>   Log level (debug, info, warning, error) [default: info]
+  -t, --temperature <temp>  Target temperature (for override command)
+  -h, --help            Show this help message
+  -v, --version         Show version information
+
+Examples:
+  hag                                    # Start the system
+  hag --config /path/to/config.yaml     # Start with custom config
+  hag validate --config config.yaml     # Validate configuration
+  hag status                             # Get system status
+  hag override heat --temperature 22    # Override to heating mode at 22°C
+  hag env                                # Show environment info
+`);
+}
+
+/**
  * Main CLI setup
  */
 async function main(): Promise<void> {
-  const cli = new Command()
-    .name('hag')
-    .description('🏠 HAG - Home Assistant aGentic HVAC Automation')
-    .version('1.0.0')
-    .option('-c, --config <file>', 'Configuration file path')
-    .option('--log-level <level>', 'Log level (debug, info, warning, error)', {
-      default: 'info',
-      global: true,
-    })
-    .action(async (options) => {
-      setupLogging(options.logLevel as LevelName);
-      logger = getAppLogger();
-      logger.debug('Starting HAG application main function...');
-      await runApplication(options.config, options.logLevel);
-    })
-    .command('validate', 'Validate configuration file')
-    .option('-c, --config <file>', 'Configuration file path', {
-      required: true,
-    })
-    .action(async (options) => {
-      setupLogging(options.logLevel as LevelName);
-      logger = getAppLogger();
-      await validateConfig(options.config);
-    })
-    .command('status', 'Get system status')
-    .option('-c, --config <file>', 'Configuration file path')
-    .action(async (options) => {
-      setupLogging(options.logLevel as LevelName);
-      logger = getAppLogger();
-      await getStatus(options.config);
-    })
-    .command('override <action>', 'Manual HVAC override (heat, cool, off)')
-    .option('-c, --config <file>', 'Configuration file path')
-    .option('-t, --temperature <temp:number>', 'Target temperature')
-    .action(async (options, action) => {
-      setupLogging(options.logLevel as LevelName);
-      logger = getAppLogger();
-      await manualOverride(action, options.config, options.temperature);
-    })
-    .command('env', 'Show environment information')
-    .action(() => {
-      setupLogging('info' as LevelName);
-      logger = getAppLogger();
-      showEnvironment();
-    });
+  const args = parseArgs(Deno.args, {
+    boolean: ['help', 'version'],
+    string: ['config', 'log-level', 'temperature'],
+    alias: {
+      h: 'help',
+      v: 'version',
+      c: 'config',
+      t: 'temperature',
+    },
+    default: {
+      'log-level': 'info',
+    },
+    unknown: (arg: string) => {
+      // Allow known commands as unknown args
+      return ['validate', 'status', 'override', 'env', 'heat', 'cool', 'off']
+        .includes(arg);
+    },
+  });
+
+  if (args.help) {
+    showHelp();
+    return;
+  }
+
+  if (args.version) {
+    console.log('HAG v1.0.0');
+    return;
+  }
 
   setupCleanup();
 
   try {
-    await cli.parse(Deno.args);
+    const command = args._[0] as string;
+    const logLevel = args['log-level'] as string;
+
+    switch (command) {
+      case 'validate': {
+        if (!args.config) {
+          console.error('❌ Error: --config is required for validate command');
+          console.error('Usage: hag validate --config <file>');
+          Deno.exit(1);
+        }
+        setupLogging(logLevel as LevelName);
+        logger = getAppLogger();
+        await validateConfig(args.config);
+        break;
+      }
+
+      case 'status': {
+        setupLogging(logLevel as LevelName);
+        logger = getAppLogger();
+        await getStatus(args.config);
+        break;
+      }
+
+      case 'override': {
+        const action = args._[1] as string;
+        if (!action || !['heat', 'cool', 'off'].includes(action)) {
+          console.error(
+            '❌ Error: override command requires action (heat, cool, off)',
+          );
+          console.error(
+            'Usage: hag override <action> [--config <file>] [--temperature <temp>]',
+          );
+          Deno.exit(1);
+        }
+        setupLogging(logLevel as LevelName);
+        logger = getAppLogger();
+        const temperature = args.temperature
+          ? parseFloat(args.temperature)
+          : undefined;
+        await manualOverride(action, args.config, temperature);
+        break;
+      }
+
+      case 'env': {
+        setupLogging('info' as LevelName);
+        logger = getAppLogger();
+        showEnvironment();
+        break;
+      }
+
+      case undefined: {
+        // Default action - start the application
+        setupLogging(logLevel as LevelName);
+        logger = getAppLogger();
+        logger.debug('Starting HAG application main function...');
+        await runApplication(args.config, logLevel);
+        break;
+      }
+
+      default: {
+        console.error(`❌ Error: Unknown command '${command}'`);
+        console.error('Run "hag --help" for usage information');
+        Deno.exit(1);
+      }
+    }
   } catch (error) {
     if (!logger) {
       setupLogging('error' as LevelName);

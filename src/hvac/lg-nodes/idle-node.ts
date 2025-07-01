@@ -177,21 +177,21 @@ function checkManualOverrideExpiration(
 /**
  * Cleanup old performance metrics to prevent memory bloat
  */
-async function cleanupPerformanceMetrics(
+function cleanupPerformanceMetrics(
   state: HVACLangGraphState,
 ): Promise<boolean> {
   const metrics = state.performanceMetrics;
-  if (!metrics) return false;
+  if (!metrics) return Promise.resolve(false);
 
   // Check if any node has too many stored measurements
   for (const [node, times] of Object.entries(metrics.nodeExecutionTimes)) {
     if (times.length > 100) {
       console.log(`Cleaning up performance metrics for node: ${node}`);
-      return true;
+      return Promise.resolve(true);
     }
   }
 
-  return false;
+  return Promise.resolve(false);
 }
 
 /**

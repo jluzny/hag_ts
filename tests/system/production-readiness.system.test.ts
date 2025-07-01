@@ -101,7 +101,11 @@ async function testPerformanceOptimizer(): Promise<boolean> {
         console.log(`  ❌ Performance monitoring failed`);
       }
     } catch (error) {
-      console.log(`  ❌ Performance monitoring failed: ${error instanceof Error ? error.message : String(error)}`);
+      console.log(
+        `  ❌ Performance monitoring failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
 
     // Test 2: Caching System
@@ -149,7 +153,11 @@ async function testPerformanceOptimizer(): Promise<boolean> {
         console.log(`  ❌ Caching system failed`);
       }
     } catch (error) {
-      console.log(`  ❌ Caching system failed: ${error instanceof Error ? error.message : String(error)}`);
+      console.log(
+        `  ❌ Caching system failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
 
     // Test 3: Task Optimization
@@ -193,7 +201,11 @@ async function testPerformanceOptimizer(): Promise<boolean> {
         console.log(`  ❌ Task optimization failed`);
       }
     } catch (error) {
-      console.log(`  ❌ Task optimization failed: ${error instanceof Error ? error.message : String(error)}`);
+      console.log(
+        `  ❌ Task optimization failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
 
     // Test 4: Performance Analysis and Recommendations
@@ -245,7 +257,11 @@ async function testPerformanceOptimizer(): Promise<boolean> {
         console.log(`  ❌ Performance analysis failed`);
       }
     } catch (error) {
-      console.log(`  ❌ Performance analysis failed: ${error instanceof Error ? error.message : String(error)}`);
+      console.log(
+        `  ❌ Performance analysis failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
 
     await optimizer.stop();
@@ -326,7 +342,11 @@ async function testProductionValidator(): Promise<boolean> {
         console.log(`  ❌ Environment validation failed`);
       }
     } catch (error) {
-      console.log(`  ❌ Environment validation failed: ${error instanceof Error ? error.message : String(error)}`);
+      console.log(
+        `  ❌ Environment validation failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
 
     // Test 2: System Health Check
@@ -368,7 +388,11 @@ async function testProductionValidator(): Promise<boolean> {
         console.log(`  ❌ System health check failed`);
       }
     } catch (error) {
-      console.log(`  ❌ System health check failed: ${error instanceof Error ? error.message : String(error)}`);
+      console.log(
+        `  ❌ System health check failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
 
     // Test 3: Deployment Checklist Generation
@@ -404,7 +428,9 @@ async function testProductionValidator(): Promise<boolean> {
       }
     } catch (error) {
       console.log(
-        `  ❌ Deployment checklist generation failed: ${error instanceof Error ? error.message : String(error)}`,
+        `  ❌ Deployment checklist generation failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
       );
     }
 
@@ -416,14 +442,20 @@ async function testProductionValidator(): Promise<boolean> {
       const validationResult = await validator.validateProductionReadiness();
 
       // Group results by category
-      const categories = validationResult.results.reduce((acc, result) => {
-        if (!acc[result.category]) {
-          acc[result.category] = { pass: 0, warning: 0, fail: 0, total: 0 };
-        }
-        acc[result.category][result.status]++;
-        acc[result.category].total++;
-        return acc;
-      }, {} as Record<string, any>);
+      const categories = validationResult.results.reduce(
+        (acc, result) => {
+          if (!acc[result.category]) {
+            acc[result.category] = { pass: 0, warning: 0, fail: 0, total: 0 };
+          }
+          acc[result.category][result.status]++;
+          acc[result.category].total++;
+          return acc;
+        },
+        {} as Record<
+          string,
+          { pass: number; warning: number; fail: number; total: number }
+        >,
+      );
 
       console.log(
         `  Validation categories analyzed: ${Object.keys(categories).length}`,
@@ -460,7 +492,9 @@ async function testProductionValidator(): Promise<boolean> {
       }
     } catch (error) {
       console.log(
-        `  ❌ Validation categories analysis failed: ${error instanceof Error ? error.message : String(error)}`,
+        `  ❌ Validation categories analysis failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
       );
     }
 
@@ -471,7 +505,7 @@ async function testProductionValidator(): Promise<boolean> {
   }
 }
 
-async function testIntegratedProductionSystem(): Promise<boolean> {
+function testIntegratedProductionSystem(): Promise<boolean> {
   console.log('\n🔗 Testing Integrated Production System\n');
 
   try {
@@ -515,10 +549,10 @@ async function testIntegratedProductionSystem(): Promise<boolean> {
     console.log('- Performance trend analysis and prediction');
     console.log('- Automated optimization recommendations');
 
-    return true;
+    return Promise.resolve(true);
   } catch (error) {
     console.error('❌ Integrated production system test failed:', error);
-    return false;
+    return Promise.resolve(false);
   }
 }
 

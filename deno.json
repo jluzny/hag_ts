@@ -18,7 +18,7 @@
     "@std/async": "jsr:@std/async@^1.0.13",
     "@std/http": "jsr:@std/http@^1.0.18",
     "@std/collections": "jsr:@std/collections@^1.1.1",
-    "@cliffy/command": "jsr:@cliffy/command@^1.0.0-rc.7",
+    "@std/cli": "jsr:@std/cli@^1.0.20",
     "@std/yaml": "jsr:@std/yaml@^1.0.8",
     "xstate": "npm:xstate@^5.20.0",
     "@langchain/core": "npm:@langchain/core@^0.3.61",
@@ -30,7 +30,7 @@
   "tasks": {
     "dev": "deno run -A src/main.ts --",
     "dev:watch": "deno run --watch -A src/main.ts --",
-    
+
     "test": "deno test -A --no-check tests/",
     "test:unit": "deno test -A --no-check tests/unit/",
     "test:integration": "deno test -A --no-check tests/integration/",
@@ -39,30 +39,30 @@
     "test:watch": "deno test -A --no-check --watch tests/",
     "test:coverage": "deno test -A --no-check --coverage=coverage tests/",
     "test:ci": "deno task test && deno task check && deno task lint",
-    
+
     "test:experimental": "deno test -A --no-check experimental/tests/",
     "test:experimental:unit": "deno test -A --no-check experimental/tests/unit/",
     "test:experimental:integration": "deno test -A --no-check experimental/tests/integration/",
     "test:experimental:watch": "deno test -A --no-check --watch experimental/tests/",
     "test:all": "deno task test && deno task test:experimental",
-    
+
     "build": "deno compile -A --no-check -o target/hag src/main.ts && mkdir -p target && cp config/hvac_config.yaml target/hvac_config.yaml && rm hag",
     "build:experimental": "deno compile -A --no-check -o target/hag-experimental src/main.ts && mkdir -p target && cp config/hvac_config.yaml target/hvac_config.yaml && rm hag-experimental",
     "build:musl": "deno compile --target x86_64-unknown-linux-musl -A --no-check -o hag src/main.ts && mkdir -p target && cp hag target/hag && cp config/hvac_config.yaml target/hvac_config.yaml && rm hag",
     "build:musl:experimental": "deno compile --target x86_64-unknown-linux-musl -A --no-check -o hag-experimental src/main.ts && mkdir -p target && cp hag-experimental target/hag-experimental && cp config/hvac_config.yaml target/hvac_config.yaml && rm hag-experimental",
-    
+
     "check": "deno check src/**/*.ts tests/**/*.ts",
     "check:experimental": "deno check src/**/*.ts tests/**/*.ts experimental/src/**/*.ts experimental/tests/**/*.ts",
     "check:all": "deno task check && deno task check:experimental",
-    
+
     "fmt": "deno fmt",
     "fmt:experimental": "deno fmt experimental/",
     "fmt:all": "deno task fmt && deno task fmt:experimental",
-    
+
     "lint": "deno lint",
     "lint:experimental": "deno lint experimental/",
     "lint:all": "deno task lint && deno task lint:experimental",
-    
+
     "ci:standard": "deno task test && deno task check && deno task lint",
     "ci:experimental": "deno task test:all && deno task check:all && deno task lint:all"
   },
@@ -80,6 +80,7 @@
   },
   "exclude": [
     "node_modules",
-    ".git"
+    ".git",
+    "experimental"
   ]
 }

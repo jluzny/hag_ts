@@ -50,7 +50,10 @@ Deno.test('Home Assistant Integration', async (t) => {
       assertExists(data.message);
       console.log('✅ REST API connection successful');
     } catch (error) {
-      console.error('❌ REST API connection failed:', error instanceof Error ? error.message : String(error));
+      console.error(
+        '❌ REST API connection failed:',
+        error instanceof Error ? error.message : String(error),
+      );
       throw error;
     }
   });
@@ -73,7 +76,12 @@ Deno.test('Home Assistant Integration', async (t) => {
       assertEquals(Array.isArray(states), true, 'States should be an array');
 
       // Find temperature sensors
-      const tempSensors = states.filter((state: { entity_id: string; attributes?: { unit_of_measurement?: string } }) =>
+      const tempSensors = states.filter((
+        state: {
+          entity_id: string;
+          attributes?: { unit_of_measurement?: string };
+        },
+      ) =>
         state.entity_id.includes('temperature') ||
         (state.attributes?.unit_of_measurement === '°C' ||
           state.attributes?.unit_of_measurement === '°F')
@@ -83,13 +91,21 @@ Deno.test('Home Assistant Integration', async (t) => {
 
       if (tempSensors.length > 0) {
         console.log('📋 Available temperature sensors:');
-        tempSensors.slice(0, 5).forEach((sensor: { entity_id: string; state: string; attributes?: { unit_of_measurement?: string } }) => {
-          console.log(
-            `   - ${sensor.entity_id}: ${sensor.state}${
-              sensor.attributes?.unit_of_measurement || ''
-            }`,
-          );
-        });
+        tempSensors.slice(0, 5).forEach(
+          (
+            sensor: {
+              entity_id: string;
+              state: string;
+              attributes?: { unit_of_measurement?: string };
+            },
+          ) => {
+            console.log(
+              `   - ${sensor.entity_id}: ${sensor.state}${
+                sensor.attributes?.unit_of_measurement || ''
+              }`,
+            );
+          },
+        );
       }
 
       assertEquals(
@@ -98,7 +114,10 @@ Deno.test('Home Assistant Integration', async (t) => {
         'Should find at least one temperature sensor',
       );
     } catch (error) {
-      console.error('❌ Sensor discovery failed:', error instanceof Error ? error.message : String(error));
+      console.error(
+        '❌ Sensor discovery failed:',
+        error instanceof Error ? error.message : String(error),
+      );
       throw error;
     }
   });
@@ -124,7 +143,7 @@ Deno.test('Home Assistant Integration', async (t) => {
         const state = await client.getState(testEntity);
         assertExists(state);
         console.log(`📊 Retrieved test entity state: ${testEntity}`);
-      } catch (error) {
+      } catch (_error) {
         console.log('⚠️ No test entity available, but connection works');
       }
 
@@ -133,7 +152,10 @@ Deno.test('Home Assistant Integration', async (t) => {
       assertEquals(client.connected, false, 'Client should be disconnected');
       console.log('✅ WebSocket disconnection successful');
     } catch (error) {
-      console.error('❌ WebSocket connection failed:', error instanceof Error ? error.message : String(error));
+      console.error(
+        '❌ WebSocket connection failed:',
+        error instanceof Error ? error.message : String(error),
+      );
       throw error;
     }
   });
@@ -154,14 +176,21 @@ Deno.test('Home Assistant Integration', async (t) => {
         // Test that callService method exists and works with a simple service call
         // Note: We won't actually call a service that could affect the system
         console.log('📋 Service call method is available');
-        assertEquals(typeof client.callService, 'function', 'callService should be a function');
-      } catch (error) {
+        assertEquals(
+          typeof client.callService,
+          'function',
+          'callService should be a function',
+        );
+      } catch (_error) {
         console.log('⚠️ Service call testing skipped');
       }
 
       await client.disconnect();
     } catch (error) {
-      console.error('❌ Service call test failed:', error instanceof Error ? error.message : String(error));
+      console.error(
+        '❌ Service call test failed:',
+        error instanceof Error ? error.message : String(error),
+      );
       throw error;
     }
   });
@@ -180,7 +209,7 @@ Deno.test('Home Assistant Integration', async (t) => {
       // Test connection functionality without depending on specific states
       console.log('📊 Testing basic connectivity:');
       assertEquals(client.connected, true, 'Client should be connected');
-      
+
       // Test basic functionality exists
       console.log('   - WebSocket connection: ✅');
       console.log('   - Event subscription capability: ✅');
@@ -188,7 +217,10 @@ Deno.test('Home Assistant Integration', async (t) => {
 
       await client.disconnect();
     } catch (error) {
-      console.error('❌ Entity filtering test failed:', error instanceof Error ? error.message : String(error));
+      console.error(
+        '❌ Entity filtering test failed:',
+        error instanceof Error ? error.message : String(error),
+      );
       throw error;
     }
   });
@@ -242,7 +274,10 @@ Deno.test('Home Assistant Integration', async (t) => {
 
       console.log('✅ Configuration integration successful');
     } catch (error) {
-      console.error('❌ Configuration integration failed:', error instanceof Error ? error.message : String(error));
+      console.error(
+        '❌ Configuration integration failed:',
+        error instanceof Error ? error.message : String(error),
+      );
       throw error;
     }
   });

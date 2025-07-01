@@ -231,10 +231,16 @@ export class LangGraphHVACStateMachineAdapter implements IHVACStateMachine {
     // Map XState events to LangGraph methods
     switch (event.type) {
       case 'UPDATE_TEMPERATURES':
-        await this.updateTemperatures(event.indoor as number, event.outdoor as number);
+        await this.updateTemperatures(
+          event.indoor as number,
+          event.outdoor as number,
+        );
         break;
       case 'MANUAL_OVERRIDE':
-        await this.manualOverride(event.mode as HVACMode, event.temperature as number);
+        await this.manualOverride(
+          event.mode as HVACMode,
+          event.temperature as number,
+        );
         break;
       case 'AUTO_EVALUATE':
         await this.evaluateConditions();
