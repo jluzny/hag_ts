@@ -11,32 +11,29 @@ import { TYPES } from '../../src/core/types.ts';
 import { HomeAssistantClient } from '../../src/home-assistant/client.ts';
 import { HassOptions } from '../../src/config/config.ts';
 import { LoggerService } from '../../src/core/logger.ts';
+import { ConfigLoader } from '../../src/config/loader.ts';
+import { parseArgs } from '@std/cli';
 
-// Test configuration
+// Test configuration - get config file from command line args
+const args = parseArgs(Deno.args);
+const configPath = args.config;
 
-// Skip integration tests if no Home Assistant credentials available
-const hasHassCredentials =
-  !!(Deno.env.get('HASS_URL') && Deno.env.get('HASS_TOKEN'));
+if (!configPath) {
+  throw new Error('Config file path must be provided via --config argument');
+}
+
+// Load test configuration using ConfigLoader
+const testConfig = await ConfigLoader.loadSettings(configPath);
 
 Deno.test('Home Assistant Integration', async (t) => {
-  if (!hasHassCredentials) {
-    await t.step('should skip integration tests - no HA credentials', () => {
-      console.log(
-        '⚠️  Skipping Home Assistant integration tests - HASS_URL or HASS_TOKEN not configured',
-      );
-      assertEquals(true, true); // Pass the test
-    });
-    return;
-  }
-
-  const hassUrl = Deno.env.get('HASS_URL')!;
-  const hassToken = Deno.env.get('HASS_TOKEN')!;
+  const hassUrl = testConfig.hassOptions.restUrl;
+  const hassToken = testConfig.hassOptions.token;
 
   await t.step('should test REST API connectivity', async () => {
     console.log('📡 Testing REST API connectivity...');
 
     try {
-      const response = await fetch(`${hassUrl}/api/`, {
+      const response = await fetch(`${hassUrl}/`, {
         headers: {
           'Authorization': `Bearer ${hassToken}`,
           'Content-Type': 'application/json',
@@ -62,7 +59,7 @@ Deno.test('Home Assistant Integration', async (t) => {
     console.log('🌡️ Discovering temperature sensors...');
 
     try {
-      const response = await fetch(`${hassUrl}/api/states`, {
+      const response = await fetch(`${hassUrl}/states`, {
         headers: {
           'Authorization': `Bearer ${hassToken}`,
           'Content-Type': 'application/json',
@@ -126,7 +123,7 @@ Deno.test('Home Assistant Integration', async (t) => {
     console.log('🔌 Testing WebSocket connection...');
 
     try {
-      const container = await createContainer('./config/hvac_config.yaml');
+      const container = await createContainer(configPath);
       const client = container.get<HomeAssistantClient>(
         TYPES.HomeAssistantClient,
       );
@@ -164,7 +161,7 @@ Deno.test('Home Assistant Integration', async (t) => {
     console.log('⚙️ Testing service calls...');
 
     try {
-      const container = await createContainer('./config/hvac_config.yaml');
+      const container = await createContainer(configPath);
       const client = container.get<HomeAssistantClient>(
         TYPES.HomeAssistantClient,
       );
@@ -199,7 +196,7 @@ Deno.test('Home Assistant Integration', async (t) => {
     console.log('🔍 Testing entity filtering...');
 
     try {
-      const container = await createContainer('./config/hvac_config.yaml');
+      const container = await createContainer(configPath);
       const client = container.get<HomeAssistantClient>(
         TYPES.HomeAssistantClient,
       );
@@ -262,7 +259,7 @@ Deno.test('Home Assistant Integration', async (t) => {
 
     try {
       // Test that container can be created with current config
-      const container = await createContainer('./config/hvac_config.yaml');
+      const container = await createContainer(configPath);
       assertExists(container);
 
       // Test that Home Assistant client can be retrieved

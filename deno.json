@@ -30,39 +30,30 @@
   "tasks": {
     "dev": "deno run -A src/main.ts --",
     "dev:watch": "deno run --watch -A src/main.ts --",
-
-    "test": "deno test -A --no-check tests/",
-    "test:unit": "deno test -A --no-check tests/unit/",
-    "test:integration": "deno test -A --no-check tests/integration/",
-    "test:performance": "deno test -A --no-check tests/performance/",
-    "test:system": "deno test -A --no-check tests/system/",
-    "test:watch": "deno test -A --no-check --watch tests/",
-    "test:coverage": "deno test -A --no-check --coverage=coverage tests/",
+    "test": "deno test -A --no-check tests/ -- --config config/hvac_config_test.yaml",
+    "test:unit": "deno test -A --no-check tests/unit/ -- --config config/hvac_config_test.yaml",
+    "test:integration": "deno test -A --no-check tests/integration/ -- --config config/hvac_config_test.yaml",
+    "test:performance": "deno test -A --no-check tests/performance/ -- --config config/hvac_config_test.yaml",
+    "test:system": "deno test -A --no-check tests/system/ -- --config config/hvac_config_test.yaml",
+    "test:watch": "deno test -A --no-check --watch tests/ -- --config config/hvac_config_test.yaml",
+    "test:coverage": "deno test -A --no-check --coverage=coverage tests/ -- --config config/hvac_config_test.yaml",
     "test:ci": "deno task test && deno task check && deno task lint",
-
-    "test:experimental": "deno test -A --no-check experimental/tests/",
-    "test:experimental:unit": "deno test -A --no-check experimental/tests/unit/",
-    "test:experimental:integration": "deno test -A --no-check experimental/tests/integration/",
-    "test:experimental:watch": "deno test -A --no-check --watch experimental/tests/",
+    "test:experimental": "deno test -A --no-check experimental/tests/ -- --config config/hvac_config_test.yaml",
+    "test:experimental:unit": "deno test -A --no-check experimental/tests/unit/ -- --config config/hvac_config_test.yaml",
+    "test:experimental:integration": "deno test -A --no-check experimental/tests/integration/ -- --config config/hvac_config_test.yaml",
+    "test:experimental:watch": "deno test -A --no-check --watch experimental/tests/ -- --config config/hvac_config_test.yaml",
     "test:all": "deno task test && deno task test:experimental",
-
     "build": "deno compile -A --no-check -o target/hag src/main.ts && mkdir -p target && cp config/hvac_config.yaml target/hvac_config.yaml && rm hag",
     "build:experimental": "deno compile -A --no-check -o target/hag-experimental src/main.ts && mkdir -p target && cp config/hvac_config.yaml target/hvac_config.yaml && rm hag-experimental",
-    "build:musl": "deno compile --target x86_64-unknown-linux-musl -A --no-check -o hag src/main.ts && mkdir -p target && cp hag target/hag && cp config/hvac_config.yaml target/hvac_config.yaml && rm hag",
-    "build:musl:experimental": "deno compile --target x86_64-unknown-linux-musl -A --no-check -o hag-experimental src/main.ts && mkdir -p target && cp hag-experimental target/hag-experimental && cp config/hvac_config.yaml target/hvac_config.yaml && rm hag-experimental",
-
     "check": "deno check src/**/*.ts tests/**/*.ts",
     "check:experimental": "deno check src/**/*.ts tests/**/*.ts experimental/src/**/*.ts experimental/tests/**/*.ts",
     "check:all": "deno task check && deno task check:experimental",
-
     "fmt": "deno fmt",
     "fmt:experimental": "deno fmt experimental/",
     "fmt:all": "deno task fmt && deno task fmt:experimental",
-
     "lint": "deno lint",
     "lint:experimental": "deno lint experimental/",
     "lint:all": "deno task lint && deno task lint:experimental",
-
     "ci:standard": "deno task test && deno task check && deno task lint",
     "ci:experimental": "deno task test:all && deno task check:all && deno task lint:all"
   },
