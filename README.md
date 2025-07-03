@@ -1,5 +1,9 @@
 # HAG - Home Assistant aGentic HVAC Automation
 
+**⚠️ Alpha Version - TypeScript Migration**
+
+This is an experimental alpha version migrating from Rust-based Hass HVAC automation to TypeScript to evaluate the latest tools and frameworks in the TypeScript ecosystem.
+
 **Advanced AI-Powered HVAC Control System with Intelligent Automation**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
