@@ -12,7 +12,7 @@ optional AI-powered decision making.
 - **Dependency Injection**: @needle-di/core for type-safe DI
 - **State Management**: XState v5 for HVAC state machine
 - **AI Integration**: LangChain v0.3 with OpenAI for intelligent decisions
-- **CLI Framework**: Cliffy for command-line interface
+- **CLI Framework**: @std/cli for command-line interface
 - **Configuration**: Zod schemas with YAML/environment variable support
 
 ## Key Dependencies & Versions
@@ -22,7 +22,7 @@ optional AI-powered decision making.
 - `@langchain/openai`: ^0.5.16 (OpenAI integration)
 - `langchain`: ^0.3.29 (main library)
 - `@needle-di/core`: ^1.0.0 (dependency injection)
-- `@cliffy/command`: v0.25.7 (CLI framework)
+- `@std/cli`: ^1.0.20 (CLI framework)
 - `zod`: ^3.25.67 (schema validation)
 - `yaml`: ^2.8.0 (configuration parsing)
 
