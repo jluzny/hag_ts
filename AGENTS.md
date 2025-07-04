@@ -1,4 +1,4 @@
-# HAG Project - Development Guide for Gemini
+# HAG Project - Development Guide
 
 ## Project Overview
 
@@ -12,7 +12,7 @@ optional AI-powered decision making.
 - **Dependency Injection**: @needle-di/core for type-safe DI
 - **State Management**: XState v5 for HVAC state machine
 - **AI Integration**: LangChain v0.3 with OpenAI for intelligent decisions
-- **CLI Framework**: Cliffy for command-line interface
+- **CLI Framework**: @std/cli for command-line interface
 - **Configuration**: Zod schemas with YAML/environment variable support
 
 ## Key Dependencies & Versions
@@ -22,7 +22,7 @@ optional AI-powered decision making.
 - `@langchain/openai`: ^0.5.16 (OpenAI integration)
 - `langchain`: ^0.3.29 (main library)
 - `@needle-di/core`: ^1.0.0 (dependency injection)
-- `@cliffy/command`: v0.25.7 (CLI framework)
+- `@std/cli`: ^1.0.20 (CLI framework)
 - `zod`: ^3.25.67 (schema validation)
 - `yaml`: ^2.8.0 (configuration parsing)
 
@@ -57,8 +57,7 @@ deno task test:coverage      # Run tests with coverage report
 
 ### TypeScript Configuration
 
-- Uses `experimentalDecorators: true` for dependency injection (generates
-  deprecation warning - this is expected)
+- Uses `experimentalDecorators: true` for dependency injection
 - `emitDecoratorMetadata: true` required for @needle-di/core
 - `--no-check` flag used in build to avoid type checking issues during
   compilation
@@ -100,14 +99,11 @@ Required properties that must be included in `defaultSettings`:
 
 ### Commit Messages
 
-- **IMPORTANT: Never mention Claude, AI assistants, or automated generation in
-  commit messages**
-- **Never include "Generated with Claude Code" footer or "Co-Authored-By:
-  Claude" lines**
 - Use conventional commit format: `type: description`
 - Focus on technical changes and business value
 - Keep commit messages professional and focused on the technical implementation
 - Example: `feat: upgrade dependencies to latest versions`
+- **Commit Messages**: Do not mention opencode in commit messages.
 
 ### Error Handling
 
