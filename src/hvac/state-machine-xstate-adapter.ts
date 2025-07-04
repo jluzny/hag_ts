@@ -121,6 +121,13 @@ export class XStateHVACStateMachineAdapter implements IHVACStateMachine {
   }
 
   /**
+   * Update temperature conditions
+   */
+  updateTemperatures(indoor: number, outdoor: number): void {
+    this.xstateStateMachine.updateTemperatures(indoor, outdoor);
+  }
+
+  /**
    * Execute manual override
    */
   async manualOverride(mode: HVACMode, temperature?: number): Promise<void> {

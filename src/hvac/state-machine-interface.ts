@@ -44,6 +44,11 @@ export interface IHVACStateMachine {
   };
 
   /**
+   * Update temperature conditions
+   */
+  updateTemperatures(indoor: number, outdoor: number): void;
+
+  /**
    * Handle temperature sensor changes
    */
   handleTemperatureChange(sensor: string, value: number): Promise<void>;
