@@ -24,6 +24,7 @@ export const TYPES = {
   // HVAC
   HVACStateMachine: Symbol.for('HVACStateMachine'),
   HVACController: Symbol.for('HVACController'),
+  HVACControllerV2: Symbol.for('HVACControllerV2'),
   HVACAgent: Symbol.for('HVACAgent'),
 
   // Tools
@@ -35,6 +36,7 @@ export const TYPES = {
   EventBus: Symbol.for('EventBus'),
   ActorSystem: Symbol.for('ActorSystem'),
   HvacActorService: Symbol.for('HvacActorService'),
+  ActorBootstrap: Symbol.for('ActorBootstrap'),
 
   // Note: Experimental features are in experimental/ folder and have their own TYPES
 } as const;

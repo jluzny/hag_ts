@@ -23,6 +23,9 @@ import { HomeAssistantClient } from '../home-assistant/client.ts';
 import { EventBus } from './event-system.ts';
 import { ActorSystem } from './actor-system.ts';
 import { HvacActorService } from '../hvac/hvac-actor-service.ts';
+import { ActorBootstrap } from './actor-bootstrap.ts';
+import { HvacActorFactory } from '../hvac/hvac-domain-actor.ts';
+import { HVACControllerV2 } from '../hvac/controller-v2.ts';
 
 // Re-export for backward compatibility
 export { LoggerService, TYPES };
@@ -172,6 +175,17 @@ export class ApplicationContainer {
         return new ActorSystem(eventBus, logger);
       },
     });
+
+    // ActorBootstrap
+    this.container.bind({
+      provide: TYPES.ActorBootstrap,
+      useFactory: () => {
+        const eventBus = this.container.get(TYPES.EventBus) as EventBus;
+        const actorSystem = this.container.get(TYPES.ActorSystem) as ActorSystem;
+        const logger = new LoggerService('HAG.actor-bootstrap');
+        return new ActorBootstrap(eventBus, actorSystem, logger);
+      },
+    });
   }
 
   /**
@@ -249,6 +263,26 @@ export class ApplicationContainer {
         );
         const logger = new LoggerService('HAG.hvac-actor-service');
         return new HvacActorService(hvacOptions, logger, haClient);
+      },
+    });
+
+    // Register HVAC Controller V2 (Actor Bootstrap version)
+    this.container.bind({
+      provide: TYPES.HVACControllerV2,
+      useFactory: () => {
+        const hvacOptions = this.container.get<HvacOptions>(TYPES.HvacOptions);
+        const appOptions = this.container.get<ApplicationOptions>(TYPES.ApplicationOptions);
+        const haClient = this.container.get<HomeAssistantClient>(TYPES.HomeAssistantClient);
+        const actorBootstrap = this.container.get<ActorBootstrap>(TYPES.ActorBootstrap);
+        const eventBus = this.container.get<EventBus>(TYPES.EventBus);
+        
+        return new HVACControllerV2(
+          hvacOptions,
+          appOptions,
+          haClient,
+          actorBootstrap,
+          eventBus,
+        );
       },
     });
 
