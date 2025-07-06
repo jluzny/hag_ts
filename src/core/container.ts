@@ -11,7 +11,6 @@ import type {
   HvacOptions,
   Settings,
 } from '../config/config.ts';
-import { type HVACAgentInterface, HVACController } from '../hvac/controller.ts';
 import { ConfigLoader } from '../config/loader.ts';
 import { HVACAgent } from '../ai/agent.ts';
 import { TYPES } from './types.ts';
@@ -24,8 +23,7 @@ import { EventBus } from './event-system.ts';
 import { ActorSystem } from './actor-system.ts';
 import { HvacActorService } from '../hvac/hvac-actor-service.ts';
 import { ActorBootstrap } from './actor-bootstrap.ts';
-import { HvacActorFactory } from '../hvac/hvac-domain-actor.ts';
-import { HVACControllerV2 } from '../hvac/controller-v2.ts';
+import { HVACController } from '../hvac/controller.ts';
 
 // Re-export for backward compatibility
 export { LoggerService, TYPES };
@@ -220,55 +218,10 @@ export class ApplicationContainer {
         return new XStateHVACStateMachineAdapter(hvacOptions, logger);
       },
     });
+
+    // Register HVAC Controller (Actor Bootstrap version)
     this.container.bind({
       provide: TYPES.HVACController,
-      useFactory: () => {
-        const hvacOptions = this.container.get<HvacOptions>(
-          TYPES.HvacOptions,
-        );
-        const appOptions = this.container.get<ApplicationOptions>(
-          TYPES.ApplicationOptions,
-        );
-        const hvacActorService = this.container.get<HvacActorService>(
-          TYPES.HvacActorService,
-        );
-        const haClient = this.container.get<HomeAssistantClient>(
-          TYPES.HomeAssistantClient,
-        );
-        const hvacAgent = this.settings?.appOptions.useAi
-          ? this.container.get(
-            TYPES.HVACAgent,
-          ) as unknown as HVACAgentInterface
-          : undefined;
-        return new HVACController(
-          hvacOptions,
-          appOptions,
-          hvacActorService,
-          haClient,
-          hvacAgent,
-        );
-      },
-    });
-
-    // Register HVAC Actor Service
-    this.container.bind({
-      provide: TYPES.HvacActorService,
-      useFactory: () => {
-        const actorSystem = this.container.get(
-          TYPES.ActorSystem,
-        ) as ActorSystem;
-        const hvacOptions = this.container.get<HvacOptions>(TYPES.HvacOptions);
-        const haClient = this.container.get<HomeAssistantClient>(
-          TYPES.HomeAssistantClient,
-        );
-        const logger = new LoggerService('HAG.hvac-actor-service');
-        return new HvacActorService(hvacOptions, logger, haClient);
-      },
-    });
-
-    // Register HVAC Controller V2 (Actor Bootstrap version)
-    this.container.bind({
-      provide: TYPES.HVACControllerV2,
       useFactory: () => {
         const hvacOptions = this.container.get<HvacOptions>(TYPES.HvacOptions);
         const appOptions = this.container.get<ApplicationOptions>(TYPES.ApplicationOptions);
@@ -276,7 +229,7 @@ export class ApplicationContainer {
         const actorBootstrap = this.container.get<ActorBootstrap>(TYPES.ActorBootstrap);
         const eventBus = this.container.get<EventBus>(TYPES.EventBus);
         
-        return new HVACControllerV2(
+        return new HVACController(
           hvacOptions,
           appOptions,
           haClient,

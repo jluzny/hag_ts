@@ -19,6 +19,7 @@ import {
 } from '../types/common.ts';
 import { StateError } from '../core/exceptions.ts';
 import { LoggerService } from '../core/logger.ts';
+import { HomeAssistantClient } from '../home-assistant/client.ts';
 
 /**
  * HVAC events that can trigger state transitions
@@ -306,7 +307,7 @@ export class CoolingStrategy {
 export function createHVACMachine(
   hvacOptions: HvacOptions,
   logger: LoggerService,
-  haClient?: any,
+  haClient?: HomeAssistantClient,
 ) {
   const heatingStrategy = new HeatingStrategy(hvacOptions);
   const coolingStrategy = new CoolingStrategy(hvacOptions);
@@ -539,7 +540,7 @@ export function createHVACMachine(
           nextState: 'heating',
         });
       },
-      executeHeating: async ({ context }) => {
+      executeHeating: async () => {
         if (!haClient) {
           logger.warning('⚠️ No Home Assistant client available for heating control');
           return;
@@ -569,7 +570,7 @@ export function createHVACMachine(
           }
         }
       },
-      executeCooling: async ({ context }) => {
+      executeCooling: async () => {
         if (!haClient) {
           logger.warning('⚠️ No Home Assistant client available for cooling control');
           return;
@@ -689,7 +690,7 @@ export function createHVACMachine(
  * Control individual HVAC entity
  */
 async function controlHVACEntity(
-  haClient: any,
+  haClient: HomeAssistantClient,
   entityId: string,
   mode: string,
   targetTemp: number,
@@ -736,7 +737,7 @@ export class HVACStateMachine {
   private actor?: HVACMachineActor;
   private logger: LoggerService;
 
-  constructor(hvacOptions?: HvacOptions, haClient?: any) {
+  constructor(hvacOptions?: HvacOptions, haClient?: HomeAssistantClient) {
     this.logger = new LoggerService('HAG.hvac.state-machine');
     this.machine = createHVACMachine(hvacOptions!, this.logger, haClient);
   }

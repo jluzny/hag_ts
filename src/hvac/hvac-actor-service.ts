@@ -5,19 +5,20 @@
 
 import { LoggerService } from '../core/logger.ts';
 import type { HvacOptions } from '../config/config.ts';
-import { HVACStateMachine, type HVACMachineActor } from './state-machine.ts';
+import { HVACStateMachine } from './state-machine.ts';
 import { HVACContext } from '../types/common.ts';
+import { HomeAssistantClient } from '../home-assistant/client.ts';
 
 export class HvacActorService {
   private stateMachine: HVACStateMachine;
   private logger: LoggerService;
   private hvacOptions: HvacOptions;
-  private haClient?: any; // HomeAssistantClient
+  private haClient?: HomeAssistantClient;
 
   constructor(
     hvacOptions: HvacOptions,
     logger?: LoggerService,
-    haClient?: any,
+    haClient?: HomeAssistantClient,
   ) {
     this.hvacOptions = hvacOptions;
     this.haClient = haClient;

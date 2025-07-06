@@ -218,9 +218,6 @@ export class ActorBootstrap {
    */
   private subscribeActorToEvents(actor: DomainActor): void {
     if (!actor.handleEvent) return;
-
-    // Subscribe to domain-specific events
-    const domainEventPattern = `${actor.domain}.`;
     
     // Subscribe to all domain events and system events
     this.eventBus.subscribeToEvent(`${actor.domain}.temperature_update`, async (event: BaseEvent) => {

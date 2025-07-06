@@ -6,7 +6,6 @@ import { assertEquals, assertExists } from '@std/assert';
 import { ActorBootstrap, DomainActor, ActorFactory, ActorStatus } from '../../../src/core/actor-bootstrap.ts';
 import { EventBus, BaseEvent, AppEvent } from '../../../src/core/event-system.ts';
 import { ActorSystem } from '../../../src/core/actor-system.ts';
-import { LoggerService } from '../../../src/core/logger.ts';
 
 // Mock domain actor for testing
 class TestDomainActor implements DomainActor {
@@ -27,13 +26,13 @@ class TestDomainActor implements DomainActor {
     };
   }
 
-  async start(): Promise<void> {
+  start(): void {
     this.isStarted = true;
     this.status.state = 'running';
     this.status.lastUpdate = new Date();
   }
 
-  async stop(): Promise<void> {
+  stop(): void {
     this.isStarted = false;
     this.status.state = 'stopped';
     this.status.lastUpdate = new Date();
@@ -43,7 +42,7 @@ class TestDomainActor implements DomainActor {
     return { ...this.status };
   }
 
-  async handleEvent(event: BaseEvent): Promise<void> {
+  handleEvent(event: BaseEvent): void {
     this.events.push(event);
   }
 

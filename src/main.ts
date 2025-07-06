@@ -161,21 +161,11 @@ async function getStatus(configPath?: string): Promise<void> {
       if (status.stateMachine.hvacMode) {
         logger.info(`HVAC Mode: ${status.stateMachine.hvacMode}`);
       }
-
-      if (status.stateMachine.conditions) {
-        const conditions = status.stateMachine.conditions;
-        if (conditions.indoorTemp) {
-          logger.info(`Indoor Temp: ${conditions.indoorTemp}°C`);
-        }
-        if (conditions.outdoorTemp) {
-          logger.info(`Outdoor Temp: ${conditions.outdoorTemp}°C`);
-        }
-      }
     }
 
-    if (status.aiAnalysis) {
-      logger.info(`AI Analysis:\n${status.aiAnalysis}`);
-    }
+    // Trigger an evaluation to ensure the system is up-to-date
+    await controller.triggerEvaluation();
+
   } catch (error) {
     logger.error('❌ Failed to get status:', error);
     Deno.exit(1);
@@ -196,12 +186,12 @@ async function manualOverride(
 
     await controller.start();
 
-    const options: Record<string, unknown> = {};
+    const options: Record<string, unknown> = { mode: action };
     if (temperature !== undefined) {
       options.temperature = temperature;
     }
 
-    const result = await controller.manualOverride(action, options);
+    const result = controller.manualOverride(action, options);
 
     if (result.success) {
       logger.info(

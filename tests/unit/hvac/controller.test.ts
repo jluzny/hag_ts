@@ -10,6 +10,9 @@ import { HvacActorService } from '../../../src/hvac/hvac-actor-service.ts';
 import { HomeAssistantClient } from '../../../src/home-assistant/client.ts';
 import { ApplicationOptions, HvacOptions } from '../../../src/config/config.ts';
 import { LogLevel, SystemMode } from '../../../src/types/common.ts';
+import { ActorBootstrap } from '../../../src/core/actor-bootstrap.ts';
+import { EventBus } from '../../../src/core/event-system.ts';
+import { ActorSystem } from '../../../src/core/actor-system.ts';
 
 // Mock actor service
 class MockHvacActorService {
@@ -209,8 +212,9 @@ Deno.test('HVAC Controller - Basic Functionality', async (t) => {
     const controller = new HVACController(
       _mockHvacOptions,
       mockAppOptions,
-      mockActorService as unknown as HvacActorService,
       mockHaClient as unknown as HomeAssistantClient,
+      new ActorBootstrap(new EventBus(), new ActorSystem(new EventBus())),
+      new EventBus(),
     );
 
     assertExists(controller);

@@ -24,7 +24,6 @@ export const TYPES = {
   // HVAC
   HVACStateMachine: Symbol.for('HVACStateMachine'),
   HVACController: Symbol.for('HVACController'),
-  HVACControllerV2: Symbol.for('HVACControllerV2'),
   HVACAgent: Symbol.for('HVACAgent'),
 
   // Tools

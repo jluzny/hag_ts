@@ -6,7 +6,6 @@
 import { LoggerService } from '../core/logger.ts';
 import { BaseEvent } from '../core/event-system.ts';
 import { DomainActor, ActorStatus, ActorFactory } from '../core/actor-bootstrap.ts';
-import { HVACStateMachine } from './state-machine.ts';
 import { HvacActorService } from './hvac-actor-service.ts';
 import type { HvacOptions } from '../config/config.ts';
 import type { HomeAssistantClient } from '../home-assistant/client.ts';
@@ -58,7 +57,7 @@ export class HvacDomainActor implements DomainActor {
   /**
    * Start the HVAC domain actor
    */
-  async start(): Promise<void> {
+  start(): void {
     this.logger.info('🎭 Starting HVAC domain actor');
     
     try {
@@ -89,7 +88,7 @@ export class HvacDomainActor implements DomainActor {
   /**
    * Stop the HVAC domain actor
    */
-  async stop(): Promise<void> {
+  stop(): void {
     this.logger.info('🛑 Stopping HVAC domain actor');
     
     try {
@@ -143,15 +142,15 @@ export class HvacDomainActor implements DomainActor {
     try {
       switch (event.type) {
         case 'hvac.temperature_update':
-          await this.handleTemperatureUpdate(event);
+          this.handleTemperatureUpdate(event);
           break;
         
         case 'hvac.mode_change_request':
-          await this.handleModeChangeRequest(event);
+          this.handleModeChangeRequest(event);
           break;
         
         case 'hvac.evaluate_conditions':
-          await this.handleEvaluateConditions(event);
+          this.handleEvaluateConditions();
           break;
         
         case 'system.shutdown':
@@ -171,7 +170,7 @@ export class HvacDomainActor implements DomainActor {
   /**
    * Handle temperature update events
    */
-  private async handleTemperatureUpdate(event: BaseEvent): Promise<void> {
+  private handleTemperatureUpdate(event: BaseEvent): void {
     const payload = event.payload as { indoor: number; outdoor: number };
     
     this.logger.info('🌡️ Processing temperature update', {
@@ -190,7 +189,7 @@ export class HvacDomainActor implements DomainActor {
   /**
    * Handle mode change requests
    */
-  private async handleModeChangeRequest(event: BaseEvent): Promise<void> {
+  private handleModeChangeRequest(event: BaseEvent): void {
     const payload = event.payload as { mode: string; temperature?: number };
     
     this.logger.info('🎛️ Processing mode change request', {
@@ -212,7 +211,7 @@ export class HvacDomainActor implements DomainActor {
   /**
    * Handle condition evaluation requests
    */
-  private async handleEvaluateConditions(event: BaseEvent): Promise<void> {
+  private handleEvaluateConditions(): void {
     this.logger.info('🔍 Processing condition evaluation request');
 
     // The HVAC service automatically evaluates conditions when temperatures are updated
