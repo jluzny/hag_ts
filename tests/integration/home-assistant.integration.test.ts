@@ -9,21 +9,23 @@ import { assertEquals, assertExists, assertInstanceOf } from '@std/assert';
 import { createContainer } from '../../src/core/container.ts';
 import { TYPES } from '../../src/core/types.ts';
 import { HomeAssistantClient } from '../../src/home-assistant/client.ts';
-import { HassOptions } from '../../src/config/config.ts';
+import { HassOptions, Settings } from '../../src/config/config.ts';
 import { LoggerService } from '../../src/core/logger.ts';
 import { ConfigLoader } from '../../src/config/loader.ts';
 import { parseArgs } from '@std/cli';
 
-// Test configuration - get config file from command line args
+// Test configuration - get config file from command line args or use test config
 const args = parseArgs(Deno.args);
-const configPath = args.config;
+const configPath = args.config || 'config/hvac_config_test.yaml';
 
-if (!configPath) {
-  throw new Error('Config file path must be provided via --config argument');
+let testConfig: Settings;
+try {
+  // Try to load test configuration
+  testConfig = await ConfigLoader.loadSettings(configPath);
+} catch (error) {
+  console.log(`❌ Integration test config not found: ${configPath}`);
+  throw new Error(`Integration test requires config file: ${configPath}`);
 }
-
-// Load test configuration using ConfigLoader
-const testConfig = await ConfigLoader.loadSettings(configPath);
 
 Deno.test('Home Assistant Integration', async (t) => {
   const hassUrl = testConfig.hassOptions.restUrl;

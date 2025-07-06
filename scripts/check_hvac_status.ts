@@ -39,11 +39,11 @@ try {
       );
       console.log('');
     } catch (error) {
-      console.log(`❌ Error checking ${entityId}: ${error.message}`);
+      console.log(`❌ Error checking ${entityId}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   await client.disconnect();
 } catch (error) {
-  console.error('❌ Failed:', error.message);
+  console.error('❌ Failed:', error instanceof Error ? error.message : String(error));
 }

@@ -165,7 +165,6 @@ const mockAppOptions: ApplicationOptions = {
   useAi: true,
   aiModel: 'gpt-4o-mini',
   aiTemperature: 0.1,
-  dryRun: false,
   openaiApiKey: undefined, // Disabled for fast testing
 };
 

@@ -164,7 +164,7 @@ export class HealthChecker {
       results.push({
         name: 'HTTP Connectivity',
         status: false,
-        details: `Failed: ${error.message}`,
+        details: `Failed: ${error instanceof Error ? error.message : String(error)}`,
       });
     }
 
@@ -185,7 +185,7 @@ export class HealthChecker {
       results.push({
         name: 'DNS Resolution',
         status: false,
-        details: `Failed: ${error.message}`,
+        details: `Failed: ${error instanceof Error ? error.message : String(error)}`,
       });
     }
 
@@ -241,7 +241,7 @@ export class ConfigValidator {
       results.push({
         name: 'Configuration File Access',
         status: false,
-        details: `Error: ${error.message}`,
+        details: `Error: ${error instanceof Error ? error.message : String(error)}`,
       });
     }
 

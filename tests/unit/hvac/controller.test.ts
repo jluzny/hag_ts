@@ -1,18 +1,18 @@
 /**
  * Unit tests for HVAC Controller in HAG JavaScript variant.
  *
- * Tests controller functionality, dry run mode, and service coordination.
+ * Tests controller functionality and service coordination.
  */
 
-import { assertEquals, assertExists } from '@std/assert';
+import { assertExists } from '@std/assert';
 import { HVACController } from '../../../src/hvac/controller.ts';
-import { HVACStateMachine } from '../../../src/hvac/state-machine.ts';
+import { HvacActorService } from '../../../src/hvac/hvac-actor-service.ts';
 import { HomeAssistantClient } from '../../../src/home-assistant/client.ts';
 import { ApplicationOptions, HvacOptions } from '../../../src/config/config.ts';
-import { HVACMode, LogLevel, SystemMode } from '../../../src/types/common.ts';
+import { LogLevel, SystemMode } from '../../../src/types/common.ts';
 
-// Mock state machine
-class MockHVACStateMachine {
+// Mock actor service
+class MockHvacActorService {
   private currentState = 'idle';
   private context = {
     indoorTemp: 21.0,
@@ -26,25 +26,16 @@ class MockHVACStateMachine {
 
   getStatus() {
     return {
-      currentState: this.currentState,
-      context: this.context,
-      canHeat: true,
-      canCool: true,
-      systemMode: SystemMode.AUTO,
+      mode: this.currentState,
+      temperatures: {
+        current: this.context.indoorTemp,
+        target: 22,
+        outdoor: this.context.outdoorTemp,
+      },
+      lastUpdate: new Date(),
+      isActive: false,
+      sensorCount: 2,
     };
-  }
-
-  manualOverride(_mode: HVACMode, _temperature?: number): void {
-    this.currentState = 'manualOverride';
-  }
-
-  updateTemperatures(indoor: number, outdoor: number): void {
-    this.context.indoorTemp = indoor;
-    this.context.outdoorTemp = outdoor;
-  }
-
-  evaluateConditions(): void {
-    // Mock implementation
   }
 
   start(): void {
@@ -168,7 +159,7 @@ class MockHomeAssistantClient {
 }
 
 // Test configuration
-const mockHvacOptions: HvacOptions = {
+const _mockHvacOptions: HvacOptions = {
   tempSensor: 'sensor.indoor_temp',
   outdoorSensor: 'sensor.outdoor_temp',
   systemMode: SystemMode.AUTO,
@@ -206,23 +197,19 @@ const mockAppOptions: ApplicationOptions = {
   useAi: false,
   aiModel: 'gpt-4o-mini',
   aiTemperature: 0.1,
-  dryRun: false,
 };
 
-const mockAppOptionsDryRun: ApplicationOptions = {
-  ...mockAppOptions,
-  dryRun: true,
-};
+
 
 Deno.test('HVAC Controller - Basic Functionality', async (t) => {
   await t.step('should create controller instance', () => {
-    const mockStateMachine = new MockHVACStateMachine();
+    const mockActorService = new MockHvacActorService();
     const mockHaClient = new MockHomeAssistantClient();
 
     const controller = new HVACController(
-      mockHvacOptions,
+      _mockHvacOptions,
       mockAppOptions,
-      mockStateMachine as unknown as HVACStateMachine,
+      mockActorService as unknown as HvacActorService,
       mockHaClient as unknown as HomeAssistantClient,
     );
 
@@ -230,46 +217,4 @@ Deno.test('HVAC Controller - Basic Functionality', async (t) => {
   });
 });
 
-Deno.test('HVAC Controller - Dry Run Mode', async (t) => {
-  await t.step('should not call HA services in dry run mode', async () => {
-    const mockStateMachine = new MockHVACStateMachine();
-    const mockHaClient = new MockHomeAssistantClient();
 
-    const controller = new HVACController(
-      mockHvacOptions,
-      mockAppOptionsDryRun, // Use dry run options
-      mockStateMachine as unknown as HVACStateMachine,
-      mockHaClient as unknown as HomeAssistantClient,
-    );
-
-    // Test manual override without starting the controller (avoiding long-running operations)
-    try {
-      await controller.manualOverride('heat', { temperature: 22.0 });
-      // This should fail because controller is not running
-    } catch (error) {
-      // Expected: controller not running
-      assertEquals(
-        error instanceof Error && error.message.includes('not running'),
-        true,
-      );
-    }
-
-    // Assert that no service calls were made to Home Assistant
-    assertEquals(mockHaClient.serviceCalls.length, 0);
-  });
-
-  await t.step('should create controller without throwing', () => {
-    const mockStateMachine = new MockHVACStateMachine();
-    const mockHaClient = new MockHomeAssistantClient();
-
-    const controller = new HVACController(
-      mockHvacOptions,
-      mockAppOptionsDryRun,
-      mockStateMachine as unknown as HVACStateMachine,
-      mockHaClient as unknown as HomeAssistantClient,
-    );
-
-    // Controller should be created successfully
-    assertExists(controller);
-  });
-});

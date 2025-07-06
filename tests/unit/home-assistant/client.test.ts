@@ -212,12 +212,14 @@ Deno.test({
     assertExists(sentMessage);
 
     // Send response
-    mockWs.receiveMessage({
-      id: sentMessage.id,
-      type: 'result',
-      success: true,
-      result: { context: {} },
-    });
+    if (sentMessage) {
+      mockWs.receiveMessage({
+        id: sentMessage.id,
+        type: 'result',
+        success: true,
+        result: { context: {} },
+      });
+    }
 
     await callPromise; // Should resolve
     await client.disconnect();

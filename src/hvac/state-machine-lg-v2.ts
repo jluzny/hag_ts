@@ -249,7 +249,6 @@ export class HVACLangGraphStateMachineV2 {
       mode,
       indoorTemp: state.indoorTemp,
       outdoorTemp: state.outdoorTemp,
-      dryRun: true, // Always dry run in this implementation
     });
 
     // In real implementation, this would call the HVAC controller

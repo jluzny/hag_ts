@@ -35,7 +35,7 @@ try {
     );
     console.log(`✅ Indoor temp: ${tempState.state}°C`);
   } catch (error) {
-    console.log(`❌ Indoor temp error: ${error.message}`);
+    console.log(`❌ Indoor temp error: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   try {
@@ -44,13 +44,13 @@ try {
     );
     console.log(`✅ Outdoor temp: ${outdoorState.state}°C`);
   } catch (error) {
-    console.log(`❌ Outdoor temp error: ${error.message}`);
+    console.log(`❌ Outdoor temp error: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   console.log('\nStep 5: Disconnecting...');
   await client.disconnect();
   console.log('✅ Disconnected cleanly');
 } catch (error) {
-  console.error('❌ WebSocket debug failed:', error.message);
-  console.error('Stack trace:', error.stack);
+  console.error('❌ WebSocket debug failed:', error instanceof Error ? error.message : String(error));
+  console.error('Stack trace:', error instanceof Error ? error.stack : String(error));
 }

@@ -8,6 +8,7 @@ import { assertEquals, assertExists } from '@std/assert';
 import { EventBus } from '../../../src/core/event-system.ts';
 import { HassEventImpl } from '../../../src/home-assistant/models.ts';
 
+
 Deno.test('Event System - EventBus', async (t) => {
   await t.step('should create event bus instance', () => {
     const eventBus = new EventBus();
@@ -43,7 +44,7 @@ Deno.test('Event System - EventBus', async (t) => {
 
     // Verify event was received
     assertExists(receivedEvent);
-    const event = receivedEvent as HassEventImpl;
+    const event: HassEventImpl = receivedEvent!;
     assertEquals(event.eventType, 'state_changed');
     assertEquals(event.origin, 'test');
   });
@@ -53,7 +54,7 @@ Deno.test('Event System - EventBus', async (t) => {
     const receivedEvents: HassEventImpl[] = [];
 
     // Subscribe multiple handlers
-    eventBus.subscribe('state_changed', (event) => {
+    eventBus.subscribe('state_changed', (event: HassEventImpl) => {
       receivedEvents.push(event);
     });
 

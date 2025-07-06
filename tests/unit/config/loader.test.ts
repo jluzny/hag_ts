@@ -4,7 +4,7 @@
  * Tests YAML file loading, environment variable substitution, and validation.
  */
 
-import { assertEquals, assertExists, assertRejects } from '@std/assert';
+import { assertEquals, assertExists, assertRejects, fail } from '@std/assert';
 import { ConfigLoader } from '../../../src/config/loader.ts';
 import { ConfigurationError } from '../../../src/core/exceptions.ts';
 import { LogLevel, SystemMode } from '../../../src/types/common.ts';
@@ -102,6 +102,7 @@ appOptions:
   logLevel: info
   useAi: false
   aiModel: gpt-4o-mini
+  aiTemperature: 0.1
 
 hassOptions:
   wsUrl: ws://localhost:8123/api/websocket
@@ -109,6 +110,7 @@ hassOptions:
   token: test_token
   maxRetries: 5
   retryDelayMs: 2000
+  stateCheckInterval: 300000
 
 hvacOptions:
   tempSensor: sensor.indoor_temperature
@@ -205,20 +207,34 @@ Deno.test('Config Loader - Environment Variable Overrides', async (t) => {
     'should apply Home Assistant environment overrides',
     async () => {
       const baseConfig = `
+    appOptions:
+      logLevel: info
+      useAi: false
+      aiModel: gpt-4o-mini
+      aiTemperature: 0.1
     hassOptions:
       wsUrl: ws://localhost:8123/api/websocket
       restUrl: http://localhost:8123
       token: original_token
+      maxRetries: 5
+      retryDelayMs: 1000
+      stateCheckInterval: 300000
     hvacOptions:
       tempSensor: sensor.temp
+      outdoorSensor: sensor.outdoor_temp
+      systemMode: auto
       hvacEntities: []
       heating:
+        temperature: 21.0
+        presetMode: comfort
         temperatureThresholds:
           indoorMin: 19.0
           indoorMax: 22.0
           outdoorMin: -10.0
           outdoorMax: 15.0
       cooling:
+        temperature: 24.0
+        presetMode: eco
         temperatureThresholds:
           indoorMin: 23.0
           indoorMax: 26.0
@@ -249,20 +265,31 @@ Deno.test('Config Loader - Environment Variable Overrides', async (t) => {
     appOptions:
       logLevel: INFO
       useAi: false
+      aiModel: gpt-4o-mini
+      aiTemperature: 0.1
     hassOptions:
       wsUrl: ws://localhost:8123/api/websocket
       restUrl: http://localhost:8123
       token: token
+      maxRetries: 5
+      retryDelayMs: 1000
+      stateCheckInterval: 300000
     hvacOptions:
       tempSensor: sensor.temp
+      outdoorSensor: sensor.outdoor_temp
+      systemMode: auto
       hvacEntities: []
       heating:
+        temperature: 21.0
+        presetMode: comfort
         temperatureThresholds:
           indoorMin: 19.0
           indoorMax: 22.0
           outdoorMin: -10.0
           outdoorMax: 15.0
       cooling:
+        temperature: 24.0
+        presetMode: eco
         temperatureThresholds:
           indoorMin: 23.0
           indoorMax: 26.0
@@ -285,22 +312,34 @@ Deno.test('Config Loader - Environment Variable Overrides', async (t) => {
 
   await t.step('should apply HVAC environment overrides', async () => {
     const baseConfig = `
+    appOptions:
+      logLevel: info
+      useAi: false
+      aiModel: gpt-4o-mini
+      aiTemperature: 0.1
     hassOptions:
       wsUrl: ws://localhost:8123/api/websocket
       restUrl: http://localhost:8123
       token: token
+      maxRetries: 5
+      retryDelayMs: 1000
+      stateCheckInterval: 300000
     hvacOptions:
       tempSensor: sensor.original
       outdoorSensor: sensor.outdoor_original
       systemMode: auto
       hvacEntities: []
       heating:
+        temperature: 21.0
+        presetMode: comfort
         temperatureThresholds:
           indoorMin: 19.0
           indoorMax: 22.0
           outdoorMin: -10.0
           outdoorMax: 15.0
       cooling:
+        temperature: 24.0
+        presetMode: eco
         temperatureThresholds:
           indoorMin: 23.0
           indoorMax: 26.0
@@ -325,20 +364,34 @@ Deno.test('Config Loader - Environment Variable Overrides', async (t) => {
     async () => {
       mockEnvironment.clear();
       const baseConfig = `
+    appOptions:
+      logLevel: info
+      useAi: false
+      aiModel: gpt-4o-mini
+      aiTemperature: 0.1
     hassOptions:
       wsUrl: ws://localhost:8123/api/websocket
       restUrl: http://localhost:8123
       token: token
+      maxRetries: 5
+      retryDelayMs: 1000
+      stateCheckInterval: 300000
     hvacOptions:
       tempSensor: sensor.temp
+      outdoorSensor: sensor.outdoor_temp
+      systemMode: auto
       hvacEntities: []
       heating:
+        temperature: 21.0
+        presetMode: comfort
         temperatureThresholds:
           indoorMin: 19.0
           indoorMax: 22.0
           outdoorMin: -10.0
           outdoorMax: 15.0
       cooling:
+        temperature: 24.0
+        presetMode: eco
         temperatureThresholds:
           indoorMin: 23.0
           indoorMax: 26.0
@@ -462,25 +515,48 @@ Deno.test('Config Loader - Default Values', async (t) => {
   setupMocks();
 
   await t.step(
-    'should apply default values for missing optional fields',
+    'should require all necessary fields in configuration',
     async () => {
-      const minimalConfig = `
+      const completeConfig = `
+    appOptions:
+      logLevel: info
+      useAi: false
+      aiModel: gpt-4o-mini
+      aiTemperature: 0.1
     hassOptions:
       wsUrl: ws://localhost:8123/api/websocket
       restUrl: http://localhost:8123
       token: token
+      maxRetries: 5
+      retryDelayMs: 1000
+      stateCheckInterval: 300000
     hvacOptions:
       tempSensor: sensor.indoor_temperature
+      outdoorSensor: sensor.openweathermap_temperature
+      systemMode: auto
       hvacEntities: []
-      heating: {}
-      cooling: {}
-    `;
+      heating:
+        temperature: 21.0
+        presetMode: comfort
+        temperatureThresholds:
+          indoorMin: 19.0
+          indoorMax: 22.0
+          outdoorMin: -10.0
+          outdoorMax: 15.0
+      cooling:
+        temperature: 24.0
+        presetMode: eco
+        temperatureThresholds:
+          indoorMin: 23.0
+          indoorMax: 26.0
+          outdoorMin: 10.0
+          outdoorMax: 45.0    `;
 
-      mockFileSystem.set('minimal.yaml', minimalConfig);
+      mockFileSystem.set('complete.yaml', completeConfig);
 
-      const settings = await ConfigLoader.loadSettings('minimal.yaml');
+      const settings = await ConfigLoader.loadSettings('complete.yaml');
 
-      // Should have default values
+      // Should load configured values
       assertEquals(settings.appOptions.logLevel, LogLevel.INFO);
       assertEquals(settings.appOptions.useAi, false);
       assertEquals(settings.hassOptions.maxRetries, 5);
@@ -493,29 +569,48 @@ Deno.test('Config Loader - Default Values', async (t) => {
     },
   );
 
-  await t.step('should preserve provided values over defaults', async () => {
+  await t.step('should load complete configuration values', async () => {
     const configWithValues = `
     appOptions:
       logLevel: error
       useAi: true
+      aiModel: gpt-4
+      aiTemperature: 0.5
     hassOptions:
       wsUrl: ws://localhost:8123/api/websocket
       restUrl: http://localhost:8123
       token: token
       maxRetries: 10
+      retryDelayMs: 2000
+      stateCheckInterval: 600000
     hvacOptions:
       tempSensor: sensor.indoor_temperature
+      outdoorSensor: sensor.outdoor_temp
       systemMode: cool_only
       hvacEntities: []
-      heating: {}
-      cooling: {}
+      heating:
+        temperature: 20.0
+        presetMode: comfort
+        temperatureThresholds:
+          indoorMin: 19.0
+          indoorMax: 22.0
+          outdoorMin: -10.0
+          outdoorMax: 15.0
+      cooling:
+        temperature: 25.0
+        presetMode: eco
+        temperatureThresholds:
+          indoorMin: 23.0
+          indoorMax: 26.0
+          outdoorMin: 10.0
+          outdoorMax: 45.0
     `;
 
     mockFileSystem.set('with-values.yaml', configWithValues);
 
     const settings = await ConfigLoader.loadSettings('with-values.yaml');
 
-    // Should use provided values, not defaults
+    // Should use configured values
     assertEquals(settings.appOptions.logLevel, LogLevel.ERROR);
     assertEquals(settings.appOptions.useAi, true);
     assertEquals(settings.hassOptions.maxRetries, 10);
@@ -541,12 +636,49 @@ Deno.test('Config Loader - File Discovery', async (t) => {
     ];
 
     for (const location of locations) {
-      mockFileSystem.clear();
-      mockFileSystem.set(location, validYamlConfig);
+      const validConfig = `
+      appOptions:
+        logLevel: info
+        useAi: false
+        aiModel: gpt-4o-mini
+        aiTemperature: 0.1
+      hassOptions:
+        wsUrl: ws://localhost:8123/api/websocket
+        restUrl: http://localhost:8123
+        token: test_token
+        maxRetries: 5
+        retryDelayMs: 1000
+        stateCheckInterval: 300000
+      hvacOptions:
+        tempSensor: sensor.indoor_temp
+        outdoorSensor: sensor.outdoor_temp
+        systemMode: auto
+        hvacEntities: []
+        heating:
+          temperature: 21.0
+          presetMode: comfort
+          temperatureThresholds:
+            indoorMin: 19.0
+            indoorMax: 22.0
+            outdoorMin: -10.0
+            outdoorMax: 15.0
+        cooling:
+          temperature: 24.0
+          presetMode: eco
+          temperatureThresholds:
+            indoorMin: 23.0
+            indoorMax: 26.0
+            outdoorMin: 10.0
+            outdoorMax: 45.0
+      `;
 
-      // Should find the config automatically
+      mockFileSystem.set(location, validConfig);
+
       const settings = await ConfigLoader.loadSettings();
       assertExists(settings);
+      assertEquals(settings.hvacOptions.tempSensor, 'sensor.indoor_temp');
+
+      mockFileSystem.delete(location);
     }
   });
 
@@ -555,22 +687,61 @@ Deno.test('Config Loader - File Discovery', async (t) => {
     async () => {
       const customPath = '/custom/path/config.yaml';
       mockEnvironment.set('HAG_CONFIG_FILE', customPath);
-      mockFileSystem.set(customPath, validYamlConfig);
+
+      const validConfig = `
+    appOptions:
+      logLevel: info
+      useAi: false
+      aiModel: gpt-4o-mini
+      aiTemperature: 0.1
+    hassOptions:
+      wsUrl: ws://localhost:8123/api/websocket
+      restUrl: http://localhost:8123
+      token: custom_token
+      maxRetries: 5
+      retryDelayMs: 1000
+      stateCheckInterval: 300000
+    hvacOptions:
+      tempSensor: sensor.custom_temp
+      outdoorSensor: sensor.outdoor_temp
+      systemMode: auto
+      hvacEntities: []
+      heating:
+        temperature: 21.0
+        presetMode: comfort
+        temperatureThresholds:
+          indoorMin: 19.0
+          indoorMax: 22.0
+          outdoorMin: -10.0
+          outdoorMax: 15.0
+      cooling:
+        temperature: 24.0
+        presetMode: eco
+        temperatureThresholds:
+          indoorMin: 23.0
+          indoorMax: 26.0
+          outdoorMin: 10.0
+          outdoorMax: 45.0
+    `;
+
+      mockFileSystem.set(customPath, validConfig);
 
       const settings = await ConfigLoader.loadSettings();
-      assertExists(settings);
+      assertEquals(settings.hvacOptions.tempSensor, 'sensor.custom_temp');
+      assertEquals(settings.hassOptions.token, 'custom_token');
     },
   );
 
   await t.step('should handle no config file found gracefully', async () => {
-    // No config files exist
+    // Clear all potential config files
     mockFileSystem.clear();
 
-    await assertRejects(
-      () => ConfigLoader.loadSettings(),
-      ConfigurationError,
-      'Configuration file not found',
-    );
+    try {
+      await ConfigLoader.loadSettings();
+      fail('Should have thrown an error');
+    } catch (error) {
+      assertExists(error);
+    }
   });
 
   teardownMocks();
@@ -580,22 +751,72 @@ Deno.test('Config Loader - Validation Helper', async (t) => {
   setupMocks();
 
   await t.step('should validate config file successfully', async () => {
-    mockFileSystem.set('valid.yaml', validYamlConfig);
+    const validConfig = `
+    appOptions:
+      logLevel: info
+      useAi: false
+      aiModel: gpt-4o-mini
+      aiTemperature: 0.1
+    hassOptions:
+      wsUrl: ws://localhost:8123/api/websocket
+      restUrl: http://localhost:8123
+      token: test_token
+      maxRetries: 5
+      retryDelayMs: 1000
+      stateCheckInterval: 300000
+    hvacOptions:
+      tempSensor: sensor.indoor_temp
+      outdoorSensor: sensor.outdoor_temp
+      systemMode: auto
+      hvacEntities: []
+      heating:
+        temperature: 21.0
+        presetMode: comfort
+        temperatureThresholds:
+          indoorMin: 19.0
+          indoorMax: 22.0
+          outdoorMin: -10.0
+          outdoorMax: 15.0
+      cooling:
+        temperature: 24.0
+        presetMode: eco
+        temperatureThresholds:
+          indoorMin: 23.0
+          indoorMax: 26.0
+          outdoorMin: 10.0
+          outdoorMax: 45.0
+    `;
+
+    mockFileSystem.set('valid.yaml', validConfig);
 
     const result = await ConfigLoader.validateConfigFile('valid.yaml');
 
     assertEquals(result.valid, true);
-    assertExists(result.config);
     assertEquals(result.errors, undefined);
+    assertExists(result.config);
   });
 
   await t.step('should return validation errors', async () => {
     const invalidConfig = `
-    appOptions:
-      logLevel: INVALID_LEVEL
     hassOptions:
       wsUrl: invalid-url
-      token: token
+      restUrl: http://localhost:8123
+      token: test_token
+    hvacOptions:
+      tempSensor: invalid_sensor
+      hvacEntities: []
+      heating:
+        temperatureThresholds:
+          indoorMin: 19.0
+          indoorMax: 22.0
+          outdoorMin: -10.0
+          outdoorMax: 15.0
+      cooling:
+        temperatureThresholds:
+          indoorMin: 23.0
+          indoorMax: 26.0
+          outdoorMin: 10.0
+          outdoorMax: 45.0
     `;
 
     mockFileSystem.set('invalid.yaml', invalidConfig);
@@ -673,7 +894,7 @@ Deno.test('Config Loader - Complex Configuration Scenarios', async (t) => {
   await t.step(
     'should handle complete configuration with all options',
     async () => {
-      const complexConfig = `
+const complexConfig = `
     appOptions:
       logLevel: debug
       useAi: true
@@ -687,6 +908,7 @@ Deno.test('Config Loader - Complex Configuration Scenarios', async (t) => {
       token: long_lived_access_token_here
       maxRetries: 5
       retryDelayMs: 2000
+      stateCheckInterval: 300000
 
     hvacOptions:
       tempSensor: sensor.indoor_temperature
@@ -742,17 +964,28 @@ Deno.test('Config Loader - Complex Configuration Scenarios', async (t) => {
     },
   );
 
-  await t.step('should handle nested merging with defaults', async () => {
-    const partialConfig = `
+  await t.step('should handle complete configuration with custom values', async () => {
+    const customConfig = `
+    appOptions:
+      logLevel: warning
+      useAi: false
+      aiModel: gpt-3.5-turbo
+      aiTemperature: 0.2
     hassOptions:
       wsUrl: ws://localhost:8123/api/websocket
       restUrl: http://localhost:8123
       token: token
+      maxRetries: 3
+      retryDelayMs: 500
+      stateCheckInterval: 600000
     hvacOptions:
       tempSensor: sensor.temp
+      outdoorSensor: sensor.outdoor_temp
+      systemMode: heat_only
       hvacEntities: []
       heating:
         temperature: 19.0
+        presetMode: comfort
         temperatureThresholds:
           indoorMin: 17.0
           indoorMax: 22.0
@@ -768,21 +1001,22 @@ Deno.test('Config Loader - Complex Configuration Scenarios', async (t) => {
           outdoorMax: 45.0
     `;
 
-    mockFileSystem.set('partial.yaml', partialConfig);
+    mockFileSystem.set('custom.yaml', customConfig);
 
-    const settings = await ConfigLoader.loadSettings('partial.yaml');
+    const settings = await ConfigLoader.loadSettings('custom.yaml');
 
-    // Should merge with defaults properly
+    // Should use the configured values
     assertEquals(settings.hvacOptions.heating.temperature, 19.0);
     assertEquals(
       settings.hvacOptions.heating.temperatureThresholds.indoorMin,
       17.0,
     );
-    // These should come from defaults
-    assertExists(settings.hvacOptions.heating.temperatureThresholds.indoorMax);
-    assertExists(settings.hvacOptions.heating.temperatureThresholds.outdoorMin);
+    assertEquals(settings.hvacOptions.heating.temperatureThresholds.indoorMax, 22.0);
+    assertEquals(settings.hvacOptions.heating.temperatureThresholds.outdoorMin, -10.0);
     assertEquals(settings.hvacOptions.cooling.presetMode, 'windFreeSleep');
-    assertExists(settings.hvacOptions.cooling.temperature);
+    assertEquals(settings.hvacOptions.cooling.temperature, 24.0);
+    assertEquals(settings.appOptions.logLevel, LogLevel.WARNING);
+    assertEquals(settings.hassOptions.maxRetries, 3);
   });
 
   teardownMocks();

@@ -80,11 +80,16 @@ const mockConfigYaml = `
 appOptions:
   logLevel: error
   useAi: false
+  aiModel: gpt-4o-mini
+  aiTemperature: 0.1
 
 hassOptions:
   wsUrl: ws://localhost:8123/api/websocket
   restUrl: http://localhost:8123
   token: test_token
+  maxRetries: 3
+  retryDelayMs: 1000
+  stateCheckInterval: 300000
 
 hvacOptions:
   tempSensor: sensor.indoor_temp
@@ -524,9 +529,9 @@ Deno.test('Application Container - Configuration Validation', async (t) => {
   });
 
   await t.step(
-    'should handle partial configuration with defaults',
+    'should require complete configuration (no defaults)',
     async () => {
-      const minimalYaml = `
+      const incompleteYaml = `
     hassOptions:
       wsUrl: ws://localhost:8123/api/websocket
       restUrl: http://localhost:8123
@@ -534,21 +539,29 @@ Deno.test('Application Container - Configuration Validation', async (t) => {
     hvacOptions:
       tempSensor: sensor.temp
       hvacEntities: []
-      heating: {}
-      cooling: {}
-    `;
+      heating:
+        temperatureThresholds:
+          indoorMin: 19.0
+          indoorMax: 22.0
+          outdoorMin: -10.0
+          outdoorMax: 15.0
+      cooling:
+        temperatureThresholds:
+          indoorMin: 23.0
+          indoorMax: 26.0
+          outdoorMin: 10.0
+          outdoorMax: 45.0    `;
 
-      mockFileSystem.set('minimal.yaml', minimalYaml);
+      mockFileSystem.set('incomplete.yaml', incompleteYaml);
 
       const container = new ApplicationContainer();
-      await container.initialize('minimal.yaml');
-
-      const settings = container.getSettings();
-
-      // Should have default values
-      assertEquals(settings.appOptions.logLevel, LogLevel.INFO);
-      assertEquals(settings.appOptions.useAi, false);
-      assertEquals(settings.hvacOptions.systemMode, SystemMode.AUTO);
+      
+      // Should reject incomplete configuration
+      await assertRejects(
+        () => container.initialize('incomplete.yaml'),
+        Error,
+        'Configuration validation failed',
+      );
     },
   );
 

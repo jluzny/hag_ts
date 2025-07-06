@@ -75,7 +75,7 @@ class InteractiveValidator {
             configResults,
           );
         } catch (error) {
-          console.log(`❌ Failed to validate ${configPath}: ${error.message}`);
+          console.log(`❌ Failed to validate ${configPath}: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
       await this.validator.waitForContinue();
@@ -114,7 +114,7 @@ class InteractiveValidator {
           this.validator.displayResults('Home Assistant API', [{
             name: 'API Connection',
             status: false,
-            details: `Error: ${error.message}`,
+            details: `Error: ${error instanceof Error ? error.message : String(error)}`,
           }]);
         }
       } else {
@@ -148,7 +148,7 @@ class InteractiveValidator {
           aiResults.push({
             name: 'OpenAI Configuration',
             status: false,
-            details: `Error: ${error.message}`,
+            details: `Error: ${error instanceof Error ? error.message : String(error)}`,
           });
         }
       } else {
@@ -214,7 +214,7 @@ class InteractiveValidator {
             binaryResults.push({
               name: 'Binary Execution',
               status: false,
-              details: `Error: ${error.message}`,
+              details: `Error: ${error instanceof Error ? error.message : String(error)}`,
             });
           }
         }
@@ -224,7 +224,7 @@ class InteractiveValidator {
         this.validator.displayResults('Binary Validation', [{
           name: 'Binary Access',
           status: false,
-          details: `Error: ${error.message}`,
+          details: `Error: ${error instanceof Error ? error.message : String(error)}`,
         }]);
       }
       await this.validator.waitForContinue();

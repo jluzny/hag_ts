@@ -59,11 +59,11 @@ try {
       }
       break; // Only need to fetch once
     } catch (error) {
-      console.log(`Error fetching entities: ${error.message}`);
+      console.log(`Error fetching entities: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   await client.disconnect();
 } catch (error) {
-  console.error('Failed:', error.message);
+  console.error('Failed:', error instanceof Error ? error.message : String(error));
 }

@@ -46,10 +46,9 @@ hvacOptions:
       outdoorMin: -5.0
       outdoorMax: 15.0
     defrost:
-      enabled: true
-      intervalHours: 2
-      durationMinutes: 5
       temperatureThreshold: 0.0
+      periodSeconds: 7200
+      durationSeconds: 300
 
   cooling:
     temperature: 24.0

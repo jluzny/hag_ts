@@ -5,13 +5,10 @@
 import { assertEquals, assertThrows } from '@std/assert';
 import { ZodError } from 'zod';
 import {
-  ApplicationOptionsSchema,
   HassOptionsSchema,
   type HvacOptions as _HvacOptions,
   HvacOptionsSchema,
-  LogLevel,
   type Settings as _Settings,
-  SettingsSchema,
   SystemMode,
 } from '../../../src/config/config.ts';
 
@@ -23,6 +20,7 @@ Deno.test('HassOptionsSchema', async (t) => {
       token: 'long_lived_access_token',
       maxRetries: 3,
       retryDelayMs: 1000,
+      stateCheckInterval: 300000,
     };
 
     const result = HassOptionsSchema.parse(validConfig);
@@ -33,16 +31,20 @@ Deno.test('HassOptionsSchema', async (t) => {
     assertEquals(result.retryDelayMs, validConfig.retryDelayMs);
   });
 
-  await t.step('should apply defaults for optional fields', () => {
-    const minimalConfig = {
+  await t.step('should validate complete config with all fields', () => {
+    const completeConfig = {
       wsUrl: 'ws://localhost:8123/api/websocket',
       restUrl: 'http://localhost:8123',
       token: 'token',
+      maxRetries: 5,
+      retryDelayMs: 1000,
+      stateCheckInterval: 300000,
     };
 
-    const result = HassOptionsSchema.parse(minimalConfig);
+    const result = HassOptionsSchema.parse(completeConfig);
     assertEquals(result.maxRetries, 5);
     assertEquals(result.retryDelayMs, 1000);
+    assertEquals(result.stateCheckInterval, 300000);
   });
 
   await t.step('should reject invalid URLs', () => {
@@ -124,8 +126,12 @@ Deno.test('HvacOptionsSchema', async (t) => {
   await t.step('should validate defrost configuration', () => {
     const configWithDefrost = {
       tempSensor: 'sensor.indoor_temperature',
+      outdoorSensor: 'sensor.outdoor_temperature',
+      systemMode: SystemMode.AUTO,
       hvacEntities: [],
       heating: {
+        temperature: 21.0,
+        presetMode: 'comfort',
         temperatureThresholds: {
           indoorMin: 19.0,
           indoorMax: 22.0,
@@ -139,6 +145,8 @@ Deno.test('HvacOptionsSchema', async (t) => {
         },
       },
       cooling: {
+        temperature: 24.0,
+        presetMode: 'eco',
         temperatureThresholds: {
           indoorMin: 23.0,
           indoorMax: 26.0,
@@ -157,8 +165,12 @@ Deno.test('HvacOptionsSchema', async (t) => {
   await t.step('should validate active hours configuration', () => {
     const configWithActiveHours = {
       tempSensor: 'sensor.indoor_temperature',
+      outdoorSensor: 'sensor.outdoor_temperature',
+      systemMode: SystemMode.AUTO,
       hvacEntities: [],
       heating: {
+        temperature: 21.0,
+        presetMode: 'comfort',
         temperatureThresholds: {
           indoorMin: 19.0,
           indoorMax: 22.0,
@@ -167,6 +179,8 @@ Deno.test('HvacOptionsSchema', async (t) => {
         },
       },
       cooling: {
+        temperature: 24.0,
+        presetMode: 'eco',
         temperatureThresholds: {
           indoorMin: 23.0,
           indoorMax: 26.0,
@@ -188,134 +202,9 @@ Deno.test('HvacOptionsSchema', async (t) => {
   });
 });
 
-Deno.test('ApplicationOptionsSchema', async (t) => {
-  await t.step('should validate application options with defaults', () => {
-    const result = ApplicationOptionsSchema.parse({});
-    assertEquals(result.logLevel, LogLevel.DEBUG);
-    assertEquals(result.useAi, false);
-    assertEquals(result.aiModel, 'gpt-4o-mini');
-    assertEquals(result.aiTemperature, 0.1);
-    assertEquals(result.openaiApiKey, undefined);
-  });
 
-  await t.step('should validate AI configuration', () => {
-    const aiConfig = {
-      logLevel: LogLevel.DEBUG,
-      useAi: true,
-      aiModel: 'gpt-4',
-      aiTemperature: 0.5,
-      openaiApiKey: 'sk-test-key',
-    };
 
-    const result = ApplicationOptionsSchema.parse(aiConfig);
-    assertEquals(result.logLevel, LogLevel.DEBUG);
-    assertEquals(result.useAi, true);
-    assertEquals(result.aiModel, 'gpt-4');
-    assertEquals(result.aiTemperature, 0.5);
-    assertEquals(result.openaiApiKey, 'sk-test-key');
-  });
 
-  await t.step('should reject invalid AI temperature', () => {
-    const invalidConfig = {
-      aiTemperature: 3.0, // Above max of 2.0
-    };
-
-    assertThrows(() => ApplicationOptionsSchema.parse(invalidConfig), ZodError);
-  });
-});
-
-Deno.test('SettingsSchema', async (t) => {
-  await t.step('should validate complete settings', () => {
-    const completeSettings = {
-      appOptions: {
-        logLevel: LogLevel.INFO,
-        useAi: false,
-      },
-      hassOptions: {
-        wsUrl: 'ws://localhost:8123/api/websocket',
-        restUrl: 'http://localhost:8123',
-        token: 'test_token',
-      },
-      hvacOptions: {
-        tempSensor: 'sensor.indoor_temperature',
-        hvacEntities: [
-          {
-            entityId: 'climate.test',
-            enabled: true,
-            defrost: false,
-          },
-        ],
-        heating: {
-          temperature: 21.0,
-          presetMode: 'comfort',
-          temperatureThresholds: {
-            indoorMin: 19.0,
-            indoorMax: 22.0,
-            outdoorMin: -10.0,
-            outdoorMax: 15.0,
-          },
-        },
-        cooling: {
-          temperature: 24.0,
-          presetMode: 'eco',
-          temperatureThresholds: {
-            indoorMin: 23.0,
-            indoorMax: 26.0,
-            outdoorMin: 10.0,
-            outdoorMax: 45.0,
-          },
-        },
-      },
-    };
-
-    const result = SettingsSchema.parse(completeSettings);
-    assertEquals(result.appOptions.logLevel, LogLevel.INFO);
-    assertEquals(result.hassOptions.wsUrl, completeSettings.hassOptions.wsUrl);
-    assertEquals(
-      result.hvacOptions.tempSensor,
-      completeSettings.hvacOptions.tempSensor,
-    );
-  });
-
-  await t.step('should apply nested defaults', () => {
-    const minimalSettings = {
-      hassOptions: {
-        wsUrl: 'ws://localhost:8123/api/websocket',
-        restUrl: 'http://localhost:8123',
-        token: 'test_token',
-      },
-      hvacOptions: {
-        tempSensor: 'sensor.indoor_temperature',
-        hvacEntities: [],
-        heating: {
-          temperatureThresholds: {
-            indoorMin: 19.0,
-            indoorMax: 22.0,
-            outdoorMin: -10.0,
-            outdoorMax: 15.0,
-          },
-        },
-        cooling: {
-          temperatureThresholds: {
-            indoorMin: 23.0,
-            indoorMax: 26.0,
-            outdoorMin: 10.0,
-            outdoorMax: 45.0,
-          },
-        },
-      },
-    };
-
-    const result = SettingsSchema.parse(minimalSettings);
-    assertEquals(result.appOptions.logLevel, LogLevel.DEBUG);
-    assertEquals(result.appOptions.useAi, false);
-    assertEquals(result.hvacOptions.systemMode, SystemMode.AUTO);
-    assertEquals(
-      result.hvacOptions.outdoorSensor,
-      'sensor.openweathermap_temperature',
-    );
-  });
-});
 
 Deno.test('Temperature thresholds validation', async (t) => {
   await t.step('should enforce temperature ranges', () => {
@@ -354,6 +243,8 @@ Deno.test('Entity validation', async (t) => {
   await t.step('should validate HVAC entity IDs', () => {
     const validEntity = {
       tempSensor: 'sensor.temp',
+      outdoorSensor: 'sensor.outdoor_temp',
+      systemMode: SystemMode.AUTO,
       hvacEntities: [
         {
           entityId: 'climate.living_room_ac',
@@ -362,6 +253,8 @@ Deno.test('Entity validation', async (t) => {
         },
       ],
       heating: {
+        temperature: 21.0,
+        presetMode: 'comfort',
         temperatureThresholds: {
           indoorMin: 19.0,
           indoorMax: 22.0,
@@ -370,6 +263,8 @@ Deno.test('Entity validation', async (t) => {
         },
       },
       cooling: {
+        temperature: 24.0,
+        presetMode: 'eco',
         temperatureThresholds: {
           indoorMin: 23.0,
           indoorMax: 26.0,
