@@ -6,39 +6,44 @@ This is an experimental alpha version migrating from Rust-based Hass HVAC
 automation to TypeScript to evaluate the latest tools and frameworks in the
 TypeScript ecosystem.
 
-**Advanced AI-Powered HVAC Control System with Intelligent Automation**
+**Production-Ready HVAC Control System with Optional AI Research Features**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
 [![Deno](https://img.shields.io/badge/Deno-2.0+-green.svg)](https://deno.land/)
 [![XState](https://img.shields.io/badge/XState-5.20+-purple.svg)](https://xstate.js.org/)
-[![LangChain](https://img.shields.io/badge/LangChain-0.3+-orange.svg)](https://js.langchain.com/)
 
 ## 🌟 Overview
 
-HAG (Home Assistant aGentic HVAC Automation) is a cutting-edge TypeScript/Deno
-application that revolutionizes HVAC control through intelligent automation. It
-combines advanced AI capabilities with Home Assistant integration to provide:
+HAG (Home Assistant aGentic HVAC Automation) is a production-ready TypeScript/Deno
+application that provides reliable HVAC control through proven automation techniques.
+The core application uses battle-tested rule-based logic with Home Assistant integration:
 
-- **AI-Powered Decision Making**: OpenAI GPT-4 integration for intelligent HVAC
-  decisions
-- **Predictive Analytics**: Advanced forecasting for temperature and energy
-  usage
-- **Adaptive Learning**: Continuous learning from user preferences and patterns
-- **Smart Scheduling**: Intelligent automation with rule-based optimization
-- **Real-time Monitoring**: Comprehensive dashboard with performance analytics
-- **Production Ready**: Enterprise-grade performance optimization and monitoring
+- **Production-Ready Core**: Reliable, deterministic HVAC control with XState v5
+- **Rule-based Logic**: Proven algorithms for heating, cooling, and scheduling
+- **Home Assistant Integration**: Native WebSocket and REST API connectivity
+- **Real-time Monitoring**: Comprehensive system health and performance tracking
+- **Enterprise Grade**: Performance optimization, validation, and deployment tools
+- **Experimental Research**: Optional AI features isolated in separate directory
 
 ## 🚀 Key Features
 
-### 🤖 AI Intelligence
+### 🏠 Production HVAC Control
 
-- **Decision Engine**: GPT-4 powered decision making with context awareness
-- **Multi-Objective Optimization**: Balance comfort, energy efficiency, and cost
-- **Predictive Analytics**: Time series forecasting with seasonal pattern
-  detection
-- **Adaptive Learning**: User behavior analysis and preference adaptation
-- **Smart Scheduling**: Automated scheduling with weather and occupancy
-  awareness
+- **Reliable State Management**: XState v5 actor-based system for production operation
+- **Rule-based Logic**: Proven, deterministic HVAC control algorithms
+- **Multi-Zone Support**: Independent control of multiple HVAC zones
+- **Temperature Regulation**: Precise heating and cooling with hysteresis control
+- **Smart Scheduling**: Time-based automation with occupancy awareness
+- **Performance Monitoring**: Real-time system health and performance tracking
+
+### 🧪 Research Features (Experimental Directory)
+
+**Note**: These features are completely isolated in the `experimental/` directory and not included in production builds.
+
+- **AI Decision Engine**: LangChain/OpenAI integration for research purposes
+- **Advanced Analytics**: Machine learning pattern detection and optimization
+- **Predictive Modeling**: Time series forecasting experiments
+- **Alternative State Management**: LangGraph workflow experimentation
 
 ### 🏠 Home Assistant Integration
 
@@ -68,54 +73,148 @@ combines advanced AI capabilities with Home Assistant integration to provide:
 
 ## 🏗️ Architecture
 
+### Production Application (`src/`)
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    HAG AI HVAC System                      │
+│                    HAG HVAC System                         │
 ├─────────────────────────────────────────────────────────────┤
-│  CLI Interface (Cliffy)                                    │
-├─────────────────────────────────────────────────────────────┤
-│  AI Layer                                                  │
-│  ├── Decision Engine (OpenAI GPT-4)                       │
-│  ├── HVAC Optimizer (Multi-objective)                     │
-│  ├── Predictive Analytics (Time Series)                   │
-│  ├── Adaptive Learning (Pattern Detection)                │
-│  └── Smart Scheduler (Rule-based Automation)              │
+│  CLI Interface (@std/cli)                                  │
 ├─────────────────────────────────────────────────────────────┤
 │  State Management                                          │
-│  ├── XState v5 (Primary State Machine)                    │
-│  └── LangGraph (Experimental Alternative)                 │
+│  └── XState v5 Actor System                               │
 ├─────────────────────────────────────────────────────────────┤
 │  Core Services                                             │
-│  ├── HVAC Controller                                       │
-│  ├── Home Assistant Client                                 │
-│  ├── Configuration Manager                                 │
-│  └── Logging & Monitoring                                  │
+│  ├── HVAC Controller (Rule-based Logic)                   │
+│  ├── Home Assistant Client (WebSocket/REST)               │
+│  ├── Configuration Manager (Zod validation)               │
+│  └── Logging & Event System                               │
 ├─────────────────────────────────────────────────────────────┤
 │  Infrastructure                                            │
 │  ├── Dependency Injection (@needle-di/core)               │
-│  ├── Performance Optimizer                                 │
 │  ├── Production Validator                                  │
-│  └── System Monitor & Dashboard                            │
+│  └── Performance Monitoring                                │
 └─────────────────────────────────────────────────────────────┘
 ```
 
+### Research Directory (`experimental/`)
+```
+┌─────────────────────────────────────────────────────────────┐
+│              Experimental Research Features                │
+│                   (Isolated Directory)                     │
+├─────────────────────────────────────────────────────────────┤
+│  AI Research Layer                                         │
+│  ├── Decision Engine (LangChain/OpenAI)                   │
+│  ├── HVAC Optimizer (Multi-objective)                     │
+│  ├── Predictive Analytics (Time Series)                   │
+│  ├── Adaptive Learning (Pattern Detection)                │
+│  └── Smart Scheduler (AI-powered)                         │
+├─────────────────────────────────────────────────────────────┤
+│  Alternative Architectures                                 │
+│  └── LangGraph State Machine (Experimental)               │
+├─────────────────────────────────────────────────────────────┤
+│  Research Infrastructure                                   │
+│  ├── Separate Test Suite                                   │
+│  ├── Independent Configuration                             │
+│  └── Isolated Dependencies                                 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Architecture Principles**:
+- **Complete Isolation**: Main application has zero dependencies on experimental code
+- **Production Focus**: Core system uses proven, reliable technologies
+- **Research Freedom**: Experimental directory allows innovation without affecting production
+- **Independent Deployment**: Main application builds without experimental dependencies
+
 ## 🛠️ Technology Stack
 
+### Production Application (`src/`)
 - **Runtime**: Deno 2.0+ (TypeScript-first runtime)
 - **Language**: TypeScript with experimental decorators
-- **State Management**: XState v5 finite state machines
-- **AI Framework**: LangChain v0.3 with OpenAI integration
+- **State Management**: XState v5 finite state machines with Actor system
 - **Dependency Injection**: @needle-di/core for type-safe DI
-- **CLI Framework**: Cliffy for command-line interface
+- **CLI Framework**: @std/cli for command-line interface
 - **Configuration**: Zod schemas with YAML support
-- **Testing**: Deno's built-in test runner with comprehensive test suites
+- **Testing**: Deno's built-in test runner
+- **Home Assistant**: Native WebSocket and REST API integration
+
+### Research Features (`experimental/`)
+- **AI Framework**: LangChain v0.3 with OpenAI integration
+- **Alternative State Management**: LangGraph for AI-powered workflows
+- **Machine Learning**: Advanced analytics and predictive modeling
+- **Enhanced Processing**: Complex event processing and pattern recognition
+- **Separate Dependencies**: Isolated from main application dependencies
+
+**Dependency Isolation**:
+- Main application: Zero AI/ML dependencies
+- Experimental directory: Separate `deno.json` with research dependencies
+- Production builds: Only include main application dependencies
+
+## 🧪 Experimental Features
+
+HAG includes experimental research features that are **completely isolated** in the `experimental/` directory. These features are designed for research, development, and future consideration without affecting the production application.
+
+### Directory Structure
+
+```
+experimental/
+├── src/                     # Experimental source code
+│   ├── ai/                 # AI research components
+│   ├── core/               # Experimental core features
+│   └── hvac/               # Alternative HVAC implementations
+├── tests/                  # Separate test suite
+├── deno.json              # Independent configuration
+└── README.md              # Experimental documentation
+```
+
+### Research Features
+
+- **AI Decision Engine**: LangChain/OpenAI integration for intelligent HVAC decisions
+- **LangGraph State Machine**: Alternative state management using AI workflows
+- **Advanced Analytics**: Machine learning pattern detection and optimization
+- **Predictive Modeling**: Time series forecasting and behavioral adaptation
+- **Enhanced Event Processing**: Complex event processing and correlation
+
+### Isolation Guarantees
+
+✅ **Complete Separation**:
+- **Zero Dependencies**: Main application has no imports from experimental code
+- **Independent Build**: Experimental features have separate `deno.json` configuration
+- **Separate Testing**: Independent test suite with different dependencies
+- **Optional Installation**: Experimental features are not required for production
+- **Research Purpose**: Used for evaluation and future development only
+
+### Working with Experimental Features
+
+```bash
+# Navigate to experimental directory
+cd experimental/
+
+# Run experimental tests
+deno task test
+
+# Build experimental features (separate from main app)
+deno task build
+
+# Check experimental dependencies
+deno task check
+```
+
+### Documentation
+
+For detailed experimental feature documentation, see:
+- [`experimental/README.md`](experimental/README.md) - Complete experimental guide
+- [`experimental/tests/README.md`](experimental/tests/README.md) - Testing experimental features
+
+**Note**: Experimental features are research tools and should not be used in production environments.
 
 ## 📋 Prerequisites
 
-- **Deno 2.0+** -
-  [Install Deno](https://deno.land/manual/getting_started/installation)
+### Production Application
+- **Deno 2.0+** - [Install Deno](https://deno.land/manual/getting_started/installation)
 - **Home Assistant** - Running instance with WebSocket API enabled
-- **OpenAI API Key** - For AI-powered decision making (optional)
+
+### Experimental Features (Optional)
+- **OpenAI API Key** - Only required for experimental AI research features in `experimental/` directory
 
 ## 🚀 Quick Start
 
@@ -132,10 +231,12 @@ cd hag_js
 # Copy example configuration
 cp config.example.yaml config.yaml
 
-# Set environment variables
-export OPENAI_API_KEY="sk-your-openai-api-key"
+# Set required environment variables
 export HASS_URL="http://your-home-assistant:8123"
 export HASS_TOKEN="your-long-lived-access-token"
+
+# Optional: For experimental AI features only
+# export OPENAI_API_KEY="sk-your-openai-api-key"
 ```
 
 ### 3. Development Setup
@@ -177,12 +278,8 @@ hvac:
       low: 20
       high: 26
 
-ai:
-  enabled: true
-  openaiApiKey: '${OPENAI_API_KEY}'
-  decisionEngine:
-    model: 'gpt-4'
-    temperature: 0.3
+# Note: AI features are located in experimental/ directory
+# Main application uses rule-based logic only
 ```
 
 ## 🎮 Usage
@@ -206,20 +303,31 @@ ai:
 ./hag diagnose
 ```
 
-### AI Features
+### Core Features
 
 ```bash
-# Enable AI decision making
-./hag ai enable
+# View system metrics
+./hag metrics
 
-# Train from user interactions
-./hag ai train
+# View system health
+./hag health
 
-# View learning insights
-./hag ai insights
+# Generate system reports
+./hag report
 
-# Generate optimization recommendations
-./hag ai optimize
+# Run system diagnostics
+./hag diagnose
+```
+
+### Experimental AI Features
+
+**Note**: AI features are experimental and require separate setup in the `experimental/` directory.
+
+```bash
+# Work with experimental AI features
+cd experimental/
+
+# See experimental/README.md for detailed AI usage
 ```
 
 ### Advanced Monitoring
@@ -237,34 +345,45 @@ ai:
 
 ## 🧪 Testing
 
-HAG includes a comprehensive, production-ready test suite with 95%+ coverage of
-all functionality.
+HAG includes comprehensive test suites for both production and experimental features, with 95%+ coverage of all functionality.
 
-### Test Organization
+### Production Test Suite (`tests/`)
 
 ```
 tests/
-├── unit/                    # Unit tests (*.test.ts)
-│   ├── ai/                  # AI component unit tests
+├── unit/                    # Production unit tests (*.test.ts)
 │   ├── config/              # Configuration and validation
 │   ├── core/                # Core services and utilities
 │   ├── home-assistant/      # Home Assistant client
 │   ├── hvac/                # HVAC logic and state machine
 │   └── types/               # Type definitions
-├── integration/             # Integration tests (*.integration.test.ts)
+├── integration/             # Production integration tests
 │   ├── hvac-system.integration.test.ts      # Complete HVAC workflow
-│   ├── home-assistant.integration.test.ts   # HA connectivity
-│   └── ai-system.integration.test.ts        # AI system integration
+│   └── home-assistant.integration.test.ts   # HA connectivity
 ├── performance/             # Performance tests (*.perf.test.ts)
 │   └── state-machine.perf.test.ts           # State machine benchmarks
 └── system/                  # System tests (*.system.test.ts)
     └── production-readiness.system.test.ts  # Production validation
 ```
 
+### Experimental Test Suite (`experimental/tests/`)
+
+```
+experimental/tests/
+├── unit/                    # Experimental unit tests
+│   └── ai/                  # AI component unit tests
+├── integration/             # AI system integration tests
+│   └── ai-system.integration.test.ts
+└── performance/             # AI performance tests
+    └── ai-system-performance.test.ts
+```
+
 ### Running Tests
 
+#### Production Tests (Main Application)
+
 ```bash
-# Run all tests (recommended)
+# Run all production tests (recommended)
 deno task test
 
 # Run by category
@@ -282,43 +401,65 @@ deno test --allow-all tests/performance/state-machine.perf.test.ts
 deno test --allow-all tests/system/production-readiness.system.test.ts
 ```
 
-### Environment Setup for Testing
-
-#### Required (None - all tests have fallbacks)
-
-All tests work without external dependencies using mocks and fallbacks.
-
-#### Optional for Full Coverage
+#### Experimental Tests (Research Features)
 
 ```bash
-# Home Assistant integration tests
+# Navigate to experimental directory
+cd experimental/
+
+# Run experimental tests
+deno task test
+
+# Run specific experimental test categories
+deno task test:unit          # Experimental unit tests
+deno task test:integration   # AI integration tests
+deno task test:performance   # AI performance tests
+```
+
+### Environment Setup for Testing
+
+#### Production Tests (No External Dependencies Required)
+
+All production tests work without external dependencies using mocks and fallbacks.
+
+#### Optional for Full Integration Coverage
+
+```bash
+# Home Assistant integration tests (both production and experimental)
 export HASS_URL="http://homeassistant.local:8123"
 export HASS_TOKEN="your_long_lived_access_token"
-
-# AI functionality tests  
-export OPENAI_API_KEY="sk-your-openai-api-key"
 
 # Logging level for tests
 export LOG_LEVEL="error"  # Reduces noise during testing
 ```
 
+#### Experimental Tests Only
+
+```bash
+# AI functionality tests (experimental directory only)
+export OPENAI_API_KEY="sk-your-openai-api-key"
+```
+
 ### Test Categories & Coverage
 
-#### ✅ **Unit Tests** (99% pass rate)
+#### ✅ **Production Unit Tests** (99% pass rate)
 
-- **AI Components**: Decision engine, optimizer, analytics, learning, scheduling
 - **HVAC Core**: State machine, controller, heating/cooling strategies
 - **Configuration**: Loading, validation, schema checking
 - **Core Services**: Container, exceptions, logging
 - **Home Assistant**: Client, models, connectivity
 - **Type Safety**: Common types and enums
 
-#### ✅ **Integration Tests** (100% pass rate)
+#### ✅ **Production Integration Tests** (100% pass rate)
 
 - **HVAC System**: Complete workflow with mock services
-- **Home Assistant**: WebSocket/REST API connectivity (when credentials
-  available)
+- **Home Assistant**: WebSocket/REST API connectivity (when credentials available)
+
+#### ✅ **Experimental Tests** (Separate Test Suite)
+
+- **AI Components**: Decision engine, optimizer, analytics, learning, scheduling
 - **AI System**: End-to-end AI decision pipeline with all components
+- **LangGraph**: Alternative state management testing
 
 #### ✅ **Performance Tests** (All benchmarks passing)
 
@@ -531,31 +672,17 @@ homeAssistant:
     occupancySensor: 'binary_sensor.occupancy'
 ```
 
-#### AI Configuration
+#### AI Configuration (Experimental)
+
+**Note**: AI features are experimental and located in the `experimental/` directory. The main application uses rule-based logic only.
 
 ```yaml
+# Main application - AI disabled
 ai:
-  enabled: true
-  openai:
-    apiKey: '${OPENAI_API_KEY}'
-    model: 'gpt-4'
-    temperature: 0.3
-    maxTokens: 1000
-
-  decisionEngine:
-    enabled: true
-    confidenceThreshold: 0.7
-    fallbackToRule: true
-
-  optimization:
-    comfortWeight: 0.5
-    energyWeight: 0.3
-    costWeight: 0.2
-
-  learning:
-    enabled: true
-    learningRate: 0.2
-    adaptationWindow: 14 # days
+  enabled: false
+  
+# For experimental AI features, see:
+# experimental/config/ai-config.yaml
 ```
 
 #### HVAC Settings
@@ -656,15 +783,16 @@ docker run -d -p 8080:8080 --name hag-controller hag
 ### Environment Variables
 
 ```bash
-# Required
+# Required for production application
 HASS_URL=http://homeassistant.local:8123
 HASS_TOKEN=your_long_lived_access_token
 
 # Optional
-OPENAI_API_KEY=sk-your-openai-api-key
 LOG_LEVEL=info
 NODE_ENV=production
 PORT=8080
+
+# Note: OPENAI_API_KEY only needed for experimental features in experimental/ directory
 ```
 
 ## 🔍 Troubleshooting
@@ -697,17 +825,17 @@ PORT=8080
 ./hag cache clear
 ```
 
-#### AI Component Issues
+#### Experimental Features Issues
+
+**Note**: Experimental features are isolated in the `experimental/` directory.
 
 ```bash
-# Test AI components
-./hag test ai
+# Main application diagnostics (production features only)
+./hag diagnose
 
-# Check OpenAI API connectivity
-./hag test openai
-
-# Reset learning data
-./hag ai reset
+# For experimental feature troubleshooting:
+cd experimental/
+# See experimental/README.md for detailed troubleshooting
 ```
 
 ### Debug Mode
@@ -728,9 +856,9 @@ export LOG_LEVEL=debug
 ./hag health
 
 # Component-specific health
-./hag health --component ai
 ./hag health --component hvac
 ./hag health --component monitor
+./hag health --component homeassistant
 ```
 
 ## 🤝 Contributing
@@ -759,22 +887,34 @@ deno task check
 
 ### Code Structure
 
+#### Production Application (`src/`)
+
 ```
 src/
-├── ai/                      # AI components
-│   ├── decision/           # Decision engine
-│   ├── optimization/       # HVAC optimization
-│   ├── predictive/         # Analytics & forecasting
-│   ├── learning/           # Adaptive learning
-│   ├── scheduling/         # Smart scheduling
-│   └── monitoring/         # System monitoring
 ├── core/                   # Core services
 │   ├── logger.ts          # Logging service
-│   ├── config/            # Configuration management
-│   └── container.ts       # Dependency injection
+│   ├── container.ts       # Dependency injection
+│   ├── event-system.ts    # Event handling
+│   └── exceptions.ts      # Error handling
+├── config/                 # Configuration management
 ├── home-assistant/         # Home Assistant integration
 ├── hvac/                   # HVAC control logic
-└── types/                  # TypeScript type definitions
+├── types/                  # TypeScript type definitions
+└── main.ts                 # CLI entry point
+```
+
+#### Experimental Features (`experimental/src/`)
+
+```
+experimental/src/
+├── ai/                     # AI research components
+│   ├── decision/          # Decision engine
+│   ├── optimization/      # HVAC optimization
+│   ├── predictive/        # Analytics & forecasting
+│   ├── learning/          # Adaptive learning
+│   └── scheduling/        # Smart scheduling
+├── core/                  # Experimental core features
+└── hvac/                  # Alternative HVAC implementations
 ```
 
 ## 📄 License
