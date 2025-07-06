@@ -244,8 +244,11 @@ export class ApplicationContainer {
           TYPES.ActorSystem,
         ) as ActorSystem;
         const hvacOptions = this.container.get<HvacOptions>(TYPES.HvacOptions);
+        const haClient = this.container.get<HomeAssistantClient>(
+          TYPES.HomeAssistantClient,
+        );
         const logger = new LoggerService('HAG.hvac-actor-service');
-        return new HvacActorService(actorSystem, hvacOptions, logger);
+        return new HvacActorService(hvacOptions, logger, haClient);
       },
     });
 

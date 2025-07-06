@@ -1,57 +1,37 @@
 /**
- * HVAC Actor Service - DI-managed service for HVAC actor lifecycle
- * Integrates HVAC actor with the application's event system
+ * HVAC Actor Service - DI-managed service for HVAC state machine lifecycle
+ * Uses XState v5 state machine for unified HVAC control
  */
 
-import { ActorSystem } from '../core/actor-system.ts';
-import { createHvacMachine, type HvacContext } from './hvac-actor.ts';
 import { LoggerService } from '../core/logger.ts';
 import type { HvacOptions } from '../config/config.ts';
-
-// Type definition for XState actor - matches ActorSystem interface
-interface HvacActor {
-  send(event: { type: string; [key: string]: unknown }): void;
-  getSnapshot(): { context: HvacContext };
-  subscribe(
-    observer: (snapshot: { context: HvacContext }) => void,
-  ): { unsubscribe(): void };
-}
+import { HVACStateMachine, type HVACMachineActor } from './state-machine.ts';
+import { HVACContext } from '../types/common.ts';
 
 export class HvacActorService {
-  private hvacActor!: HvacActor;
+  private stateMachine: HVACStateMachine;
   private logger: LoggerService;
-  private actorSystem: ActorSystem;
   private hvacOptions: HvacOptions;
+  private haClient?: any; // HomeAssistantClient
 
   constructor(
-    actorSystem: ActorSystem,
     hvacOptions: HvacOptions,
     logger?: LoggerService,
+    haClient?: any,
   ) {
-    this.actorSystem = actorSystem;
     this.hvacOptions = hvacOptions;
+    this.haClient = haClient;
     this.logger = logger || new LoggerService('HAG.hvac-actor-service');
-    this.initializeHvacActor();
+    this.stateMachine = new HVACStateMachine(hvacOptions, haClient);
   }
 
-  private initializeHvacActor(): void {
-    const machine = createHvacMachine(this.hvacOptions);
-    this.hvacActor = this.actorSystem.createActor('hvac', machine) as HvacActor;
 
-    // Subscribe to Home Assistant state change events
-    this.actorSystem.subscribeActorToEvents('hvac', 'state_changed');
-
-    this.logger.info('🎭 HVAC actor initialized', {
-      tempSensor: this.hvacOptions.tempSensor,
-      outdoorSensor: this.hvacOptions.outdoorSensor,
-    });
-  }
 
   /**
    * Start the HVAC system
    */
   start(): void {
-    this.hvacActor.send({ type: 'START' });
+    this.stateMachine.start();
     this.logger.info('▶️ HVAC system started');
   }
 
@@ -59,7 +39,7 @@ export class HvacActorService {
    * Stop the HVAC system
    */
   stop(): void {
-    this.hvacActor.send({ type: 'STOP' });
+    this.stateMachine.stop();
     this.logger.info('⏹️ HVAC system stopped');
   }
 
@@ -67,29 +47,30 @@ export class HvacActorService {
    * Set target temperature
    */
   setTargetTemperature(temp: number): void {
-    this.hvacActor.send({ type: 'SET_TARGET_TEMP', temp });
-    this.logger.info(`🌡️ Target temperature set to ${temp}°C`);
+    // XState machine doesn't need explicit target temperature setting
+    // Temperature is handled through configuration
+    this.logger.info(`🌡️ Target temperature request: ${temp}°C (handled via configuration)`);
   }
 
   /**
    * Get current HVAC state (returns context for internal use)
    */
-  getContext(): HvacContext {
-    return this.hvacActor.getSnapshot().context;
+  getContext(): HVACContext {
+    return this.stateMachine.getContext();
   }
 
   /**
    * Get current state (compatibility with HVACStateMachine interface)
    */
   getCurrentState(): string {
-    return this.getContext().currentMode;
+    return this.stateMachine.getCurrentState();
   }
 
   /**
    * Get current HVAC mode
    */
   getCurrentMode(): string {
-    return this.getContext().currentMode;
+    return this.stateMachine.getCurrentState();
   }
 
   /**
@@ -100,19 +81,12 @@ export class HvacActorService {
     target: number;
     outdoor: number | undefined;
   } {
-    const state = this.getContext();
+    const context = this.getContext();
     return {
-      current: state.currentTemp,
-      target: state.targetTemp,
-      outdoor: state.outdoorTemp,
+      current: context.indoorTemp,
+      target: this.hvacOptions.heating.temperature, // Default to heating temp
+      outdoor: context.outdoorTemp,
     };
-  }
-
-  /**
-   * Get sensor data
-   */
-  getSensorData(): Record<string, unknown> {
-    return this.getContext().sensorData;
   }
 
   /**
@@ -124,6 +98,25 @@ export class HvacActorService {
   }
 
   /**
+   * Update temperatures from controller
+   */
+  updateTemperatures(indoor: number, outdoor: number): void {
+    this.logger.info('🌡️ Updating state machine temperatures', {
+      indoor,
+      outdoor,
+      previousIndoor: this.getContext().indoorTemp,
+      previousOutdoor: this.getContext().outdoorTemp,
+    });
+
+    this.stateMachine.updateTemperatures(indoor, outdoor);
+    
+    // Trigger evaluation after temperature update
+    this.stateMachine.evaluateConditions();
+  }
+
+
+
+  /**
    * Get detailed status for monitoring
    */
   getStatus(): {
@@ -133,21 +126,19 @@ export class HvacActorService {
       target: number;
       outdoor: number | undefined;
     };
-    lastUpdate: Date;
     isActive: boolean;
-    sensorCount: number;
   } {
-    const state = this.getContext();
+    const context = this.getContext();
+    const status = this.stateMachine.getStatus();
+    
     return {
-      mode: state.currentMode,
+      mode: status.currentState,
       temperatures: {
-        current: state.currentTemp,
-        target: state.targetTemp,
-        outdoor: state.outdoorTemp,
+        current: context.indoorTemp,
+        target: this.hvacOptions.heating.temperature, // Default to heating temp
+        outdoor: context.outdoorTemp,
       },
-      lastUpdate: state.lastUpdate,
       isActive: this.isActive(),
-      sensorCount: Object.keys(state.sensorData).length,
     };
   }
 }

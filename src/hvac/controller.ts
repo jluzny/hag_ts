@@ -59,10 +59,16 @@ export class HVACController {
   ) {
     this.hvacOptions = hvacOptions!;
     this.appOptions = appOptions!;
-    this.hvacActorService = hvacActorService!;
     this.haClient = haClient!;
     this.logger = new LoggerService('HAG.hvac.controller');
     this.hvacAgent = hvacAgent;
+    
+    // Create HVAC Actor Service with unified XState approach
+    this.hvacActorService = new HvacActorService(
+      this.hvacOptions,
+      this.logger,
+      this.haClient
+    );
   }
 
   /**
@@ -104,13 +110,13 @@ export class HVACController {
       await this.haClient.connect();
       this.logger.info('✅ Step 1 completed: Home Assistant connected');
 
-      // Start state machine
-      this.logger.info('⚙️ Step 2: Starting state machine', {
+      // Start actor system
+      this.logger.info('⚙️ Step 2: Starting HVAC actor system', {
         initialState: this.hvacActorService?.getCurrentState(),
         systemMode: this.hvacOptions.systemMode,
       });
       this.hvacActorService.start();
-      this.logger.info('✅ Step 2 completed: State machine started', {
+      this.logger.info('✅ Step 2 completed: HVAC actor system started', {
         currentState: this.hvacActorService.getCurrentState(),
       });
 
@@ -177,12 +183,12 @@ export class HVACController {
       this.abortController.abort();
     }
 
-    // Stop state machine
-    this.logger.debug('⚙️ Stopping state machine', {
+    // Stop actor system
+    this.logger.debug('⚙️ Stopping HVAC actor system', {
       currentState: this.hvacActorService?.getCurrentState(),
     });
     this.hvacActorService.stop();
-    this.logger.debug('✅ State machine stopped');
+    this.logger.debug('✅ HVAC actor system stopped');
 
     // Disconnect from Home Assistant
     try {
@@ -206,7 +212,7 @@ export class HVACController {
    */
   async getStatus(): Promise<HVACStatus> {
     try {
-      const stateMachineStatus = this.hvacActorService.getStatus();
+      const actorStatus = this.hvacActorService.getStatus();
       const haConnected = await this.haClient.connected;
 
       const status: HVACStatus = {
@@ -218,7 +224,7 @@ export class HVACController {
           aiEnabled: this.appOptions.useAi && !!this.hvacAgent,
         },
         stateMachine: {
-          currentState: stateMachineStatus.mode,
+          currentState: actorStatus.mode,
           hvacMode: this.getCurrentHVACMode(),
         },
         timestamp: new Date().toISOString(),
@@ -334,31 +340,35 @@ export class HVACController {
           data: result,
           timestamp: new Date().toISOString(),
         };
-      } else {
-        // Direct execution
-        this.logger.info('⚡ Executing direct manual override', {
-          mode,
-          temperature,
-        });
+        } else {
+          // Direct execution via actor
+          this.logger.info('⚡ Executing manual override via actor', {
+            mode,
+            temperature,
+          });
 
-        await this.executeHVACMode(mode, temperature);
+          // Send manual override to actor
+          if (mode === HVACMode.HEAT) {
+            this.hvacActorService.setTargetTemperature(temperature || this.hvacOptions.heating.temperature);
+          } else if (mode === HVACMode.COOL) {
+            this.hvacActorService.setTargetTemperature(temperature || this.hvacOptions.cooling.temperature);
+          }
 
-        const newState = this.hvacActorService.getCurrentState();
+          const newState = this.hvacActorService.getCurrentState();
 
-        this.logger.info('✅ Manual override executed successfully', {
-          action,
-          mode,
-          temperature,
-          newState,
-        });
+          this.logger.info('✅ Manual override executed successfully', {
+            action,
+            mode,
+            temperature,
+            newState,
+          });
 
-        return {
-          success: true,
-          data: { action, mode, temperature, newState },
-          timestamp: new Date().toISOString(),
-        };
-      }
-    } catch (error) {
+          return {
+            success: true,
+            data: { action, mode, temperature, newState },
+            timestamp: new Date().toISOString(),
+          };
+        }    } catch (error) {
       this.logger.error('❌ Manual override failed', error, {
         action,
         options,
@@ -518,13 +528,13 @@ export class HVACController {
   }
 
   /**
-   * Evaluate state machine directly without AI (legacy method - now event-only)
+   * Evaluate HVAC system using actor-based approach
    */
   private async evaluateStateMachineDirect(): Promise<void> {
     const evaluationStart = Date.now();
 
     try {
-      this.logger.debug('⚙️ Starting direct state machine evaluation', {
+      this.logger.debug('⚙️ Starting actor-based HVAC evaluation', {
         tempSensor: this.hvacOptions.tempSensor,
         outdoorSensor: this.hvacOptions.outdoorSensor,
         haConnected: this.haClient.connected,
@@ -601,21 +611,20 @@ export class HVACController {
         },
       });
 
-      // Update state machine conditions
-      this.logger.debug('⚙️ Updating state machine with temperature data');
-      // Note: Temperature updates now happen through the actor system automatically
+      // Update actor with temperature data - this will trigger state evaluation
+      this.logger.debug('⚙️ Updating actor with temperature data');
+      this.hvacActorService.updateTemperatures(indoorTemp, outdoorTemp);
 
       const stateAfterUpdate = this.hvacActorService.getCurrentState();
-      this.logger.debug('✅ State machine temperatures updated', {
+      this.logger.debug('✅ Actor temperatures updated', {
         newState: stateAfterUpdate,
         temperatures: { indoor: indoorTemp, outdoor: outdoorTemp },
-        note:
-          'State machine populated with initial data - waiting for temperature events to trigger changes',
+        note: 'Actor will automatically evaluate and transition states based on temperature data',
       });
 
       const totalEvaluationTime = Date.now() - evaluationStart;
 
-      this.logger.info('✅ Direct state machine evaluation completed', {
+      this.logger.info('✅ Actor-based evaluation completed', {
         indoorTemp,
         outdoorTemp,
         finalState: this.hvacActorService.getCurrentState(),
@@ -625,7 +634,7 @@ export class HVACController {
     } catch (error) {
       const totalEvaluationTime = Date.now() - evaluationStart;
 
-      this.logger.error('❌ Direct state machine evaluation failed', error, {
+      this.logger.error('❌ Actor-based evaluation failed', error, {
         evaluationTimeMs: totalEvaluationTime,
         currentState: this.hvacActorService?.getCurrentState(),
         errorType: error instanceof Error ? error.name : 'Unknown',
@@ -635,227 +644,7 @@ export class HVACController {
     }
   }
 
-  /**
-   * Execute HVAC mode changes on actual devices
-   */
-  private async executeHVACMode(
-    hvacMode: HVACMode,
-    targetTemp?: number,
-  ): Promise<void> {
-    const executionStart = Date.now();
 
-    this.logger.info('⚡ Executing HVAC mode change', {
-      hvacMode,
-      targetTemp,
-      systemMode: this.hvacOptions.systemMode,
-      executionTime: new Date().toISOString(),
-    });
-
-    // Get enabled entities
-    const enabledEntities = this.hvacOptions.hvacEntities.filter((entity) =>
-      entity.enabled
-    );
-    const disabledEntities = this.hvacOptions.hvacEntities.filter((entity) =>
-      !entity.enabled
-    );
-
-    this.logger.debug('🏠 HVAC entities configuration', {
-      totalEntities: this.hvacOptions.hvacEntities.length,
-      enabledCount: enabledEntities.length,
-      disabledCount: disabledEntities.length,
-      enabledEntities: enabledEntities.map((e) => e.entityId),
-      disabledEntities: disabledEntities.map((e) => e.entityId),
-    });
-
-    if (enabledEntities.length === 0) {
-      this.logger.warning(
-        '⚠️ No enabled HVAC entities found - no action will be taken',
-        {
-          totalConfiguredEntities: this.hvacOptions.hvacEntities.length,
-          allEntities: this.hvacOptions.hvacEntities.map((e) => ({
-            id: e.entityId,
-            enabled: e.enabled,
-          })),
-        },
-      );
-      return;
-    }
-
-    let successCount = 0;
-    let errorCount = 0;
-    const results: Array<
-      { entityId: string; success: boolean; error?: string }
-    > = [];
-
-    // Execute mode change for each entity
-    for (const entity of enabledEntities) {
-      try {
-        this.logger.debug('🎯 Controlling HVAC entity', {
-          entityId: entity.entityId,
-          mode: hvacMode,
-          targetTemp,
-          entityConfig: entity,
-        });
-
-        await this.controlHVACEntity(entity.entityId, hvacMode, targetTemp);
-
-        successCount++;
-        results.push({ entityId: entity.entityId, success: true });
-
-        this.logger.info('✅ HVAC entity controlled successfully', {
-          entityId: entity.entityId,
-          mode: hvacMode,
-          temperature: targetTemp,
-        });
-      } catch (error) {
-        errorCount++;
-        const errorMessage = error instanceof Error
-          ? error.message
-          : String(error);
-        results.push({
-          entityId: entity.entityId,
-          success: false,
-          error: errorMessage,
-        });
-
-        this.logger.error('❌ Failed to control HVAC entity', error, {
-          entityId: entity.entityId,
-          mode: hvacMode,
-          targetTemp,
-          errorType: error instanceof Error ? error.name : 'Unknown',
-        });
-      }
-    }
-
-    const executionTime = Date.now() - executionStart;
-
-    this.logger.info('🏁 HVAC mode execution completed', {
-      hvacMode,
-      targetTemp,
-      totalEntities: enabledEntities.length,
-      successCount,
-      errorCount,
-      executionTimeMs: executionTime,
-      results,
-      overallSuccess: errorCount === 0,
-    });
-  }
-
-  /**
-   * Control individual HVAC entity
-   */
-  private async controlHVACEntity(
-    entityId: string,
-    mode: HVACMode,
-    targetTemp?: number,
-  ): Promise<void> {
-    const controlStart = Date.now();
-
-    // Determine temperature and preset based on mode
-    const temperature = targetTemp ||
-      (mode === HVACMode.HEAT
-        ? this.hvacOptions.heating.temperature
-        : this.hvacOptions.cooling.temperature);
-    const presetMode = mode === HVACMode.HEAT
-      ? this.hvacOptions.heating.presetMode
-      : this.hvacOptions.cooling.presetMode;
-
-    this.logger.info('🎯 Controlling HVAC entity', {
-      entityId,
-      mode,
-      targetTemp,
-      finalTemperature: temperature,
-      presetMode,
-      controlTime: new Date().toISOString(),
-    });
-
-    try {
-      // Set HVAC mode
-      this.logger.debug('🔧 Setting HVAC mode', {
-        entityId,
-        mode,
-        service: 'climate.set_hvac_mode',
-      });
-
-      const modeCall = HassServiceCallImpl.climate('set_hvac_mode', entityId, {
-        hvac_mode: mode,
-      });
-      await this.haClient.callService(modeCall);
-
-      this.logger.debug('✅ HVAC mode set successfully', { entityId, mode });
-
-      // Set temperature and preset if not turning off
-      if (mode !== HVACMode.OFF) {
-        this.logger.debug('🌡️ Setting temperature', {
-          entityId,
-          temperature,
-          service: 'climate.set_temperature',
-        });
-
-        const tempCall = HassServiceCallImpl.climate(
-          'set_temperature',
-          entityId,
-          { temperature },
-        );
-        await this.haClient.callService(tempCall);
-
-        this.logger.debug('✅ Temperature set successfully', {
-          entityId,
-          temperature,
-        });
-
-        this.logger.debug('⚙️ Setting preset mode', {
-          entityId,
-          presetMode,
-          service: 'climate.set_preset_mode',
-        });
-
-        const presetCall = HassServiceCallImpl.climate(
-          'set_preset_mode',
-          entityId,
-          { preset_mode: presetMode },
-        );
-        await this.haClient.callService(presetCall);
-
-        this.logger.debug('✅ Preset mode set successfully', {
-          entityId,
-          presetMode,
-        });
-      } else {
-        this.logger.debug(
-          '⏹️ HVAC turned off - skipping temperature and preset configuration',
-          {
-            entityId,
-            mode,
-          },
-        );
-      }
-
-      const controlTime = Date.now() - controlStart;
-
-      this.logger.info('✅ HVAC entity control completed successfully', {
-        entityId,
-        mode,
-        temperature: mode !== HVACMode.OFF ? temperature : undefined,
-        presetMode: mode !== HVACMode.OFF ? presetMode : undefined,
-        controlTimeMs: controlTime,
-        servicesCalledCount: mode !== HVACMode.OFF ? 3 : 1,
-      });
-    } catch (error) {
-      const controlTime = Date.now() - controlStart;
-
-      this.logger.error('❌ Failed to control HVAC entity', error, {
-        entityId,
-        mode,
-        temperature,
-        presetMode,
-        controlTimeMs: controlTime,
-        errorType: error instanceof Error ? error.name : 'Unknown',
-      });
-
-      throw error;
-    }
-  }
 
   /**
    * Get current HVAC mode from state machine

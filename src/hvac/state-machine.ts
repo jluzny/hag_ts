@@ -100,6 +100,11 @@ export class HeatingStrategy {
       return false;
     }
 
+    this.logger.info('EVALUATING heating', {
+      currentTemp: data.currentTemp,
+      indoorMin: thresholds.indoorMin,
+      shouldHeat: data.currentTemp < thresholds.indoorMin,
+    });
     const shouldHeat = data.currentTemp < thresholds.indoorMin;
     const evaluationTime = Date.now() - evaluationStart;
 
@@ -261,6 +266,11 @@ export class CoolingStrategy {
       return false;
     }
 
+    this.logger.info('EVALUATING cooling', {
+      currentTemp: data.currentTemp,
+      indoorMax: thresholds.indoorMax,
+      shouldCool: data.currentTemp > thresholds.indoorMax,
+    });
     const shouldCool = data.currentTemp > thresholds.indoorMax;
     const evaluationTime = Date.now() - evaluationStart;
 
@@ -296,6 +306,7 @@ export class CoolingStrategy {
 export function createHVACMachine(
   hvacOptions: HvacOptions,
   logger: LoggerService,
+  haClient?: any,
 ) {
   const heatingStrategy = new HeatingStrategy(hvacOptions);
   const coolingStrategy = new CoolingStrategy(hvacOptions);
@@ -379,7 +390,7 @@ export function createHVACMachine(
         },
       },
       heating: {
-        entry: ['logStateEntry', 'logHeatingStart'],
+        entry: ['logStateEntry', 'logHeatingStart', 'executeHeating'],
         on: {
           OFF: 'idle',
           COOL: {
@@ -405,7 +416,7 @@ export function createHVACMachine(
         },
       },
       cooling: {
-        entry: ['logStateEntry', 'logCoolingStart'],
+        entry: ['logStateEntry', 'logCoolingStart', 'executeCooling'],
         on: {
           OFF: 'idle',
           HEAT: {
@@ -528,6 +539,66 @@ export function createHVACMachine(
           nextState: 'heating',
         });
       },
+      executeHeating: async ({ context }) => {
+        if (!haClient) {
+          logger.warning('⚠️ No Home Assistant client available for heating control');
+          return;
+        }
+
+        const enabledEntities = hvacOptions.hvacEntities.filter(e => e.enabled);
+        
+        logger.info('🔥 Executing heating mode on entities', {
+          targetTemp: hvacOptions.heating.temperature,
+          presetMode: hvacOptions.heating.presetMode,
+          enabledEntities: enabledEntities.length,
+          entities: enabledEntities.map(e => e.entityId),
+        });
+
+        for (const entity of enabledEntities) {
+          try {
+            await controlHVACEntity(haClient, entity.entityId, 'heat', hvacOptions.heating.temperature, hvacOptions.heating.presetMode, logger);
+            logger.info('✅ Heating entity controlled', {
+              entityId: entity.entityId,
+              temperature: hvacOptions.heating.temperature,
+              presetMode: hvacOptions.heating.presetMode,
+            });
+          } catch (error) {
+            logger.error('❌ Failed to control heating entity', error, {
+              entityId: entity.entityId,
+            });
+          }
+        }
+      },
+      executeCooling: async ({ context }) => {
+        if (!haClient) {
+          logger.warning('⚠️ No Home Assistant client available for cooling control');
+          return;
+        }
+
+        const enabledEntities = hvacOptions.hvacEntities.filter(e => e.enabled);
+        
+        logger.info('❄️ Executing cooling mode on entities', {
+          targetTemp: hvacOptions.cooling.temperature,
+          presetMode: hvacOptions.cooling.presetMode,
+          enabledEntities: enabledEntities.length,
+          entities: enabledEntities.map(e => e.entityId),
+        });
+
+        for (const entity of enabledEntities) {
+          try {
+            await controlHVACEntity(haClient, entity.entityId, 'cool', hvacOptions.cooling.temperature, hvacOptions.cooling.presetMode, logger);
+            logger.info('✅ Cooling entity controlled', {
+              entityId: entity.entityId,
+              temperature: hvacOptions.cooling.temperature,
+              presetMode: hvacOptions.cooling.presetMode,
+            });
+          } catch (error) {
+            logger.error('❌ Failed to control cooling entity', error, {
+              entityId: entity.entityId,
+            });
+          }
+        }
+      },
     },
     guards: {
       canHeat: ({ context }) => {
@@ -569,6 +640,7 @@ export function createHVACMachine(
         });
       },
       shouldAutoHeat: ({ context }) => {
+        logger.info('Checking shouldAutoHeat guard');
         if (context.systemMode !== SystemMode.AUTO) return false;
 
         if (!context.indoorTemp || !context.outdoorTemp) {
@@ -583,6 +655,7 @@ export function createHVACMachine(
         });
       },
       shouldAutoCool: ({ context }) => {
+        logger.info('Checking shouldAutoCool guard');
         if (context.systemMode !== SystemMode.AUTO) return false;
 
         if (!context.indoorTemp || !context.outdoorTemp) {
@@ -613,6 +686,48 @@ export function createHVACMachine(
 }
 
 /**
+ * Control individual HVAC entity
+ */
+async function controlHVACEntity(
+  haClient: any,
+  entityId: string,
+  mode: string,
+  targetTemp: number,
+  presetMode: string,
+  logger: LoggerService,
+): Promise<void> {
+  if (!haClient) return;
+
+  // Import HassServiceCallImpl dynamically to avoid circular dependency
+  const { HassServiceCallImpl } = await import('../home-assistant/models.ts');
+
+  // Set HVAC mode
+  const modeCall = HassServiceCallImpl.climate('set_hvac_mode', entityId, {
+    hvac_mode: mode,
+  });
+  await haClient.callService(modeCall);
+
+  // Set temperature
+  const tempCall = HassServiceCallImpl.climate('set_temperature', entityId, {
+    temperature: targetTemp,
+  });
+  await haClient.callService(tempCall);
+
+  // Set preset mode
+  const presetCall = HassServiceCallImpl.climate('set_preset_mode', entityId, {
+    preset_mode: presetMode,
+  });
+  await haClient.callService(presetCall);
+
+  logger.debug('🎯 HVAC entity control completed', {
+    entityId,
+    mode,
+    temperature: targetTemp,
+    presetMode,
+  });
+}
+
+/**
  * HVAC state machine service
  */
 @injectable()
@@ -621,9 +736,9 @@ export class HVACStateMachine {
   private actor?: HVACMachineActor;
   private logger: LoggerService;
 
-  constructor(hvacOptions?: HvacOptions) {
+  constructor(hvacOptions?: HvacOptions, haClient?: any) {
     this.logger = new LoggerService('HAG.hvac.state-machine');
-    this.machine = createHVACMachine(hvacOptions!, this.logger);
+    this.machine = createHVACMachine(hvacOptions!, this.logger, haClient);
   }
 
   /**
@@ -807,6 +922,7 @@ export class HVACStateMachine {
       timestamp: new Date().toISOString(),
     });
 
+    this.logger.info('Sending AUTO_EVALUATE event');
     this.send({ type: 'AUTO_EVALUATE' });
   }
 
