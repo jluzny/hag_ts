@@ -1,13 +1,11 @@
-# HAG HVAC Configuration - LangGraph Experiment
-# Configuration with LangGraph state machine enabled for testing
+# HAG HVAC Configuration
+# Direct port from Python configuration with TypeScript-specific enhancements
 
 appOptions:
   logLevel: 'debug' # debug, info, warn, error, critical
   useAi: false # Enable AI agent for intelligent decisions
   aiModel: 'gpt-3.5-turbo' # AI model to use
   aiTemperature: 0.1 # AI model temperature
-  experimentalFeatures:
-    - 'langgraph-state-machine' # Enable LangGraph experiment
 
 hassOptions:
   wsUrl: 'ws://192.168.0.204:8123/api/websocket'
@@ -27,16 +25,16 @@ hvacOptions:
       enabled: true
       defrost: true
     - entityId: 'climate.bedroom_ac'
-      enabled: true
+      enabled: false
       defrost: false
     - entityId: 'climate.matej_ac'
-      enabled: true
+      enabled: false
       defrost: false
     - entityId: 'climate.anicka_ac'
-      enabled: true
+      enabled: false
       defrost: false
     - entityId: 'climate.radek_ac'
-      enabled: true
+      enabled: false
       defrost: false
 
   heating:
@@ -52,6 +50,8 @@ hvacOptions:
       intervalHours: 2
       durationMinutes: 5
       temperatureThreshold: 0.0
+      periodSeconds: 7200
+      durationSeconds: 300
 
   cooling:
     temperature: 24.0
@@ -59,10 +59,10 @@ hvacOptions:
     temperatureThresholds:
       indoorMin: 23.0
       indoorMax: 23.5
-      outdoorMin: 22.0
+      outdoorMin: 20.0
       outdoorMax: 45.0
 
   activeHours:
-    start: 8
-    startWeekday: 7
-    end: 20
+    start: 5
+    startWeekday: 5
+    end: 23

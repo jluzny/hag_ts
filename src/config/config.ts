@@ -6,7 +6,6 @@
 
 import { z } from 'zod';
 import { LogLevel, SystemMode } from '../types/common.ts';
-import type { ExperimentalFeatures as _ExperimentalFeatures } from '../core/experimental-features.ts';
 
 /**
  * Home Assistant connection options schema
@@ -15,13 +14,13 @@ export const HassOptionsSchema = z.object({
   wsUrl: z.string().url().describe('WebSocket URL for Home Assistant'),
   restUrl: z.string().url().describe('REST API URL for Home Assistant'),
   token: z.string().min(1).describe('Long-lived access token'),
-  maxRetries: z.number().int().positive().default(5).describe(
+  maxRetries: z.number().int().positive().describe(
     'Maximum connection retry attempts',
   ),
-  retryDelayMs: z.number().int().positive().default(1000).describe(
+  retryDelayMs: z.number().int().positive().describe(
     'Delay between retries in milliseconds',
   ),
-  stateCheckInterval: z.number().int().positive().default(300000).describe(
+  stateCheckInterval: z.number().int().positive().describe(
     'State check interval in milliseconds',
   ),
 });
@@ -50,13 +49,13 @@ export const TemperatureThresholdsSchema = z.object({
  * Defrost cycle configuration schema
  */
 export const DefrostOptionsSchema = z.object({
-  temperatureThreshold: z.number().default(0.0).describe(
+  temperatureThreshold: z.number().describe(
     'Temperature below which defrost is needed',
   ),
-  periodSeconds: z.number().int().positive().default(3600).describe(
+  periodSeconds: z.number().int().positive().describe(
     'Defrost cycle period in seconds',
   ),
-  durationSeconds: z.number().int().positive().default(300).describe(
+  durationSeconds: z.number().int().positive().describe(
     'Defrost cycle duration in seconds',
   ),
 });
@@ -65,10 +64,10 @@ export const DefrostOptionsSchema = z.object({
  * Heating configuration schema
  */
 export const HeatingOptionsSchema = z.object({
-  temperature: z.number().min(10).max(35).default(21.0).describe(
+  temperature: z.number().min(10).max(35).describe(
     'Target heating temperature',
   ),
-  presetMode: z.string().default('comfort').describe('Heating preset mode'),
+  presetMode: z.string().describe('Heating preset mode'),
   temperatureThresholds: TemperatureThresholdsSchema,
   defrost: DefrostOptionsSchema.optional().describe('Defrost configuration'),
 });
@@ -77,10 +76,10 @@ export const HeatingOptionsSchema = z.object({
  * Cooling configuration schema
  */
 export const CoolingOptionsSchema = z.object({
-  temperature: z.number().min(15).max(35).default(24.0).describe(
+  temperature: z.number().min(15).max(35).describe(
     'Target cooling temperature',
   ),
-  presetMode: z.string().default('eco').describe('Cooling preset mode'),
+  presetMode: z.string().describe('Cooling preset mode'),
   temperatureThresholds: TemperatureThresholdsSchema,
 });
 
@@ -88,13 +87,13 @@ export const CoolingOptionsSchema = z.object({
  * Active hours configuration schema
  */
 export const ActiveHoursSchema = z.object({
-  start: z.number().int().min(0).max(23).default(8).describe(
+  start: z.number().int().min(0).max(23).describe(
     'Start hour (24h format)',
   ),
-  startWeekday: z.number().int().min(0).max(23).default(7).describe(
+  startWeekday: z.number().int().min(0).max(23).describe(
     'Weekday start hour',
   ),
-  end: z.number().int().min(0).max(23).default(22).describe(
+  end: z.number().int().min(0).max(23).describe(
     'End hour (24h format)',
   ),
 });
@@ -104,10 +103,10 @@ export const ActiveHoursSchema = z.object({
  */
 export const HvacEntitySchema = z.object({
   entityId: z.string().refine((val) => val.includes('.'), {
-    message: 'Entity ID must be in format "domain.entity"',
+    message: 'Entity ID must be in format \"domain.entity\"',
   }).describe('Home Assistant entity ID'),
-  enabled: z.boolean().default(true).describe('Whether entity is enabled'),
-  defrost: z.boolean().default(false).describe(
+  enabled: z.boolean().describe('Whether entity is enabled'),
+  defrost: z.boolean().describe(
     'Whether entity supports defrost',
   ),
 });
@@ -121,13 +120,11 @@ export const HvacOptionsSchema = z.object({
   }).describe('Temperature sensor entity ID'),
   outdoorSensor: z.string().refine((val) => val.startsWith('sensor.'), {
     message: 'Outdoor sensor must be a sensor entity',
-  }).default('sensor.openweathermap_temperature').describe(
-    'Outdoor temperature sensor',
-  ),
-  systemMode: z.nativeEnum(SystemMode).default(SystemMode.AUTO).describe(
+  }).describe('Outdoor temperature sensor'),
+  systemMode: z.nativeEnum(SystemMode).describe(
     'System operation mode',
   ),
-  hvacEntities: z.array(HvacEntitySchema).default([]).describe(
+  hvacEntities: z.array(HvacEntitySchema).describe(
     'HVAC entities to control',
   ),
   heating: HeatingOptionsSchema,
@@ -142,37 +139,34 @@ export const HvacOptionsSchema = z.object({
  */
 export const ExperimentalFeaturesSchema = z.object({
   adaptiveLearning: z.object({
-    enabled: z.boolean().default(false),
+    enabled: z.boolean(),
     config: z.record(z.unknown()).optional(),
-  }).default({ enabled: false }),
+  }),
   advancedAnalytics: z.object({
-    enabled: z.boolean().default(false),
+    enabled: z.boolean(),
     config: z.record(z.unknown()).optional(),
-  }).default({ enabled: false }).optional(),
+  }).optional(),
   predictiveModeling: z.object({
-    enabled: z.boolean().default(false),
+    enabled: z.boolean(),
     config: z.record(z.unknown()).optional(),
-  }).default({ enabled: false }).optional(),
+  }).optional(),
 });
 
 /**
  * Application-level configuration schema
  */
 export const ApplicationOptionsSchema = z.object({
-  logLevel: z.nativeEnum(LogLevel).default(LogLevel.DEBUG).describe(
+  logLevel: z.nativeEnum(LogLevel).describe(
     'Logging level',
   ),
-  useAi: z.boolean().default(false).describe(
+  useAi: z.boolean().describe(
     'Enable AI agent for HVAC decisions',
   ),
-  aiModel: z.string().default('gpt-4o-mini').describe('AI model to use'),
-  aiTemperature: z.number().min(0).max(2).default(0.1).describe(
+  aiModel: z.string().describe('AI model to use'),
+  aiTemperature: z.number().min(0).max(2).describe(
     'AI model temperature',
   ),
   openaiApiKey: z.string().optional().describe('OpenAI API key for AI agent'),
-  dryRun: z.boolean().default(false).describe(
-    'Enable dry run mode (no actual HA calls)',
-  ),
   experimentalFeatures: z.union([
     z.array(z.string()),
     ExperimentalFeaturesSchema,
@@ -185,7 +179,7 @@ export const ApplicationOptionsSchema = z.object({
  * Main application settings schema
  */
 export const SettingsSchema = z.object({
-  appOptions: ApplicationOptionsSchema.default({}),
+  appOptions: ApplicationOptionsSchema,
   hassOptions: HassOptionsSchema,
   hvacOptions: HvacOptionsSchema,
 });

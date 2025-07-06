@@ -548,26 +548,4 @@ export interface ExperimentalFeatures {
   };
 }
 
-/**
- * Default experimental features configuration (all disabled)
- */
-export const defaultExperimentalFeatures: ExperimentalFeatures = {
-  adaptiveLearning: {
-    enabled: false,
-  },
-  hvacOptimization: {
-    enabled: false,
-  },
-  predictiveAnalytics: {
-    enabled: false,
-  },
-  systemMonitoring: {
-    enabled: false,
-  },
-  smartScheduling: {
-    enabled: false,
-  },
-  performanceOptimization: {
-    enabled: false,
-  },
-};
+

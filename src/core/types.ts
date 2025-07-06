@@ -31,12 +31,10 @@ export const TYPES = {
   HVACControlTool: Symbol.for('HVACControlTool'),
   SensorReaderTool: Symbol.for('SensorReaderTool'),
 
-  // Experimental Features
-  AdaptiveLearningEngine: Symbol.for('AdaptiveLearningEngine'),
-  HVACOptimizer: Symbol.for('HVACOptimizer'),
-  PredictiveAnalyticsEngine: Symbol.for('PredictiveAnalyticsEngine'),
-  SystemMonitor: Symbol.for('SystemMonitor'),
-  SmartScheduler: Symbol.for('SmartScheduler'),
-  PerformanceOptimizer: Symbol.for('PerformanceOptimizer'),
-  ExperimentalFeatures: Symbol.for('ExperimentalFeatures'),
+  // Event System
+  EventBus: Symbol.for('EventBus'),
+  ActorSystem: Symbol.for('ActorSystem'),
+  HvacActorService: Symbol.for('HvacActorService'),
+
+  // Note: Experimental features are in experimental/ folder and have their own TYPES
 } as const;

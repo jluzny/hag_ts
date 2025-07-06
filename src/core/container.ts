@@ -18,14 +18,11 @@ import { TYPES } from './types.ts';
 import { LoggerService } from './logger.ts';
 import { HVACStateMachine } from '../hvac/state-machine.ts';
 import { XStateHVACStateMachineAdapter } from '../hvac/state-machine-xstate-adapter.ts';
-import { LangGraphHVACStateMachineAdapter } from '../hvac/state-machine-lg-adapter.ts';
 import { IHVACStateMachine } from '../hvac/state-machine-interface.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
-import {
-  defaultExperimentalFeatures,
-  type ExperimentalFeatures,
-} from './experimental-features.ts';
-import { configureExperimentalFeatures } from './experimental-container.ts';
+import { EventBus } from './event-system.ts';
+import { ActorSystem } from './actor-system.ts';
+import { HvacActorService } from '../hvac/hvac-actor-service.ts';
 
 // Re-export for backward compatibility
 export { LoggerService, TYPES };
@@ -148,6 +145,33 @@ export class ApplicationContainer {
       provide: TYPES.ConfigLoader,
       useClass: ConfigLoader,
     });
+
+    // Register event system
+    this.registerEventSystem();
+  }
+
+  /**
+   * Register event system services
+   */
+  private registerEventSystem(): void {
+    // EventBus
+    this.container.bind({
+      provide: TYPES.EventBus,
+      useFactory: () => {
+        const logger = new LoggerService('HAG.event-bus');
+        return new EventBus(logger);
+      },
+    });
+
+    // ActorSystem
+    this.container.bind({
+      provide: TYPES.ActorSystem,
+      useFactory: () => {
+        const eventBus = this.container.get(TYPES.EventBus) as EventBus;
+        const logger = new LoggerService('HAG.actor-system');
+        return new ActorSystem(eventBus, logger);
+      },
+    });
   }
 
   /**
@@ -173,31 +197,13 @@ export class ApplicationContainer {
       provide: TYPES.HVACStateMachine,
       useFactory: () => {
         const hvacOptions = this.container.get<HvacOptions>(TYPES.HvacOptions);
-        const appOptions = this.container.get<ApplicationOptions>(
+        const _appOptions = this.container.get<ApplicationOptions>(
           TYPES.ApplicationOptions,
         );
-        const logger = new LoggerService('HAG.hvac.state-machine-factory');
+        const logger = new LoggerService('HAG.hvac.state-machine');
 
-        // Check for LangGraph experiment feature flag
-        const useLangGraph = Array.isArray(appOptions.experimentalFeatures)
-          ? appOptions.experimentalFeatures.includes('langgraph-state-machine')
-          : false;
-
-        if (useLangGraph) {
-          logger.info(
-            '🧪 [Experiment] Creating LangGraph state machine implementation',
-          );
-          return new LangGraphHVACStateMachineAdapter(
-            hvacOptions,
-            appOptions,
-            logger,
-          );
-        } else {
-          logger.info(
-            '🔄 Creating XState state machine implementation (default)',
-          );
-          return new XStateHVACStateMachineAdapter(hvacOptions, logger);
-        }
+        logger.info('🔄 Creating XState state machine implementation');
+        return new XStateHVACStateMachineAdapter(hvacOptions, logger);
       },
     });
     this.container.bind({
@@ -209,9 +215,9 @@ export class ApplicationContainer {
         const appOptions = this.container.get<ApplicationOptions>(
           TYPES.ApplicationOptions,
         );
-        const stateMachine = this.container.get<IHVACStateMachine>(
-          TYPES.HVACStateMachine,
-        ) as unknown as HVACStateMachine;
+        const hvacActorService = this.container.get<HvacActorService>(
+          TYPES.HvacActorService,
+        );
         const haClient = this.container.get<HomeAssistantClient>(
           TYPES.HomeAssistantClient,
         );
@@ -223,10 +229,23 @@ export class ApplicationContainer {
         return new HVACController(
           hvacOptions,
           appOptions,
-          stateMachine,
+          hvacActorService,
           haClient,
           hvacAgent,
         );
+      },
+    });
+
+    // Register HVAC Actor Service
+    this.container.bind({
+      provide: TYPES.HvacActorService,
+      useFactory: () => {
+        const actorSystem = this.container.get(
+          TYPES.ActorSystem,
+        ) as ActorSystem;
+        const hvacOptions = this.container.get<HvacOptions>(TYPES.HvacOptions);
+        const logger = new LoggerService('HAG.hvac-actor-service');
+        return new HvacActorService(actorSystem, hvacOptions, logger);
       },
     });
 
@@ -312,43 +331,10 @@ export class ApplicationContainer {
   }
 
   /**
-   * Register experimental features
+   * Note: Experimental features are handled separately in the experimental/ folder
    */
   private async registerExperimentalFeatures(): Promise<void> {
-    if (!this.settings) {
-      throw new Error('Settings not loaded');
-    }
-
-    const logger = new LoggerService('HAG.experimental');
-
-    // Get experimental features configuration from settings
-    const rawFeatures = this.settings.appOptions.experimentalFeatures;
-    let experimentalFeatures = defaultExperimentalFeatures;
-
-    if (rawFeatures) {
-      if (Array.isArray(rawFeatures)) {
-        // Legacy string array format - convert to structured format
-        experimentalFeatures = {
-          ...defaultExperimentalFeatures,
-          adaptiveLearning: {
-            enabled: (rawFeatures as string[]).includes('adaptive-learning'),
-          },
-        };
-        logger.debug('🔄 Converted legacy experimental features format', {
-          features: rawFeatures,
-        });
-      } else {
-        // New structured format
-        experimentalFeatures = rawFeatures as ExperimentalFeatures;
-      }
-    }
-
-    // Configure experimental features using the dedicated container
-    await configureExperimentalFeatures(
-      this.container,
-      experimentalFeatures,
-      logger,
-    );
+    // This method is intentionally empty - experimental features are not part of the main codebase
   }
 
   /**

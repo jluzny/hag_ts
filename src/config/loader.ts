@@ -61,14 +61,9 @@ export class ConfigLoader {
           : [],
       });
 
-      // Merge with defaults
-      logger.debug('🔄 Merging with default configuration');
-      const mergedConfig = await this.mergeWithDefaults(rawConfig);
-      logger.debug('✅ Configuration merged with defaults');
-
       // Apply environment variable overrides
       logger.debug('🌍 Applying environment variable overrides');
-      const configWithEnv = this.applyEnvironmentOverrides(mergedConfig);
+      const configWithEnv = this.applyEnvironmentOverrides(rawConfig);
       logger.debug('✅ Environment overrides applied');
 
       // Validate configuration
@@ -155,9 +150,10 @@ export class ConfigLoader {
   /**
    * Find configuration file in standard locations
    */
-  private static findConfigFile(): string {
+  private static findConfigFile(env?: string): string {
     const possiblePaths = [
       Deno.env.get('HAG_CONFIG_FILE'),
+      env ? `config/hvac_config_${env}.yaml` : undefined,
       'config/hvac_config.yaml',
       'hvac_config.yaml',
       join(Deno.env.get('HOME') || '~', '.config', 'hag', 'hvac_config.yaml'),
@@ -320,107 +316,7 @@ export class ConfigLoader {
     return resolvedText;
   }
 
-  /**
-   * Load default configuration from YAML file
-   */
-  private static async loadDefaultConfig(): Promise<unknown> {
-    try {
-      // Try to load config.yaml as the default
-      const defaultConfigPath = 'config.yaml';
-      return await this.loadConfigFile(defaultConfigPath);
-    } catch (_error) {
-      // If config.yaml doesn't exist, use basic minimal defaults
-      logger.warning('No default config.yaml found, using minimal defaults');
-      return {
-        appOptions: {
-          logLevel: 'info',
-          useAi: false,
-          aiModel: 'gpt-3.5-turbo',
-          aiTemperature: 0.1,
-        },
-        hassOptions: {
-          wsUrl: 'ws://localhost:8123/api/websocket',
-          restUrl: 'http://localhost:8123/api',
-          token: 'your_long_lived_access_token_here',
-          maxRetries: 5,
-          retryDelayMs: 1000,
-          stateCheckInterval: 300000,
-        },
-        hvacOptions: {
-          tempSensor: 'sensor.indoor_temperature',
-          outdoorSensor: 'sensor.openweathermap_temperature',
-          systemMode: 'auto',
-          hvacEntities: [],
-          heating: {
-            temperature: 21.0,
-            presetMode: 'comfort',
-            temperatureThresholds: {
-              indoorMin: 18.0,
-              indoorMax: 28.0,
-              outdoorMin: -20.0,
-              outdoorMax: 40.0,
-            },
-          },
-          cooling: {
-            temperature: 24.0,
-            presetMode: 'eco',
-            temperatureThresholds: {
-              indoorMin: 18.0,
-              indoorMax: 28.0,
-              outdoorMin: -20.0,
-              outdoorMax: 40.0,
-            },
-          },
-          activeHours: {
-            start: 8,
-            startWeekday: 7,
-            end: 22,
-          },
-        },
-      };
-    }
-  }
 
-  /**
-   * Merge configuration with default values from YAML file
-   */
-  private static async mergeWithDefaults(config: unknown): Promise<unknown> {
-    const defaultConfig = await this.loadDefaultConfig();
-
-    if (typeof config !== 'object' || config === null) {
-      return defaultConfig;
-    }
-
-    const configObj = config as Record<string, unknown>;
-    const defaultObj = defaultConfig as Record<string, unknown>;
-
-    return {
-      appOptions: {
-        ...(defaultObj.appOptions as Record<string, unknown> || {}),
-        ...(configObj.appOptions as Record<string, unknown> || {}),
-      },
-      hassOptions: {
-        ...(defaultObj.hassOptions as Record<string, unknown> || {}),
-        ...(configObj.hassOptions as Record<string, unknown> || {}),
-      },
-      hvacOptions: {
-        ...(defaultObj.hvacOptions as Record<string, unknown> || {}),
-        ...(configObj.hvacOptions as Record<string, unknown> || {}),
-        heating: {
-          ...((defaultObj.hvacOptions as Record<string, unknown>)
-            ?.heating as Record<string, unknown> || {}),
-          ...((configObj.hvacOptions as Record<string, unknown>)
-            ?.heating as Record<string, unknown> || {}),
-        },
-        cooling: {
-          ...((defaultObj.hvacOptions as Record<string, unknown>)
-            ?.cooling as Record<string, unknown> || {}),
-          ...((configObj.hvacOptions as Record<string, unknown>)
-            ?.cooling as Record<string, unknown> || {}),
-        },
-      },
-    };
-  }
 
   /**
    * Apply environment variable overrides

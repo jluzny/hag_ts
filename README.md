@@ -2,7 +2,9 @@
 
 **⚠️ Alpha Version - TypeScript Migration**
 
-This is an experimental alpha version migrating from Rust-based Hass HVAC automation to TypeScript to evaluate the latest tools and frameworks in the TypeScript ecosystem.
+This is an experimental alpha version migrating from Rust-based Hass HVAC
+automation to TypeScript to evaluate the latest tools and frameworks in the
+TypeScript ecosystem.
 
 **Advanced AI-Powered HVAC Control System with Intelligent Automation**
 

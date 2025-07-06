@@ -111,7 +111,13 @@ Required properties that must be included in `defaultSettings`:
 - Check `error instanceof Error` before accessing `.name` property
 - Use `import type` for decorator parameter types to avoid metadata issues
 
+### Deno Imports
+
+- Always use `jsr` packages for imports, as defined in `deno.json`.
+- Do not use `deno.land` URLs for imports.
+
 ### Type Safety
+
 
 - Use `import type` for types used only in decorators
 - Cast types as `any` when needed for library compatibility (e.g., LangChain)

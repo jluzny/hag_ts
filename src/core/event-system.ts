@@ -1,27 +1,54 @@
 /**
- * Simple event-driven pub/sub system following Rust HAG actor pattern
- *
- * Only handles Home Assistant state_changed events.
- * All sensor-specific logic is handled by subscribers.
+ * Generic event-driven pub/sub system with XState actor integration
+ * Supports both Home Assistant events and custom application events
+ * Maintains backward compatibility with existing HassEventImpl
  */
 
 import { EventEmitter } from 'node:events';
 import { LoggerService } from './logger.ts';
 import { HassEventImpl } from '../home-assistant/models.ts';
 
+export interface BaseEvent {
+  readonly type: string;
+  readonly timestamp: Date;
+  readonly payload?: unknown;
+}
+
+export abstract class AppEvent implements BaseEvent {
+  public readonly timestamp = new Date();
+
+  constructor(
+    public readonly type: string,
+    public readonly payload?: unknown,
+  ) {}
+}
+
 /**
- * Simple EventBus for Home Assistant events only
+ * Enhanced EventBus supporting both legacy and new event types
  */
 export class EventBus extends EventEmitter {
-  private logger = new LoggerService('HAG.event-bus');
+  private logger: LoggerService;
 
-  constructor() {
+  constructor(logger?: LoggerService) {
     super();
-    this.setMaxListeners(50);
+    this.setMaxListeners(100);
+    this.logger = logger || new LoggerService('HAG.event-bus');
   }
 
   /**
-   * Publish a Home Assistant event
+   * Publish any event (new generic method)
+   */
+  publishEvent<T extends BaseEvent>(event: T): void {
+    this.logger.debug(`📤 ${event.type}`, {
+      listeners: this.listenerCount(event.type),
+      timestamp: event.timestamp,
+    });
+
+    this.emit(event.type, event);
+  }
+
+  /**
+   * Publish a Home Assistant event (legacy compatibility)
    */
   publish(event: HassEventImpl): void {
     this.logger.debug('📤 Publishing event', {
@@ -34,7 +61,32 @@ export class EventBus extends EventEmitter {
   }
 
   /**
-   * Subscribe to Home Assistant events
+   * Subscribe to events with type safety (new generic method)
+   */
+  subscribeToEvent<T extends BaseEvent>(
+    eventType: string,
+    handler: (event: T) => Promise<void> | void,
+  ): () => void {
+    const wrappedHandler = async (event: T) => {
+      try {
+        await handler(event);
+      } catch (error) {
+        this.logger.error(`❌ Event handler error: ${eventType}`, { error });
+      }
+    };
+
+    this.on(eventType, wrappedHandler);
+
+    this.logger.debug(`📡 Subscribed to ${eventType}`, {
+      listeners: this.listenerCount(eventType),
+    });
+
+    // Return unsubscribe function
+    return () => this.off(eventType, wrappedHandler);
+  }
+
+  /**
+   * Subscribe to Home Assistant events (legacy compatibility)
    */
   subscribe(
     eventType: string,

@@ -2,7 +2,6 @@
  * Type definitions for AI-enhanced HVAC system
  */
 
-import { HVACLangGraphState } from '../../hvac/lg-types/hvac-state.ts';
 import { SystemMode } from '../../types/common.ts';
 
 /**
@@ -78,9 +77,9 @@ export interface DecisionResult {
 }
 
 /**
- * AI-enhanced state extending the base LangGraph state
+ * AI-enhanced state for HVAC system
  */
-export interface AIEnhancedState extends HVACLangGraphState {
+export interface AIEnhancedState {
   // AI-specific context
   aiContext?: {
     // Decision history

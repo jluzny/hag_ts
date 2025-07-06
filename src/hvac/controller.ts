@@ -7,19 +7,10 @@
 import { injectable } from '@needle-di/core';
 import { LoggerService } from '../core/logger.ts';
 import type { ApplicationOptions, HvacOptions } from '../config/config.ts';
-import { HVACStateMachine } from './state-machine.ts';
+import { HvacActorService } from './hvac-actor-service.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
-import {
-  HassEventImpl,
-  HassServiceCallImpl,
-} from '../home-assistant/models.ts';
-import { eventBus } from '../core/event-system.ts';
-import {
-  HassStateChangeData,
-  HVACMode,
-  HVACStatus,
-  OperationResult,
-} from '../types/common.ts';
+import { HassServiceCallImpl } from '../home-assistant/models.ts';
+import { HVACMode, HVACStatus, OperationResult } from '../types/common.ts';
 import {
   HVACOperationError,
   StateError,
@@ -54,7 +45,7 @@ export class HVACController {
 
   private hvacOptions: HvacOptions;
   private appOptions: ApplicationOptions;
-  private stateMachine: HVACStateMachine;
+  private hvacActorService: HvacActorService;
   private haClient: HomeAssistantClient;
   private logger: LoggerService;
   private hvacAgent?: HVACAgentInterface; // Optional AI agent
@@ -62,13 +53,13 @@ export class HVACController {
   constructor(
     hvacOptions?: HvacOptions,
     appOptions?: ApplicationOptions,
-    stateMachine?: HVACStateMachine,
+    hvacActorService?: HvacActorService,
     haClient?: HomeAssistantClient,
     hvacAgent?: HVACAgentInterface,
   ) {
     this.hvacOptions = hvacOptions!;
     this.appOptions = appOptions!;
-    this.stateMachine = stateMachine!;
+    this.hvacActorService = hvacActorService!;
     this.haClient = haClient!;
     this.logger = new LoggerService('HAG.hvac.controller');
     this.hvacAgent = hvacAgent;
@@ -89,7 +80,6 @@ export class HVACController {
     this.logger.info('🚀 Starting HVAC controller', {
       systemMode: this.hvacOptions.systemMode,
       aiEnabled: this.appOptions.useAi,
-      dryRun: this.appOptions.dryRun,
       hvacEntities: this.hvacOptions.hvacEntities.length,
       tempSensor: this.hvacOptions.tempSensor,
       outdoorSensor: this.hvacOptions.outdoorSensor,
@@ -116,12 +106,12 @@ export class HVACController {
 
       // Start state machine
       this.logger.info('⚙️ Step 2: Starting state machine', {
-        initialState: this.stateMachine?.getCurrentState(),
+        initialState: this.hvacActorService?.getCurrentState(),
         systemMode: this.hvacOptions.systemMode,
       });
-      this.stateMachine.start();
+      this.hvacActorService.start();
       this.logger.info('✅ Step 2 completed: State machine started', {
-        currentState: this.stateMachine.getCurrentState(),
+        currentState: this.hvacActorService.getCurrentState(),
       });
 
       // Setup event subscriptions
@@ -143,7 +133,6 @@ export class HVACController {
       // Trigger initial evaluation
       this.logger.info('🎯 Step 5: Triggering initial evaluation', {
         aiEnabled: this.appOptions.useAi,
-        dryRun: this.appOptions.dryRun,
       });
       await this.triggerInitialEvaluation();
       this.logger.info('✅ Step 5 completed: Initial evaluation triggered');
@@ -154,7 +143,7 @@ export class HVACController {
         mode: this.hvacOptions.systemMode,
         aiEnabled: this.appOptions.useAi && !!this.hvacAgent,
         entities: this.hvacOptions.hvacEntities.length,
-        currentState: this.stateMachine.getCurrentState(),
+        currentState: this.hvacActorService.getCurrentState(),
       });
     } catch (error) {
       this.logger.error('❌ Failed to start HVAC controller', error, {
@@ -176,7 +165,7 @@ export class HVACController {
   async stop(): Promise<void> {
     this.logger.info('🛑 Stopping HVAC controller', {
       currentlyRunning: this.running,
-      currentState: this.stateMachine?.getCurrentState(),
+      currentState: this.hvacActorService?.getCurrentState(),
       haConnected: this.haClient?.connected,
     });
 
@@ -190,9 +179,9 @@ export class HVACController {
 
     // Stop state machine
     this.logger.debug('⚙️ Stopping state machine', {
-      currentState: this.stateMachine?.getCurrentState(),
+      currentState: this.hvacActorService?.getCurrentState(),
     });
-    this.stateMachine.stop();
+    this.hvacActorService.stop();
     this.logger.debug('✅ State machine stopped');
 
     // Disconnect from Home Assistant
@@ -217,7 +206,7 @@ export class HVACController {
    */
   async getStatus(): Promise<HVACStatus> {
     try {
-      const stateMachineStatus = this.stateMachine.getStatus();
+      const stateMachineStatus = this.hvacActorService.getStatus();
       const haConnected = await this.haClient.connected;
 
       const status: HVACStatus = {
@@ -229,9 +218,8 @@ export class HVACController {
           aiEnabled: this.appOptions.useAi && !!this.hvacAgent,
         },
         stateMachine: {
-          currentState: stateMachineStatus.currentState,
+          currentState: stateMachineStatus.mode,
           hvacMode: this.getCurrentHVACMode(),
-          conditions: stateMachineStatus.context,
         },
         timestamp: new Date().toISOString(),
       };
@@ -306,12 +294,10 @@ export class HVACController {
     this.logger.info('🎯 Manual override requested', {
       action,
       options,
-      currentState: this.stateMachine?.getCurrentState(),
+      currentState: this.hvacActorService?.getCurrentState(),
       currentMode: this.getCurrentHVACMode(),
       aiEnabled: this.appOptions.useAi && !!this.hvacAgent,
-      dryRun: this.appOptions.dryRun,
     });
-
     if (!this.running) {
       this.logger.error(
         '❌ Cannot execute manual override: controller not running',
@@ -327,7 +313,7 @@ export class HVACController {
       this.logger.info('🔧 Processing manual override', {
         parsedMode: mode,
         targetTemperature: temperature,
-        fromState: this.stateMachine.getCurrentState(),
+        fromState: this.hvacActorService.getCurrentState(),
         requestedAction: action,
       });
 
@@ -353,20 +339,17 @@ export class HVACController {
         this.logger.info('⚡ Executing direct manual override', {
           mode,
           temperature,
-          dryRun: this.appOptions.dryRun,
         });
 
         await this.executeHVACMode(mode, temperature);
-        this.stateMachine.manualOverride(mode, temperature);
 
-        const newState = this.stateMachine.getCurrentState();
+        const newState = this.hvacActorService.getCurrentState();
 
         this.logger.info('✅ Manual override executed successfully', {
           action,
           mode,
           temperature,
           newState,
-          dryRun: this.appOptions.dryRun,
         });
 
         return {
@@ -379,7 +362,7 @@ export class HVACController {
       this.logger.error('❌ Manual override failed', error, {
         action,
         options,
-        currentState: this.stateMachine?.getCurrentState(),
+        currentState: this.hvacActorService?.getCurrentState(),
         errorType: error instanceof Error ? error.name : 'Unknown',
       });
       throw new HVACOperationError(
@@ -409,11 +392,11 @@ export class HVACController {
         };
       } else {
         // Simple efficiency analysis without AI
-        const status = this.stateMachine.getStatus();
+        const status = this.hvacActorService.getStatus();
         return {
           success: true,
           data: {
-            analysis: `State machine mode: ${status.currentState}`,
+            analysis: `State machine mode: ${status.mode}`,
             recommendations: [
               'Monitor temperature trends',
               'Check for optimal scheduling',
@@ -429,257 +412,18 @@ export class HVACController {
   }
 
   /**
-   * Setup Home Assistant event subscriptions using event bus (Rust HAG pattern)
+   * Setup Home Assistant event subscriptions (simplified)
    */
   private async setupEventSubscriptions(): Promise<void> {
     // Subscribe to state change events
     await this.haClient.subscribeEvents('state_changed');
 
-    // Route Home Assistant events through event bus
-    this.haClient.addEventHandler(
-      'state_changed',
-      (event: HassEventImpl) => {
-        eventBus.publish(event);
-      },
-    );
-
-    // Setup subscribers for different entity types
-    this.setupTemperatureSensorSubscriber();
-    this.setupOutdoorSensorSubscriber();
-
-    this.logger.debug('Event bus subscriptions configured', {
+    this.logger.debug('Event subscriptions configured', {
       watchedEntities: [
         this.hvacOptions.tempSensor,
         this.hvacOptions.outdoorSensor,
       ],
-      approach: 'pure_event_driven_rust_pattern',
     });
-  }
-
-  /**
-   * Setup temperature sensor subscriber (indoor temperature)
-   */
-  private setupTemperatureSensorSubscriber(): void {
-    eventBus.subscribe('state_changed', (event) => {
-      if (!event.isStateChanged()) return;
-
-      const stateChange = event.getStateChangeData();
-      if (
-        !stateChange || stateChange.entityId !== this.hvacOptions.tempSensor
-      ) return;
-
-      this.logger.info('🌡️ Temperature sensor event received', {
-        entityId: stateChange.entityId,
-        newTemp: stateChange.newState?.state,
-        oldTemp: stateChange.oldState?.state,
-      });
-
-      this.processTemperatureEvent(stateChange).catch((error) => {
-        this.logger.error('Failed to process temperature event', error);
-      });
-    });
-  }
-
-  /**
-   * Setup outdoor sensor subscriber
-   */
-  private setupOutdoorSensorSubscriber(): void {
-    eventBus.subscribe('state_changed', (event) => {
-      if (!event.isStateChanged()) return;
-
-      const stateChange = event.getStateChangeData();
-      if (
-        !stateChange || stateChange.entityId !== this.hvacOptions.outdoorSensor
-      ) return;
-
-      this.logger.debug('🌡️ Outdoor sensor event received', {
-        entityId: stateChange.entityId,
-        newTemp: stateChange.newState?.state,
-      });
-
-      // Outdoor sensor changes don't trigger immediate evaluation
-      // They're used when indoor temperature events trigger evaluation
-    });
-  }
-
-  /**
-   * Process temperature sensor events (Rust HAG pattern - event-driven only)
-   */
-  private async processTemperatureEvent(
-    stateChange: HassStateChangeData,
-  ): Promise<void> {
-    if (!stateChange.newState) {
-      this.logger.warning('⚠️ Temperature sensor event with no new state', {
-        entityId: stateChange.entityId,
-        oldState: stateChange.oldState?.state,
-      });
-      return;
-    }
-
-    this.logger.info('🌡️ Processing temperature sensor change', {
-      entityId: stateChange.entityId,
-      oldTemperature: stateChange.oldState?.state,
-      newTemperature: stateChange.newState.state,
-      temperatureChange:
-        stateChange.oldState?.state && stateChange.newState?.state
-          ? parseFloat(stateChange.newState.state) -
-            parseFloat(stateChange.oldState.state)
-          : 'initial',
-      currentHVACState: this.stateMachine?.getCurrentState(),
-    });
-
-    try {
-      if (this.appOptions.useAi && this.hvacAgent) {
-        // Process through AI agent
-        const eventData = {
-          entityId: stateChange.entityId,
-          newState: stateChange.newState.state,
-          oldState: stateChange.oldState?.state,
-          timestamp: new Date().toISOString(),
-          attributes: stateChange.newState.attributes,
-        };
-
-        this.logger.debug('🤖 Delegating temperature change to AI agent');
-        await this.hvacAgent.processTemperatureChange(eventData);
-        this.logger.debug('✅ AI agent processed temperature change');
-      } else {
-        // Use direct state machine logic
-        this.logger.debug('⚙️ Processing with direct state machine logic');
-        await this.processStateChangeDirect(stateChange);
-        this.logger.debug('✅ Direct state machine processing completed');
-      }
-    } catch (error) {
-      this.logger.error('❌ Failed to process temperature change', error, {
-        entityId: stateChange.entityId,
-        newTemperature: stateChange.newState?.state,
-        oldTemperature: stateChange.oldState?.state,
-        processingMethod: this.appOptions.useAi && this.hvacAgent
-          ? 'AI'
-          : 'direct',
-      });
-    }
-  }
-
-  /**
-   * Process state change using direct state machine logic
-   */
-  private async processStateChangeDirect(
-    stateChange: HassStateChangeData,
-  ): Promise<void> {
-    const startTime = Date.now();
-
-    try {
-      this.logger.info('🔄 Starting direct state change processing', {
-        entityId: stateChange?.entityId,
-        rawState: stateChange?.newState?.state,
-        processingStartTime: new Date().toISOString(),
-      });
-
-      const newTemp = parseFloat(stateChange?.newState?.state || '0');
-      if (isNaN(newTemp)) {
-        this.logger.warning('⚠️ Invalid temperature value received', {
-          entityId: stateChange?.entityId,
-          rawState: stateChange?.newState?.state,
-          parsedValue: newTemp,
-          stateType: typeof stateChange?.newState?.state,
-        });
-        return;
-      }
-
-      this.logger.debug('✅ Temperature parsed successfully', {
-        entityId: stateChange?.entityId,
-        parsedTemperature: newTemp,
-        unit: stateChange?.newState?.attributes?.unit_of_measurement ||
-          'unknown',
-      });
-
-      // Get outdoor temperature
-      let outdoorTemp = 20.0; // Default fallback
-      try {
-        this.logger.debug('🌡️ Fetching outdoor temperature', {
-          outdoorSensor: this.hvacOptions.outdoorSensor,
-        });
-
-        const outdoorState = await this.haClient.getState(
-          this.hvacOptions.outdoorSensor,
-        );
-        const outdoorValue = outdoorState.getNumericState();
-
-        if (outdoorValue !== null) {
-          outdoorTemp = outdoorValue;
-          this.logger.debug('✅ Outdoor temperature retrieved', {
-            outdoorTemperature: outdoorTemp,
-            outdoorSensor: this.hvacOptions.outdoorSensor,
-            unit: outdoorState.attributes?.unit_of_measurement,
-          });
-        } else {
-          this.logger.warning(
-            '⚠️ Outdoor temperature is null, using fallback',
-            {
-              fallbackTemp: outdoorTemp,
-              outdoorSensor: this.hvacOptions.outdoorSensor,
-            },
-          );
-        }
-      } catch (error) {
-        this.logger.warning(
-          '⚠️ Failed to get outdoor temperature, using fallback',
-          {
-            error,
-            fallbackTemp: outdoorTemp,
-            outdoorSensor: this.hvacOptions.outdoorSensor,
-          },
-        );
-      }
-
-      const oldState = this.stateMachine.getCurrentState();
-
-      // Update state machine with new conditions
-      this.logger.info('⚙️ Updating state machine with new temperatures', {
-        indoorTemp: newTemp,
-        outdoorTemp,
-        currentState: oldState,
-        temperatureDelta: stateChange?.oldState?.state
-          ? newTemp - parseFloat(stateChange.oldState.state)
-          : 'initial',
-      });
-
-      this.stateMachine.updateTemperatures(newTemp, outdoorTemp);
-
-      const newState = this.stateMachine.getCurrentState();
-
-      this.logger.debug('✅ State machine updated', {
-        oldState,
-        newState,
-        stateChanged: oldState !== newState,
-        temperatures: { indoor: newTemp, outdoor: outdoorTemp },
-      });
-
-      // Trigger evaluation
-      this.logger.debug('🎯 Triggering evaluation and execution');
-      await this.evaluateAndExecute();
-
-      const processingTime = Date.now() - startTime;
-
-      this.logger.info('✅ Direct state change processing completed', {
-        entityId: stateChange?.entityId,
-        indoorTemp: newTemp,
-        outdoorTemp,
-        oldState,
-        newState,
-        stateChanged: oldState !== newState,
-        processingTimeMs: processingTime,
-      });
-    } catch (error) {
-      const processingTime = Date.now() - startTime;
-
-      this.logger.error('❌ Direct state change processing failed', error, {
-        entityId: stateChange?.entityId,
-        rawState: stateChange?.newState?.state,
-        processingTimeMs: processingTime,
-        currentState: this.stateMachine?.getCurrentState(),
-      });
-    }
   }
 
   /**
@@ -690,7 +434,7 @@ export class HVACController {
 
     this.logger.info('🎯 Performing periodic HVAC evaluation', {
       aiEnabled: this.appOptions.useAi && !!this.hvacAgent,
-      currentState: this.stateMachine?.getCurrentState(),
+      currentState: this.hvacActorService?.getCurrentState(),
       haConnected: this.haClient?.connected,
       evaluationType: this.appOptions.useAi && this.hvacAgent
         ? 'AI-powered'
@@ -739,7 +483,7 @@ export class HVACController {
           ? 'AI'
           : 'direct',
         evaluationTimeMs: totalEvaluationTime,
-        currentState: this.stateMachine?.getCurrentState(),
+        currentState: this.hvacActorService?.getCurrentState(),
         success: true,
       });
     } catch (error) {
@@ -750,86 +494,26 @@ export class HVACController {
           ? 'AI'
           : 'direct',
         evaluationTimeMs: totalEvaluationTime,
-        currentState: this.stateMachine?.getCurrentState(),
+        currentState: this.hvacActorService?.getCurrentState(),
         errorType: error instanceof Error ? error.name : 'Unknown',
       });
     }
   }
 
   /**
-   * Trigger initial temperature state reading (following Rust HAG pattern)
-   * Both AI and non-AI paths follow event-driven approach
+   * Trigger initial evaluation
    */
   private async triggerInitialEvaluation(): Promise<void> {
-    this.logger.info(
-      '🎯 Triggering initial temperature state reading (Rust HAG pattern)',
-      {
-        tempSensor: this.hvacOptions.tempSensor,
-        aiEnabled: this.appOptions.useAi,
-        approach: 'event_driven_only',
-        note: 'Will request current state to trigger initial event processing',
-      },
-    );
-
-    try {
-      // Follow Rust pattern for both AI and non-AI: trigger a state read that will generate an event
-      // This is equivalent to publish_state_oneshot() in Rust HAG
-      this.logger.debug(
-        '⚙️ Using event-driven pattern for initial temperature reading',
-      );
-      await this.publishStateOneshot(this.hvacOptions.tempSensor);
-    } catch (error) {
-      this.logger.warning('❌ Initial state trigger failed', { error });
-    }
-  }
-
-  /**
-   * Trigger a state read to generate initial event (Rust HAG pattern)
-   * Equivalent to publish_state_oneshot() in Rust
-   */
-  private async publishStateOneshot(entityId: string): Promise<void> {
-    this.logger.info('📡 Publishing state oneshot request', {
-      entityId,
+    this.logger.info('🎯 Triggering initial evaluation', {
+      tempSensor: this.hvacOptions.tempSensor,
+      aiEnabled: this.appOptions.useAi,
     });
 
     try {
-      // Read current state and manually trigger a state change event
-      const currentState = await this.haClient.getState(entityId);
-
-      // Create a synthetic state change event to trigger the event processing pipeline
-      // This mimics what Home Assistant would send via WebSocket
-      const eventData = {
-        entity_id: entityId,
-        old_state: null,
-        new_state: {
-          entity_id: entityId,
-          state: currentState.state,
-          attributes: currentState.attributes,
-          last_changed: currentState.lastChanged.toISOString(),
-          last_updated: currentState.lastUpdated.toISOString(),
-        },
-      };
-
-      const syntheticEvent = new HassEventImpl(
-        'state_changed',
-        eventData,
-        'local',
-        new Date(),
-      );
-
-      this.logger.debug('✅ Triggering synthetic state change event', {
-        entityId,
-        currentValue: currentState.state,
-      });
-
-      // Process the synthetic event through the event bus
-      eventBus.publish(syntheticEvent);
+      // Perform initial evaluation using the actor system
+      await this.performEvaluation();
     } catch (error) {
-      this.logger.error('❌ Failed to publish state oneshot', error, {
-        entityId,
-        errorType: error instanceof Error ? error.name : 'Unknown',
-      });
-      throw error;
+      this.logger.warning('❌ Initial evaluation failed', { error });
     }
   }
 
@@ -844,7 +528,7 @@ export class HVACController {
         tempSensor: this.hvacOptions.tempSensor,
         outdoorSensor: this.hvacOptions.outdoorSensor,
         haConnected: this.haClient.connected,
-        currentState: this.stateMachine?.getCurrentState(),
+        currentState: this.hvacActorService?.getCurrentState(),
       });
 
       // Get current temperatures
@@ -876,45 +560,33 @@ export class HVACController {
         return;
       }
 
-      let outdoorTemp = 20.0;
-      try {
-        this.logger.debug('🌡️ Fetching outdoor temperature', {
-          sensor: this.hvacOptions.outdoorSensor,
-        });
+      this.logger.debug('🌡️ Fetching outdoor temperature', {
+        sensor: this.hvacOptions.outdoorSensor,
+      });
 
-        const outdoorState = await this.haClient.getState(
-          this.hvacOptions.outdoorSensor,
-        );
-        const outdoorValue = outdoorState.getNumericState();
+      const outdoorState = await this.haClient.getState(
+        this.hvacOptions.outdoorSensor,
+      );
+      const outdoorValue = outdoorState.getNumericState();
 
-        if (outdoorValue !== null) {
-          outdoorTemp = outdoorValue;
-          this.logger.debug('✅ Outdoor temperature retrieved', {
-            sensor: this.hvacOptions.outdoorSensor,
-            temperature: outdoorTemp,
-            unit: outdoorState.attributes?.unit_of_measurement,
-            lastUpdated: outdoorState.lastUpdated,
-          });
-        } else {
-          this.logger.warning(
-            '⚠️ Outdoor temperature is null, using fallback',
-            {
-              sensor: this.hvacOptions.outdoorSensor,
-              fallbackTemp: outdoorTemp,
-              state: outdoorState.state,
-            },
-          );
-        }
-      } catch (error) {
-        this.logger.warning(
-          '⚠️ Failed to get outdoor temperature, using fallback',
+      if (outdoorValue === null) {
+        this.logger.error(
+          '❌ Outdoor temperature is null - cannot proceed with evaluation',
           {
-            error,
             sensor: this.hvacOptions.outdoorSensor,
-            fallbackTemp: outdoorTemp,
+            state: outdoorState.state,
           },
         );
+        return;
       }
+
+      const outdoorTemp = outdoorValue;
+      this.logger.debug('✅ Outdoor temperature retrieved', {
+        sensor: this.hvacOptions.outdoorSensor,
+        temperature: outdoorTemp,
+        unit: outdoorState.attributes?.unit_of_measurement,
+        lastUpdated: outdoorState.lastUpdated,
+      });
 
       const temperatureFetchTime = Date.now() - evaluationStart;
 
@@ -931,9 +603,9 @@ export class HVACController {
 
       // Update state machine conditions
       this.logger.debug('⚙️ Updating state machine with temperature data');
-      this.stateMachine.updateTemperatures(indoorTemp, outdoorTemp);
+      // Note: Temperature updates now happen through the actor system automatically
 
-      const stateAfterUpdate = this.stateMachine.getCurrentState();
+      const stateAfterUpdate = this.hvacActorService.getCurrentState();
       this.logger.debug('✅ State machine temperatures updated', {
         newState: stateAfterUpdate,
         temperatures: { indoor: indoorTemp, outdoor: outdoorTemp },
@@ -946,7 +618,7 @@ export class HVACController {
       this.logger.info('✅ Direct state machine evaluation completed', {
         indoorTemp,
         outdoorTemp,
-        finalState: this.stateMachine.getCurrentState(),
+        finalState: this.hvacActorService.getCurrentState(),
         evaluationTimeMs: totalEvaluationTime,
         success: true,
       });
@@ -955,74 +627,10 @@ export class HVACController {
 
       this.logger.error('❌ Direct state machine evaluation failed', error, {
         evaluationTimeMs: totalEvaluationTime,
-        currentState: this.stateMachine?.getCurrentState(),
+        currentState: this.hvacActorService?.getCurrentState(),
         errorType: error instanceof Error ? error.name : 'Unknown',
         tempSensor: this.hvacOptions.tempSensor,
         outdoorSensor: this.hvacOptions.outdoorSensor,
-      });
-    }
-  }
-
-  /**
-   * Evaluate state machine and execute HVAC actions
-   */
-  private async evaluateAndExecute(): Promise<void> {
-    const evaluationStart = Date.now();
-    const previousState = this.stateMachine.getCurrentState();
-    const previousMode = this.getCurrentHVACMode();
-    const stateMachineStatus = this.stateMachine.getStatus();
-
-    this.logger.info('🎯 Starting HVAC evaluation', {
-      previousState,
-      previousMode,
-      currentConditions: stateMachineStatus.context,
-      evaluationTime: new Date().toISOString(),
-    });
-
-    // Trigger evaluation
-    this.logger.debug('⚙️ Triggering state machine condition evaluation');
-    this.stateMachine.evaluateConditions();
-
-    const currentState = this.stateMachine.getCurrentState();
-    const hvacMode = this.getCurrentHVACMode();
-    const newStateMachineStatus = this.stateMachine.getStatus();
-    const evaluationTime = Date.now() - evaluationStart;
-
-    this.logger.info('✅ HVAC evaluation completed', {
-      previousState,
-      currentState,
-      previousMode,
-      hvacMode: hvacMode || 'unknown',
-      stateChanged: previousState !== currentState,
-      modeChanged: previousMode !== hvacMode,
-      evaluationTimeMs: evaluationTime,
-      conditions: newStateMachineStatus.context,
-      shouldExecute: hvacMode &&
-        (previousState !== currentState || currentState === 'manualOverride'),
-    });
-
-    // Execute HVAC actions if mode changed or manual override
-    if (
-      hvacMode &&
-      (previousState !== currentState || currentState === 'manualOverride')
-    ) {
-      this.logger.info('⚡ Executing HVAC mode change', {
-        reason: currentState === 'manualOverride'
-          ? 'manual_override'
-          : 'state_change',
-        fromState: previousState,
-        toState: currentState,
-        fromMode: previousMode,
-        toMode: hvacMode,
-      });
-
-      await this.executeHVACMode(hvacMode);
-    } else {
-      this.logger.debug('🔄 No action required', {
-        reason: !hvacMode ? 'no_hvac_mode' : 'no_state_change',
-        currentState,
-        hvacMode,
-        stateChanged: previousState !== currentState,
       });
     }
   }
@@ -1039,7 +647,6 @@ export class HVACController {
     this.logger.info('⚡ Executing HVAC mode change', {
       hvacMode,
       targetTemp,
-      dryRun: this.appOptions.dryRun,
       systemMode: this.hvacOptions.systemMode,
       executionTime: new Date().toISOString(),
     });
@@ -1099,7 +706,6 @@ export class HVACController {
           entityId: entity.entityId,
           mode: hvacMode,
           temperature: targetTemp,
-          dryRun: this.appOptions.dryRun,
         });
       } catch (error) {
         errorCount++;
@@ -1130,7 +736,6 @@ export class HVACController {
       successCount,
       errorCount,
       executionTimeMs: executionTime,
-      dryRun: this.appOptions.dryRun,
       results,
       overallSuccess: errorCount === 0,
     });
@@ -1161,42 +766,8 @@ export class HVACController {
       targetTemp,
       finalTemperature: temperature,
       presetMode,
-      dryRun: this.appOptions.dryRun,
       controlTime: new Date().toISOString(),
     });
-
-    if (this.appOptions.dryRun) {
-      this.logger.info('📝 DRY RUN: Would set HVAC mode', {
-        entityId,
-        hvac_mode: mode,
-        service: 'climate.set_hvac_mode',
-      });
-
-      if (mode !== HVACMode.OFF) {
-        this.logger.info('📝 DRY RUN: Would set temperature', {
-          entityId,
-          temperature,
-          service: 'climate.set_temperature',
-        });
-
-        this.logger.info('📝 DRY RUN: Would set preset mode', {
-          entityId,
-          preset_mode: presetMode,
-          service: 'climate.set_preset_mode',
-        });
-      }
-
-      const dryRunTime = Date.now() - controlStart;
-      this.logger.debug('✅ DRY RUN: Entity control simulation completed', {
-        entityId,
-        mode,
-        temperature,
-        presetMode,
-        simulationTimeMs: dryRunTime,
-      });
-
-      return;
-    }
 
     try {
       // Set HVAC mode
@@ -1290,7 +861,7 @@ export class HVACController {
    * Get current HVAC mode from state machine
    */
   private getCurrentHVACMode(): HVACMode | undefined {
-    const currentState = this.stateMachine.getCurrentState();
+    const currentState = this.hvacActorService.getCurrentState();
 
     switch (currentState) {
       case 'heating':

@@ -688,11 +688,10 @@ export class HomeAssistantClient {
 
       // Log specific event details for important event types
       if (event.eventType === 'state_changed') {
-        const entityId = event.data?.entity_id;
-        // deno-lint-ignore no-explicit-any
-        const oldState = (event.data as any)?.old_state?.state;
-        // deno-lint-ignore no-explicit-any
-        const newState = (event.data as any)?.new_state?.state;
+        const stateChangeData = event.getStateChangeData();
+        const entityId = stateChangeData?.entityId;
+        const oldState = stateChangeData?.oldState?.state;
+        const newState = stateChangeData?.newState?.state;
 
         this.logger.debug('🔄 Entity state changed', {
           entityId,
@@ -700,8 +699,7 @@ export class HomeAssistantClient {
           newState,
           stateChanged: oldState !== newState,
           timeFired: event.timeFired,
-          // deno-lint-ignore no-explicit-any
-          attributes: (event.data as any)?.new_state?.attributes,
+          attributes: stateChangeData?.newState?.attributes,
         });
       } else if (event.eventType === 'service_executed') {
         this.logger.debug('⚙️ Service execution event', {

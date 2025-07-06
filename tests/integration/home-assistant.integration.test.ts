@@ -22,7 +22,7 @@ let testConfig: Settings;
 try {
   // Try to load test configuration
   testConfig = await ConfigLoader.loadSettings(configPath);
-} catch (error) {
+} catch (_error) {
   console.log(`❌ Integration test config not found: ${configPath}`);
   throw new Error(`Integration test requires config file: ${configPath}`);
 }

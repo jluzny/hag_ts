@@ -7,7 +7,6 @@ appOptions:
   aiModel: 'gpt-4o-mini'
   aiTemperature: 0.3
   openaiApiKey: '${OPENAI_API_KEY}'
-  dryRun: true
   experimentalFeatures:
     - 'langgraph-state-machine'
     - 'ai-decision-engine'
