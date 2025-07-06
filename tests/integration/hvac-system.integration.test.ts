@@ -207,15 +207,15 @@ Deno.test('HVAC Integration Tests', async (t) => {
     // Verify state machine is in a valid state (indicates it's processing data)
     assertExists(status.stateMachine.currentState);
     assertExists(status.stateMachine.hvacMode);
-    
+
     // In mock environment, the controller should be able to read sensor states
     // Test that the mock Home Assistant client can provide temperature data
     const indoorTemp = mockHaClient.getState('sensor.indoor_temperature');
     const outdoorTemp = mockHaClient.getState('sensor.outdoor_temperature');
-    
+
     assertEquals(indoorTemp.state, '22.5');
     assertEquals(outdoorTemp.state, '15.0');
-    
+
     console.log('Mock temperature readings confirmed:', {
       indoor: indoorTemp.state,
       outdoor: outdoorTemp.state,
@@ -276,12 +276,6 @@ Deno.test('HVAC Integration Tests', async (t) => {
     // Check if state machine responded appropriately
     const status = await controller.getStatus();
     assertExists(status.stateMachine);
-  });
-
-  await t.step('should evaluate system efficiency', async () => {
-    const result = await controller.evaluateEfficiency();
-    assertEquals(result.success, true);
-    assertExists(result.data);
   });
 
   await t.step('should evaluate system efficiency', async () => {

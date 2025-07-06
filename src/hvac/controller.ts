@@ -1,6 +1,6 @@
 /**
  * HVAC Controller V2 - Uses generic actor bootstrap system
- * 
+ *
  * This controller demonstrates how to use the generic actor framework
  * for domain-specific HVAC management
  */
@@ -12,7 +12,7 @@ import { HomeAssistantClient } from '../home-assistant/client.ts';
 import { HVACMode, HVACStatus, OperationResult } from '../types/common.ts';
 import { HVACOperationError, StateError } from '../core/exceptions.ts';
 import { ActorBootstrap } from '../core/actor-bootstrap.ts';
-import { EventBus, AppEvent } from '../core/event-system.ts';
+import { AppEvent, EventBus } from '../core/event-system.ts';
 import { HvacActorFactory, HvacDomainActor } from './hvac-domain-actor.ts';
 
 /**
@@ -83,7 +83,9 @@ export class HVACController {
       systemMode: this.hvacOptions.systemMode,
       aiEnabled: this.appOptions.useAi,
       hvacEntities: this.hvacOptions.hvacEntities.length,
-      enabledEntities: this.hvacOptions.hvacEntities.filter(e => e.enabled).length,
+      enabledEntities: this.hvacOptions.hvacEntities.filter((e) =>
+        e.enabled
+      ).length,
     });
 
     try {
@@ -108,7 +110,7 @@ export class HVACController {
       // Step 3: Start actor bootstrap system
       this.logger.info('⚙️ Step 3: Starting actor bootstrap system');
       await this.actorBootstrap.startAll();
-      
+
       // Get reference to HVAC actor
       this.hvacActor = this.actorBootstrap.getActor('hvac') as HvacDomainActor;
       this.logger.info('✅ Step 3 completed: Actor bootstrap system started');
@@ -157,7 +159,9 @@ export class HVACController {
       await this.haClient.disconnect();
       this.logger.debug('✅ Home Assistant disconnected');
     } catch (error) {
-      this.logger.warning('⚠️ Error disconnecting from Home Assistant', { error });
+      this.logger.warning('⚠️ Error disconnecting from Home Assistant', {
+        error,
+      });
     }
 
     this.running = false;
@@ -271,34 +275,6 @@ export class HVACController {
   }
 
   /**
-   * Evaluate system efficiency
-   */
-  async evaluateEfficiency(): Promise<OperationResult> {
-    if (!this.running) {
-      throw new StateError('HVAC controller is not running');
-    }
-
-    try {
-      // Simple efficiency analysis without AI
-      const actorStatus = this.hvacActor?.getStatus();
-      return {
-        success: true,
-        data: {
-          analysis: `Actor mode: ${actorStatus?.metadata?.hvacMode || 'unknown'}`,
-          recommendations: [
-            'Monitor temperature trends',
-            'Check for optimal scheduling',
-          ],
-        },
-        timestamp: new Date().toISOString(),
-      };
-    } catch (error) {
-      this.logger.error('Efficiency evaluation failed', error);
-      throw new HVACOperationError('Efficiency evaluation failed');
-    }
-  }
-
-  /**
    * Start monitoring loop with event-driven temperature updates
    */
   private startMonitoringLoop(): void {
@@ -351,7 +327,10 @@ export class HVACController {
       }
 
       // Publish temperature update event
-      const temperatureEvent = new TemperatureUpdateEvent(indoorTemp, outdoorTemp);
+      const temperatureEvent = new TemperatureUpdateEvent(
+        indoorTemp,
+        outdoorTemp,
+      );
       this.eventBus.publishEvent(temperatureEvent);
 
       // Publish evaluation request event
@@ -364,7 +343,10 @@ export class HVACController {
         events: [temperatureEvent.type, evaluationEvent.type],
       });
     } catch (error) {
-      this.logger.error('❌ Failed to evaluate and publish temperatures', error);
+      this.logger.error(
+        '❌ Failed to evaluate and publish temperatures',
+        error,
+      );
     }
   }
 
@@ -408,3 +390,4 @@ export class HVACController {
     return this.hvacActor;
   }
 }
+
