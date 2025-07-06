@@ -21,9 +21,10 @@ import { IHVACStateMachine } from '../hvac/state-machine-interface.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
 import { EventBus } from './event-system.ts';
 import { ActorSystem } from './actor-system.ts';
-import { HvacActorService } from '../hvac/hvac-actor-service.ts';
 import { ActorBootstrap } from './actor-bootstrap.ts';
 import { HVACController } from '../hvac/controller.ts';
+import { ActorManager } from './actor-manager.ts';
+import { HvacModule } from '../hvac/hvac-module.ts';
 
 // Re-export for backward compatibility
 export { LoggerService, TYPES };
@@ -34,6 +35,7 @@ export { LoggerService, TYPES };
 export class ApplicationContainer {
   private container: Container;
   private settings?: Settings;
+  private logger?: LoggerService;
 
   constructor() {
     this.container = new Container();
@@ -52,12 +54,18 @@ export class ApplicationContainer {
 
       // Register core services
       this.registerCoreServices();
+      
+      // Initialize logger
+      this.logger = this.container.get<LoggerService>(TYPES.Logger);
 
       // Register Home Assistant services
       this.registerHomeAssistantServices();
 
       // Register HVAC services
       this.registerHVACServices();
+
+      // Register modules
+      await this.registerModules();
 
       // Register tools (if AI is enabled)
       if (this.settings.appOptions.useAi) {
@@ -164,7 +172,17 @@ export class ApplicationContainer {
       },
     });
 
-    // ActorSystem
+
+    // Actor Manager (new unified system)
+    this.container.bind({
+      provide: TYPES.ActorManager,
+      useFactory: () => {
+        const logger = new LoggerService('HAG.actor-manager');
+        return new ActorManager(this.container, logger);
+      },
+    });
+
+    // Legacy ActorSystem (for backward compatibility)
     this.container.bind({
       provide: TYPES.ActorSystem,
       useFactory: () => {
@@ -174,7 +192,7 @@ export class ApplicationContainer {
       },
     });
 
-    // ActorBootstrap
+    // Legacy ActorBootstrap (for backward compatibility)
     this.container.bind({
       provide: TYPES.ActorBootstrap,
       useFactory: () => {
@@ -318,6 +336,23 @@ export class ApplicationContainer {
       throw new Error('Settings not loaded');
     }
     return this.settings;
+  }
+
+  /**
+   * Register domain modules
+   */
+  private async registerModules(): Promise<void> {
+    if (!this.settings) {
+      throw new Error('Settings not loaded');
+    }
+
+    const actorManager = this.container.get<ActorManager>(TYPES.ActorManager);
+
+    // Register HVAC module
+    const hvacModule = new HvacModule();
+    await actorManager.registerModule(hvacModule, this.settings.hvacOptions);
+
+    this.logger?.info('✅ Registered all domain modules');
   }
 
   /**

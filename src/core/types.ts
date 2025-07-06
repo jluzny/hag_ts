@@ -37,5 +37,8 @@ export const TYPES = {
   HvacActorService: Symbol.for('HvacActorService'),
   ActorBootstrap: Symbol.for('ActorBootstrap'),
 
+  // New Architecture
+  ActorManager: Symbol.for('ActorManager'),
+
   // Note: Experimental features are in experimental/ folder and have their own TYPES
 } as const;

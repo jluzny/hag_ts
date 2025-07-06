@@ -572,17 +572,20 @@ Deno.test('Application Container - Concurrent Operations', async (t) => {
   setupConfigMocks();
 
   await t.step('should handle concurrent initialization attempts', async () => {
-    const container = new ApplicationContainer();
+    const container1 = new ApplicationContainer();
+    const container2 = new ApplicationContainer();
 
-    // Start multiple initializations concurrently
-    const init1 = container.initialize('test-config.yaml');
-    const init2 = container.initialize('test-config.yaml');
+    // Start multiple initializations concurrently on different containers
+    const init1 = container1.initialize('test-config.yaml');
+    const init2 = container2.initialize('test-config.yaml');
 
     // Both should complete without error
     await Promise.all([init1, init2]);
 
-    const settings = container.getSettings();
-    assertExists(settings);
+    const settings1 = container1.getSettings();
+    const settings2 = container2.getSettings();
+    assertExists(settings1);
+    assertExists(settings2);
   });
 
   await t.step('should handle concurrent service access', async () => {

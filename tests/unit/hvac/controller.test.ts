@@ -6,7 +6,6 @@
 
 import { assertExists } from '@std/assert';
 import { HVACController } from '../../../src/hvac/controller.ts';
-import { HvacActorService } from '../../../src/hvac/hvac-actor-service.ts';
 import { HomeAssistantClient } from '../../../src/home-assistant/client.ts';
 import { ApplicationOptions, HvacOptions } from '../../../src/config/config.ts';
 import { LogLevel, SystemMode } from '../../../src/types/common.ts';
@@ -14,49 +13,6 @@ import { ActorBootstrap } from '../../../src/core/actor-bootstrap.ts';
 import { EventBus } from '../../../src/core/event-system.ts';
 import { ActorSystem } from '../../../src/core/actor-system.ts';
 
-// Mock actor service
-class MockHvacActorService {
-  private currentState = 'idle';
-  private context = {
-    indoorTemp: 21.0,
-    outdoorTemp: 15.0,
-    systemMode: SystemMode.AUTO,
-  };
-
-  getCurrentState(): string {
-    return this.currentState;
-  }
-
-  getStatus() {
-    return {
-      mode: this.currentState,
-      temperatures: {
-        current: this.context.indoorTemp,
-        target: 22,
-        outdoor: this.context.outdoorTemp,
-      },
-      lastUpdate: new Date(),
-      isActive: false,
-      sensorCount: 2,
-    };
-  }
-
-  start(): void {
-    // Mock implementation
-  }
-
-  stop(): void {
-    // Mock implementation
-  }
-
-  send(_event: unknown): void {
-    // Mock implementation
-  }
-
-  getContext(): typeof this.context {
-    return this.context;
-  }
-}
 
 // Mock Home Assistant client
 class MockHomeAssistantClient {
@@ -206,7 +162,6 @@ const mockAppOptions: ApplicationOptions = {
 
 Deno.test('HVAC Controller - Basic Functionality', async (t) => {
   await t.step('should create controller instance', () => {
-    const mockActorService = new MockHvacActorService();
     const mockHaClient = new MockHomeAssistantClient();
 
     const controller = new HVACController(
