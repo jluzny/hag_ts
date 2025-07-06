@@ -557,6 +557,28 @@ function testIntegratedProductionSystem(): Promise<boolean> {
 }
 
 // Run all tests
+// Deno test declarations
+Deno.test('Production Readiness - Performance Optimizer', async () => {
+  const success = await testPerformanceOptimizer();
+  if (!success) {
+    throw new Error('Performance optimizer tests failed');
+  }
+});
+
+Deno.test('Production Readiness - Production Validator', async () => {
+  const success = await testProductionValidator();
+  if (!success) {
+    throw new Error('Production validator tests failed');
+  }
+});
+
+Deno.test('Production Readiness - Integrated System', async () => {
+  const success = await testIntegratedProductionSystem();
+  if (!success) {
+    throw new Error('Integrated system tests failed');
+  }
+});
+
 if (import.meta.main) {
   console.log('🚀 Starting Production Readiness and Performance Tests\n');
 
