@@ -28,13 +28,13 @@ hvacOptions:
       enabled: true
       defrost: false
     - entityId: 'climate.matej_ac'
-      enabled: true
+      enabled: false
       defrost: false
     - entityId: 'climate.anicka_ac'
-      enabled: true
+      enabled: false
       defrost: false
     - entityId: 'climate.radek_ac'
-      enabled: true
+      enabled: false
       defrost: false
 
   heating:
@@ -50,6 +50,8 @@ hvacOptions:
       intervalHours: 2
       durationMinutes: 5
       temperatureThreshold: 0.0
+      periodSeconds: 7200
+      durationSeconds: 300
 
   cooling:
     temperature: 24.0
@@ -57,10 +59,10 @@ hvacOptions:
     temperatureThresholds:
       indoorMin: 23.0
       indoorMax: 23.5
-      outdoorMin: 22.0
+      outdoorMin: 20.0
       outdoorMax: 45.0
 
   activeHours:
-    start: 8
-    startWeekday: 7
-    end: 20
+    start: 5
+    startWeekday: 5
+    end: 23

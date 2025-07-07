@@ -419,6 +419,24 @@ export class HomeAssistantClient {
   }
 
   /**
+   * Add state change event handler (convenience method)
+   */
+  onStateChanged(handler: (entityId: string, oldState: string, newState: string) => void): void {
+    this.addEventHandler('state_changed', (event: HassEventImpl) => {
+      const stateChangeData = event.getStateChangeData();
+      if (stateChangeData) {
+        const entityId = stateChangeData.entityId;
+        const oldState = stateChangeData.oldState?.state || '';
+        const newState = stateChangeData.newState?.state || '';
+        
+        if (oldState !== newState) {
+          handler(entityId, oldState, newState);
+        }
+      }
+    });
+  }
+
+  /**
    * Establish WebSocket connection
    */
   private establishConnection(): Promise<void> {

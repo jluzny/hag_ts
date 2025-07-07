@@ -44,14 +44,6 @@ export class HvacActorService {
     this.logger.info('⏹️ HVAC system stopped');
   }
 
-  /**
-   * Set target temperature
-   */
-  setTargetTemperature(temp: number): void {
-    // XState machine doesn't need explicit target temperature setting
-    // Temperature is handled through configuration
-    this.logger.info(`🌡️ Target temperature request: ${temp}°C (handled via configuration)`);
-  }
 
   /**
    * Get current HVAC state (returns context for internal use)

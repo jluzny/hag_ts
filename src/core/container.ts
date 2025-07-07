@@ -16,8 +16,6 @@ import { HVACAgent } from '../ai/agent.ts';
 import { TYPES } from './types.ts';
 import { LoggerService } from './logger.ts';
 import { HVACStateMachine } from '../hvac/state-machine.ts';
-import { XStateHVACStateMachineAdapter } from '../hvac/state-machine-xstate-adapter.ts';
-import { IHVACStateMachine } from '../hvac/state-machine-interface.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
 import { EventBus } from './event-system.ts';
 import { ActorSystem } from './actor-system.ts';
@@ -233,7 +231,7 @@ export class ApplicationContainer {
         const logger = new LoggerService('HAG.hvac.state-machine');
 
         logger.info('🔄 Creating XState state machine implementation');
-        return new XStateHVACStateMachineAdapter(hvacOptions, logger);
+        return new HVACStateMachine(hvacOptions);
       },
     });
 
@@ -268,7 +266,7 @@ export class ApplicationContainer {
           const appOptions = this.container.get<ApplicationOptions>(
             TYPES.ApplicationOptions,
           );
-          const stateMachine = this.container.get<IHVACStateMachine>(
+          const stateMachine = this.container.get<HVACStateMachine>(
             TYPES.HVACStateMachine,
           ) as unknown as HVACStateMachine;
           const haClient = this.container.get<HomeAssistantClient>(

@@ -6,10 +6,9 @@
 import { Container } from '@needle-di/core';
 import { BaseModule } from '../core/module-registry.ts';
 import { DomainActor, ActorFactory } from '../core/actor-bootstrap.ts';
-import { ConfigurationManager } from '../core/config-system.ts';
 import { HvacActorFactory } from './hvac-domain-actor.ts';
 import { HvacActorService } from './hvac-actor-service.ts';
-import { XStateHVACStateMachineAdapter } from './state-machine-xstate-adapter.ts';
+import { HVACStateMachine } from './state-machine.ts';
 import { TYPES } from '../core/types.ts';
 import { HvacOptions, HvacOptionsSchema } from '../config/config.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
@@ -23,7 +22,7 @@ export class HvacModule extends BaseModule {
   readonly version = '1.0.0';
   readonly description = 'HVAC temperature control and automation module';
 
-  private configManager?: ConfigurationManager<HvacOptions>;
+  private hvacConfig?: HvacOptions;
 
   /**
    * Initialize HVAC module
@@ -31,15 +30,8 @@ export class HvacModule extends BaseModule {
   override async initialize(config: unknown): Promise<void> {
     await super.initialize(config);
     
-    // Create configuration manager for HVAC
-    this.configManager = new ConfigurationManager(
-      HvacOptionsSchema,
-      'hvac',
-      this.logger
-    );
-    
-    // Set and validate configuration
-    this.configManager.setConfig(config);
+    // Store HVAC configuration directly
+    this.hvacConfig = config as HvacOptions;
     
     this.logger?.info('✅ HVAC module initialized');
   }
@@ -48,7 +40,7 @@ export class HvacModule extends BaseModule {
    * Create HVAC actor factory
    */
   createActorFactory(): ActorFactory<DomainActor> {
-    if (!this.configManager) {
+    if (!this.hvacConfig) {
       throw new Error('HVAC module not initialized');
     }
 
@@ -61,11 +53,11 @@ export class HvacModule extends BaseModule {
   override registerServices(container: Container): void {
     super.registerServices(container);
 
-    if (!this.configManager) {
+    if (!this.hvacConfig) {
       throw new Error('HVAC module not initialized - cannot register services');
     }
 
-    const hvacConfig = this.configManager.getConfig();
+    const hvacConfig = this.hvacConfig;
 
     // Register HVAC state machine
     container.bind({
@@ -73,7 +65,7 @@ export class HvacModule extends BaseModule {
       useFactory: () => {
         const logger = this.logger!;
         logger.info('🔄 Creating HVAC state machine implementation');
-        return new XStateHVACStateMachineAdapter(hvacConfig, logger);
+        return new HVACStateMachine(hvacConfig);
       },
     });
 
@@ -117,10 +109,10 @@ export class HvacModule extends BaseModule {
    * Get HVAC configuration
    */
   getConfig(): HvacOptions {
-    if (!this.configManager) {
+    if (!this.hvacConfig) {
       throw new Error('HVAC module not initialized');
     }
-    return this.configManager.getConfig();
+    return this.hvacConfig;
   }
 
   /**

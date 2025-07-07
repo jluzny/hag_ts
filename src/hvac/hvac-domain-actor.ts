@@ -141,8 +141,8 @@ export class HvacDomainActor implements DomainActor {
 
     try {
       switch (event.type) {
-        case 'hvac.temperature_update':
-          this.handleTemperatureUpdate(event);
+        case 'hvac.sensor_states_updated':
+          this.handleSensorStatesUpdate(event);
           break;
         
         case 'hvac.mode_change_request':
@@ -168,21 +168,21 @@ export class HvacDomainActor implements DomainActor {
   }
 
   /**
-   * Handle temperature update events
+   * Handle sensor states update events
    */
-  private handleTemperatureUpdate(event: BaseEvent): void {
-    const payload = event.payload as { indoor: number; outdoor: number };
+  private handleSensorStatesUpdate(event: BaseEvent): void {
+    const payload = event.payload as { sensorStates: Record<string, string>; timestamp: string };
     
-    this.logger.info('🌡️ Processing temperature update', {
-      indoor: payload.indoor,
-      outdoor: payload.outdoor,
+    this.logger.info('📊 Processing sensor states update', {
+      sensorStates: payload.sensorStates,
+      timestamp: payload.timestamp,
     });
 
-    this.hvacService.updateTemperatures(payload.indoor, payload.outdoor);
+    this.hvacService.updateSensorStates(payload.sensorStates);
     
     this.updateStatus('running', {
-      lastTemperatureUpdate: new Date().toISOString(),
-      currentTemperatures: payload,
+      lastSensorUpdate: new Date().toISOString(),
+      currentSensorStates: payload.sensorStates,
     });
   }
 
@@ -197,9 +197,9 @@ export class HvacDomainActor implements DomainActor {
       temperature: payload.temperature,
     });
 
-    // Set target temperature if provided
+    // Temperature is handled through configuration, not runtime changes
     if (payload.temperature) {
-      this.hvacService.setTargetTemperature(payload.temperature);
+      this.logger.info(`🌡️ Temperature change requested: ${payload.temperature}°C (handled via configuration)`);
     }
 
     this.updateStatus('running', {

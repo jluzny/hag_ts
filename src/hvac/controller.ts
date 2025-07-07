@@ -446,18 +446,5 @@ export class HVACController {
     return this.running;
   }
 
-  /**
-   * Get actor bootstrap system (for debugging/monitoring)
-   */
-  getActorBootstrap(): ActorBootstrap {
-    return this.actorBootstrap;
-  }
-
-  /**
-   * Get HVAC actor (for direct access if needed)
-   */
-  getHvacActor(): HvacDomainActor | undefined {
-    return this.hvacActor;
-  }
 }
 
