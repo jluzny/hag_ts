@@ -8,7 +8,7 @@
 
 import { assertEquals } from '@std/assert';
 import { createContainer } from '../../src/core/container.ts';
-import { XStateHVACStateMachineAdapter } from '../../src/hvac/state-machine-xstate-adapter.ts';
+import { HVACStateMachine } from '../../src/hvac/state-machine.ts';
 import { HVACMode } from '../../src/types/common.ts';
 
 interface BenchmarkResult {
@@ -76,11 +76,11 @@ async function benchmarkOperation(
 async function testXStatePerformance(): Promise<void> {
   console.log('🔄 Benchmarking XState HVAC State Machine...\n');
 
-  // Create container with default (XState) config
-  const container = await createContainer('./config/hvac_config.yaml');
+  // Create container with test config
+  const container = await createContainer('config/hvac_config_unit_test.yaml');
   const stateMachine = container.get(
     Symbol.for('HVACStateMachine'),
-  ) as XStateHVACStateMachineAdapter;
+  ) as HVACStateMachine;
 
   const results: BenchmarkResult[] = [];
 
@@ -104,10 +104,11 @@ async function testXStatePerformance(): Promise<void> {
     await benchmarkOperation(
       'Temperature Update',
       async () => {
-        await stateMachine.handleTemperatureChange(
-          'indoor_sensor',
-          20 + Math.random() * 10,
-        );
+        stateMachine.send({
+          type: 'UPDATE_TEMPERATURES',
+          indoor: 20 + Math.random() * 10,
+          outdoor: 15 + Math.random() * 20,
+        });
       },
       1000,
     ),
@@ -212,10 +213,10 @@ async function testXStatePerformance(): Promise<void> {
 async function testConcurrentOperations(): Promise<void> {
   console.log('\n🚀 Testing Concurrent Operations...\n');
 
-  const container = await createContainer('./config/hvac_config.yaml');
+  const container = await createContainer('config/hvac_config_unit_test.yaml');
   const stateMachine = container.get(
     Symbol.for('HVACStateMachine'),
-  ) as XStateHVACStateMachineAdapter;
+  ) as HVACStateMachine;
 
   await stateMachine.start();
 
@@ -227,10 +228,11 @@ async function testConcurrentOperations(): Promise<void> {
   for (let i = 0; i < concurrentOps; i++) {
     promises.push(
       Promise.all([
-        stateMachine.handleTemperatureChange(
-          'indoor_sensor',
-          20 + Math.random() * 5,
-        ),
+        Promise.resolve(stateMachine.send({
+          type: 'UPDATE_TEMPERATURES',
+          indoor: 20 + Math.random() * 5,
+          outdoor: 15 + Math.random() * 10,
+        })),
         stateMachine.getStatus(),
         Promise.resolve(stateMachine.evaluateConditions()),
       ]),
@@ -263,6 +265,15 @@ async function testConcurrentOperations(): Promise<void> {
 
   console.log('✅ Concurrent operations test completed successfully!');
 }
+
+// Deno test declarations
+Deno.test('HVAC State Machine Performance - XState Performance', async () => {
+  await testXStatePerformance();
+});
+
+Deno.test('HVAC State Machine Performance - Concurrent Operations', async () => {
+  await testConcurrentOperations();
+});
 
 // Run performance tests if called directly
 if (import.meta.main) {

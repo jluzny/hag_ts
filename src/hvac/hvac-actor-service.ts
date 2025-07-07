@@ -67,52 +67,45 @@ export class HvacActorService {
     return this.stateMachine.getCurrentState();
   }
 
-  /**
-   * Get current HVAC mode
-   */
-  getCurrentMode(): string {
-    return this.stateMachine.getCurrentState();
-  }
-
-  /**
-   * Get current temperatures
-   */
-  getTemperatures(): {
-    current: number | undefined;
-    target: number;
-    outdoor: number | undefined;
-  } {
-    const context = this.getContext();
-    return {
-      current: context.indoorTemp,
-      target: this.hvacOptions.heating.temperature, // Default to heating temp
-      outdoor: context.outdoorTemp,
-    };
-  }
 
   /**
    * Check if HVAC is active (heating or cooling)
    */
   isActive(): boolean {
-    const mode = this.getCurrentMode();
+    const mode = this.getCurrentState();
     return mode === 'heating' || mode === 'cooling';
   }
 
   /**
-   * Update temperatures from controller
+   * Update sensor states from controller
    */
-  updateTemperatures(indoor: number, outdoor: number): void {
-    this.logger.info('🌡️ Updating state machine temperatures', {
-      indoor,
-      outdoor,
+  updateSensorStates(sensorStates: Record<string, string>): void {
+    this.logger.info('📊 Updating state machine with sensor states', {
+      sensorStates,
       previousIndoor: this.getContext().indoorTemp,
       previousOutdoor: this.getContext().outdoorTemp,
     });
 
-    this.stateMachine.updateTemperatures(indoor, outdoor);
+    // Extract temperature values from sensor states
+    const indoorTemp = parseFloat(sensorStates[this.hvacOptions.tempSensor] || '0');
+    const outdoorTemp = parseFloat(sensorStates[this.hvacOptions.outdoorSensor] || '0');
     
-    // Trigger evaluation after temperature update
-    this.stateMachine.evaluateConditions();
+    if (!isNaN(indoorTemp) && !isNaN(outdoorTemp)) {
+      // Send generic update event to state machine
+      this.stateMachine.send({
+        type: 'UPDATE_TEMPERATURES',
+        indoor: indoorTemp,
+        outdoor: outdoorTemp,
+      });
+      
+      // Trigger evaluation after sensor update
+      this.stateMachine.evaluateConditions();
+    } else {
+      this.logger.warning('⚠️ Invalid sensor readings, skipping update', {
+        indoorReading: sensorStates[this.hvacOptions.tempSensor],
+        outdoorReading: sensorStates[this.hvacOptions.outdoorSensor],
+      });
+    }
   }
 
 

@@ -16,11 +16,11 @@ import { AppEvent, EventBus } from '../core/event-system.ts';
 import { HvacActorFactory, HvacDomainActor } from './hvac-domain-actor.ts';
 
 /**
- * Temperature update event
+ * Sensor states update event
  */
-class TemperatureUpdateEvent extends AppEvent {
-  constructor(indoor: number, outdoor: number) {
-    super('hvac.temperature_update', { indoor, outdoor });
+class SensorStatesUpdateEvent extends AppEvent {
+  constructor(sensorStates: Record<string, string>) {
+    super('hvac.sensor_states_updated', { sensorStates, timestamp: new Date().toISOString() });
   }
 }
 
@@ -115,10 +115,10 @@ export class HVACController {
       this.hvacActor = this.actorBootstrap.getActor('hvac') as HvacDomainActor;
       this.logger.info('✅ Step 3 completed: Actor bootstrap system started');
 
-      // Step 4: Start monitoring loop
-      this.logger.info('⚙️ Step 4: Starting monitoring loop');
-      this.startMonitoringLoop();
-      this.logger.info('✅ Step 4 completed: Monitoring loop started');
+      // Step 4: Setup event-driven temperature monitoring
+      this.logger.info('⚙️ Step 4: Setting up event-driven temperature monitoring');
+      await this.setupEventDrivenMonitoring();
+      this.logger.info('✅ Step 4 completed: Event-driven monitoring setup');
 
       this.running = true;
 
@@ -144,7 +144,7 @@ export class HVACController {
 
     this.logger.info('🛑 Stopping HVAC controller');
 
-    // Stop monitoring loop
+    // Stop event monitoring
     if (this.abortController) {
       this.abortController.abort();
     }
@@ -209,7 +209,7 @@ export class HVACController {
     }
 
     try {
-      await this.evaluateAndPublishTemperatures();
+      await this.triggerSensorEvents();
       return {
         success: true,
         timestamp: new Date().toISOString(),
@@ -275,76 +275,146 @@ export class HVACController {
   }
 
   /**
-   * Start monitoring loop with event-driven temperature updates
+   * Setup event-driven temperature monitoring
    */
-  private startMonitoringLoop(): void {
-    const monitoringInterval = setInterval(async () => {
-      if (this.abortController?.signal.aborted) {
-        clearInterval(monitoringInterval);
-        return;
-      }
-
-      try {
-        await this.evaluateAndPublishTemperatures();
-      } catch (error) {
-        this.logger.error('❌ Monitoring loop error', error);
-      }
-    }, 30000); // 30 seconds
-
-    // Handle abort signal
-    this.abortController?.signal.addEventListener('abort', () => {
-      clearInterval(monitoringInterval);
-      this.logger.debug('🛑 Monitoring loop stopped');
+  private async setupEventDrivenMonitoring(): Promise<void> {
+    // Get all sensors for HVAC system
+    const sensors = this.getSensors();
+    
+    this.logger.info('📡 Setting up event-driven monitoring for sensors', {
+      sensors: sensors,
+      totalSensors: sensors.length,
     });
 
-    this.logger.debug('🔄 Monitoring loop started (30s interval)');
+    // Setup Home Assistant event filtering for temperature sensors
+    this.setupSensorsEventHandling(sensors);
+    
+    // Subscribe HVAC domain actor to event bus
+    this.setupEventBusSubscription();
+    
+    // Trigger initial reading for all sensors
+    await this.triggerSensorEvents();
   }
 
   /**
-   * Evaluate temperatures and publish update events
+   * Setup event bus subscription for HVAC domain actor
    */
-  private async evaluateAndPublishTemperatures(): Promise<void> {
-    try {
-      this.logger.debug('🌡️ Evaluating temperatures for event publication');
+  private setupEventBusSubscription(): void {
+    if (!this.hvacActor) {
+      this.logger.error('❌ Cannot setup event subscription: HVAC actor not available');
+      return;
+    }
 
-      // Get temperature readings
-      const indoorTempState = await this.haClient.getState(
-        this.hvacOptions.tempSensor,
-      );
-      const outdoorTempState = await this.haClient.getState(
-        this.hvacOptions.outdoorSensor,
-      );
+    this.logger.info('📡 Setting up event bus subscription for HVAC domain actor');
 
-      const indoorTemp = parseFloat(indoorTempState.state);
-      const outdoorTemp = parseFloat(outdoorTempState.state);
+    // Subscribe to HVAC-related events
+    this.eventBus.subscribeToEvent('hvac.sensor_states_updated', async (event) => {
+      await this.hvacActor!.handleEvent(event);
+    });
 
-      if (isNaN(indoorTemp) || isNaN(outdoorTemp)) {
-        this.logger.warning('⚠️ Invalid temperature readings', {
-          indoor: indoorTempState.state,
-          outdoor: outdoorTempState.state,
+    this.eventBus.subscribeToEvent('hvac.evaluate_conditions', async (event) => {
+      await this.hvacActor!.handleEvent(event);
+    });
+
+    this.eventBus.subscribeToEvent('hvac.mode_change_request', async (event) => {
+      await this.hvacActor!.handleEvent(event);
+    });
+
+    this.logger.info('✅ Event bus subscription setup complete for HVAC domain actor');
+  }
+
+  /**
+   * Get all sensors for HVAC system
+   */
+  private getSensors(): string[] {
+    return [
+      this.hvacOptions.tempSensor,
+      this.hvacOptions.outdoorSensor,
+    ];
+  }
+
+  /**
+   * Setup event handling for sensors
+   */
+  private setupSensorsEventHandling(sensors: string[]): void {
+    this.logger.info('📡 Setting up event handlers for sensors', {
+      sensors,
+      totalSensors: sensors.length,
+    });
+
+    // Register event handler for sensor changes
+    this.haClient.onStateChanged((entityId, oldState, newState) => {
+      if (sensors.includes(entityId)) {
+        this.logger.debug('📊 Sensor event received', {
+          entityId,
+          oldState,
+          newState,
+          timestamp: new Date().toISOString(),
         });
-        return;
+
+        // Trigger sensor update
+        this.handleSensorChange(entityId, newState);
+      }
+    });
+
+    this.logger.info('✅ Event handlers registered for sensors', {
+      sensors,
+      totalSensors: sensors.length,
+    });
+  }
+
+  /**
+   * Handle sensor state changes
+   */
+  private async handleSensorChange(entityId: string, newState: string): Promise<void> {
+    try {
+      this.logger.debug('📊 Processing sensor change', {
+        entityId,
+        newState,
+        timestamp: new Date().toISOString(),
+      });
+
+      // Trigger complete sensor reading for all sensors
+      await this.triggerSensorEvents();
+    } catch (error) {
+      this.logger.error('❌ Failed to handle sensor change', error, {
+        entityId,
+        newState,
+      });
+    }
+  }
+
+  /**
+   * Trigger events for all sensors
+   */
+  private async triggerSensorEvents(): Promise<void> {
+    try {
+      this.logger.debug('📊 Triggering events for all sensors');
+
+      const sensors = this.getSensors();
+      const sensorStates: Record<string, string> = {};
+
+      // Get all sensor readings
+      for (const sensorId of sensors) {
+        const state = await this.haClient.getState(sensorId);
+        sensorStates[sensorId] = state.state;
       }
 
-      // Publish temperature update event
-      const temperatureEvent = new TemperatureUpdateEvent(
-        indoorTemp,
-        outdoorTemp,
-      );
-      this.eventBus.publishEvent(temperatureEvent);
+      // Publish generic sensor state change event
+      const stateChangeEvent = new SensorStatesUpdateEvent(sensorStates);
+      this.eventBus.publishEvent(stateChangeEvent);
 
       // Publish evaluation request event
       const evaluationEvent = new EvaluateConditionsEvent();
       this.eventBus.publishEvent(evaluationEvent);
 
-      this.logger.debug('✅ Temperature events published', {
-        indoor: indoorTemp,
-        outdoor: outdoorTemp,
-        events: [temperatureEvent.type, evaluationEvent.type],
+      this.logger.debug('✅ Sensor events published', {
+        sensorStates,
+        events: [stateChangeEvent.type, evaluationEvent.type],
       });
     } catch (error) {
       this.logger.error(
-        '❌ Failed to evaluate and publish temperatures',
+        '❌ Failed to trigger sensor events',
         error,
       );
     }

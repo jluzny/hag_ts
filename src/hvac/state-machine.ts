@@ -872,38 +872,6 @@ export class HVACStateMachine {
     return this.actor.getSnapshot().context;
   }
 
-  /**
-   * Update temperature conditions
-   */
-  updateTemperatures(indoor: number, outdoor: number): void {
-    const context = this.getContext();
-    const tempChange = {
-      indoorChange: context.indoorTemp
-        ? indoor - context.indoorTemp
-        : undefined,
-      outdoorChange: context.outdoorTemp
-        ? outdoor - context.outdoorTemp
-        : undefined,
-    };
-
-    this.logger.info('🌡️ Updating temperature conditions', {
-      indoor,
-      outdoor,
-      previousIndoor: context.indoorTemp,
-      previousOutdoor: context.outdoorTemp,
-      indoorChange: tempChange.indoorChange,
-      outdoorChange: tempChange.outdoorChange,
-      significantChange: Math.abs(tempChange.indoorChange || 0) > 0.5 ||
-        Math.abs(tempChange.outdoorChange || 0) > 2,
-      timestamp: new Date().toISOString(),
-    });
-
-    this.send({
-      type: 'UPDATE_TEMPERATURES',
-      indoor,
-      outdoor,
-    });
-  }
 
   /**
    * Trigger auto evaluation

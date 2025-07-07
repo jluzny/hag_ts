@@ -87,7 +87,11 @@ Deno.test('HVAC State Machine', async (t) => {
     const outdoorTemp = 5.0;
 
     stateMachine.start();
-    stateMachine.updateTemperatures(indoorTemp, outdoorTemp);
+    stateMachine.send({
+      type: 'UPDATE_TEMPERATURES',
+      indoor: indoorTemp,
+      outdoor: outdoorTemp,
+    });
 
     const status = stateMachine.getStatus();
     assertEquals(status.context.indoorTemp, indoorTemp);
@@ -100,7 +104,11 @@ Deno.test('HVAC State Machine', async (t) => {
     const stateMachine = new HVACStateMachine(mockHvacOptions);
     // Set conditions that should trigger heating
     stateMachine.start();
-    stateMachine.updateTemperatures(18.0, 5.0); // Below heating threshold
+    stateMachine.send({
+      type: 'UPDATE_TEMPERATURES',
+      indoor: 18.0,
+      outdoor: 5.0,
+    }); // Below heating threshold
     stateMachine.evaluateConditions();
 
     const _currentState = stateMachine.getCurrentState();
@@ -117,7 +125,11 @@ Deno.test('HVAC State Machine', async (t) => {
     const stateMachine = new HVACStateMachine(mockHvacOptions);
     // Set conditions that should trigger cooling
     stateMachine.start();
-    stateMachine.updateTemperatures(27.0, 25.0); // Above cooling threshold
+    stateMachine.send({
+      type: 'UPDATE_TEMPERATURES',
+      indoor: 27.0,
+      outdoor: 25.0,
+    }); // Above cooling threshold
     stateMachine.evaluateConditions();
 
     const _currentState = stateMachine.getCurrentState();
@@ -134,7 +146,11 @@ Deno.test('HVAC State Machine', async (t) => {
     const stateMachine = new HVACStateMachine(mockHvacOptions);
     // Set conditions that should keep system idle
     stateMachine.start();
-    stateMachine.updateTemperatures(21.0, 15.0); // Within comfort zone
+    stateMachine.send({
+      type: 'UPDATE_TEMPERATURES',
+      indoor: 21.0,
+      outdoor: 15.0,
+    }); // Within comfort zone
     stateMachine.evaluateConditions();
 
     const currentState = stateMachine.getCurrentState();
@@ -149,7 +165,11 @@ Deno.test('HVAC State Machine', async (t) => {
     const stateMachine = new HVACStateMachine(mockHvacOptions);
     // Set conditions that could trigger defrost
     stateMachine.start();
-    stateMachine.updateTemperatures(18.0, -5.0); // Cold outdoor, heating needed
+    stateMachine.send({
+      type: 'UPDATE_TEMPERATURES',
+      indoor: 18.0,
+      outdoor: -5.0,
+    }); // Cold outdoor, heating needed
     stateMachine.evaluateConditions();
 
     // Check that temperatures were updated correctly
@@ -190,7 +210,11 @@ Deno.test('HVAC State Machine', async (t) => {
     const heatOnlyMachine = new HVACStateMachine(heatOnlyOptions);
 
     heatOnlyMachine.start();
-    heatOnlyMachine.updateTemperatures(27.0, 25.0); // High temp
+    heatOnlyMachine.send({
+      type: 'UPDATE_TEMPERATURES',
+      indoor: 27.0,
+      outdoor: 25.0,
+    }); // High temp
     heatOnlyMachine.evaluateConditions();
 
     // Should not cool in heat-only mode
@@ -215,7 +239,11 @@ Deno.test('HVAC State Machine', async (t) => {
 
     limitedMachine.start();
     // Set temperature that would normally trigger heating
-    limitedMachine.updateTemperatures(18.0, 5.0);
+    limitedMachine.send({
+      type: 'UPDATE_TEMPERATURES',
+      indoor: 18.0,
+      outdoor: 5.0,
+    });
     limitedMachine.evaluateConditions();
 
     // Should remain idle outside active hours
@@ -234,7 +262,11 @@ Deno.test('HVAC State Machine', async (t) => {
     const stateMachine = new HVACStateMachine(mockHvacOptions);
     // Test heating with outdoor temp too low
     stateMachine.start();
-    stateMachine.updateTemperatures(18.0, -15.0); // Below outdoor heating min
+    stateMachine.send({
+      type: 'UPDATE_TEMPERATURES',
+      indoor: 18.0,
+      outdoor: -15.0,
+    }); // Below outdoor heating min
     stateMachine.evaluateConditions();
 
     // Should not heat when outdoor temp is too low
@@ -243,7 +275,11 @@ Deno.test('HVAC State Machine', async (t) => {
     assertExists(state);
 
     // Test cooling with outdoor temp too high
-    stateMachine.updateTemperatures(27.0, 50.0); // Above outdoor cooling max
+    stateMachine.send({
+      type: 'UPDATE_TEMPERATURES',
+      indoor: 27.0,
+      outdoor: 50.0,
+    }); // Above outdoor cooling max
     stateMachine.evaluateConditions();
 
     // Should handle extreme outdoor temperatures appropriately
@@ -255,7 +291,11 @@ Deno.test('HVAC State Machine', async (t) => {
   await t.step('should provide comprehensive status', () => {
     const stateMachine = new HVACStateMachine(mockHvacOptions);
     stateMachine.start();
-    stateMachine.updateTemperatures(20.0, 10.0);
+    stateMachine.send({
+      type: 'UPDATE_TEMPERATURES',
+      indoor: 20.0,
+      outdoor: 10.0,
+    });
     stateMachine.evaluateConditions();
 
     const status = stateMachine.getStatus();
@@ -276,7 +316,11 @@ Deno.test('HVAC State Machine', async (t) => {
 
     stateMachine.start();
     for (const temp of temperatures) {
-      stateMachine.updateTemperatures(temp, 15.0);
+      stateMachine.send({
+      type: 'UPDATE_TEMPERATURES',
+      indoor: temp,
+      outdoor: 15.0,
+    });
       stateMachine.evaluateConditions();
 
       const _currentState = stateMachine.getCurrentState();
@@ -294,13 +338,21 @@ Deno.test('HVAC State Machine', async (t) => {
 
     stateMachine.start();
     // Test heating threshold boundary
-    stateMachine.updateTemperatures(heatingMax, 10.0);
+    stateMachine.send({
+      type: 'UPDATE_TEMPERATURES',
+      indoor: heatingMax,
+      outdoor: 10.0,
+    });
     stateMachine.evaluateConditions();
     const stateAtHeatingBoundary = stateMachine.getCurrentState();
     assertExists(stateAtHeatingBoundary);
 
     // Test cooling threshold boundary
-    stateMachine.updateTemperatures(coolingMin, 20.0);
+    stateMachine.send({
+      type: 'UPDATE_TEMPERATURES',
+      indoor: coolingMin,
+      outdoor: 20.0,
+    });
     stateMachine.evaluateConditions();
     const stateAtCoolingBoundary = stateMachine.getCurrentState();
     assertExists(stateAtCoolingBoundary);
@@ -369,11 +421,19 @@ Deno.test('HVAC State Machine Error Handling', async (t) => {
   await t.step('should handle invalid temperature values', () => {
     // Test with extreme values
     stateMachine.start();
-    stateMachine.updateTemperatures(NaN, 15.0);
+    stateMachine.send({
+      type: 'UPDATE_TEMPERATURES',
+      indoor: NaN,
+      outdoor: 15.0,
+    });
     const status1 = stateMachine.getStatus();
     assertExists(status1); // Should handle gracefully
 
-    stateMachine.updateTemperatures(20.0, Infinity);
+    stateMachine.send({
+      type: 'UPDATE_TEMPERATURES',
+      indoor: 20.0,
+      outdoor: Infinity,
+    });
     const status2 = stateMachine.getStatus();
     assertExists(status2); // Should handle gracefully
 

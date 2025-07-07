@@ -12,7 +12,6 @@ import {
 import { TYPES } from '../../src/core/types.ts';
 import { HVACController } from '../../src/hvac/controller.ts';
 import { HVACStateMachine } from '../../src/hvac/state-machine.ts';
-import { XStateHVACStateMachineAdapter } from '../../src/hvac/state-machine-xstate-adapter.ts';
 import { HVACMode, LogLevel, SystemMode } from '../../src/types/common.ts';
 import { Settings } from '../../src/config/config.ts';
 
@@ -131,6 +130,11 @@ class MockHomeAssistantClient {
     // Mock event handler removal
   }
 
+  onStateChanged(handler: (entityId: string, oldState: string, newState: string) => void): void {
+    // Mock state change event handler
+    // In a real implementation, this would register the handler to receive state change events
+  }
+
   getStats() {
     return {
       totalConnections: 1,
@@ -181,7 +185,7 @@ Deno.test('HVAC Integration Tests', async (t) => {
     assertExists(controller);
     assertExists(stateMachine);
     assertInstanceOf(controller, HVACController);
-    assertInstanceOf(stateMachine, XStateHVACStateMachineAdapter);
+    assertInstanceOf(stateMachine, HVACStateMachine);
   });
 
   await t.step('should start and connect to Home Assistant', async () => {
@@ -375,7 +379,11 @@ Deno.test('HVAC State Machine Integration', async (t) => {
 
   await t.step('should transition states based on conditions', () => {
     // Update temperatures to trigger heating
-    stateMachine.updateTemperatures(18.0, 5.0); // Cold indoor, cold outdoor
+    stateMachine.send({
+      type: 'UPDATE_TEMPERATURES',
+      indoor: 18.0,
+      outdoor: 5.0,
+    }); // Cold indoor, cold outdoor
     stateMachine.evaluateConditions();
 
     const status = stateMachine.getStatus();
