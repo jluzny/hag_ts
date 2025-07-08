@@ -1,6 +1,6 @@
 /**
  * HVAC Module - implements the new module system
- * Provides HVAC domain actors through the unified module architecture
+ * Provides HVAC components through the unified module architecture
  */
 
 import { Container } from '@needle-di/core';

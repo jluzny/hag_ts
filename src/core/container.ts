@@ -193,7 +193,7 @@ export class ApplicationContainer {
       },
     });
 
-    // Register HVAC Controller (Actor Bootstrap version)
+    // Register HVAC Controller
     this.container.bind({
       provide: TYPES.HVACController,
       useFactory: () => {

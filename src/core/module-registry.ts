@@ -16,7 +16,6 @@ export interface Module {
 
   initialize(config: unknown): Promise<void>;
   registerServices(container: Container): void;
-  createActorFactory?(): ActorFactory<DomainActor>;
   getRequiredDependencies?(): symbol[];
   validateConfig?(config: unknown): boolean;
   dispose(): Promise<void>;
@@ -48,9 +47,6 @@ export abstract class BaseModule implements Module {
     this.logger?.debug(`📍 Module ${this.domain}.registerServices() EXIT`);
   }
 
-  createActorFactory?(): ActorFactory<DomainActor> {
-    return undefined;
-  }
 
   getRequiredDependencies?(): symbol[] {
     return [];
@@ -67,44 +63,12 @@ export abstract class BaseModule implements Module {
   }
 }
 
-/**
- * Domain Actor interface - represents a long-running process or service within a module.
- */
-export interface DomainActor {
-  readonly name: string;
-  readonly domain: string;
-  start(): Promise<void>;
-  stop(): Promise<void>;
-  getStatus?(): Record<string, unknown>;
-  handleEvent?(event: unknown): Promise<void>;
-}
-
-/**
- * Actor Factory interface - responsible for creating DomainActor instances.
- */
-export interface ActorFactory<T extends DomainActor> {
-  readonly domain: string;
-  create(config: unknown): T;
-  validateConfig?(config: unknown): boolean;
-}
-
-/**
- * Status of an actor.
- */
-export interface ActorStatus {
-  name: string;
-  domain: string;
-  state: 'stopped' | 'starting' | 'running' | 'stopping' | 'error';
-  lastUpdate: Date;
-  metadata?: Record<string, unknown>;
-}
 
 /**
  * Manages the registration, initialization, and lifecycle of application modules.
  */
 export class ModuleRegistry {
   private modules = new Map<string, Module>();
-  private actorFactories = new Map<string, ActorFactory<DomainActor>>();
   private logger: LoggerService;
 
   constructor(container: Container, logger: LoggerService) {
@@ -164,7 +128,6 @@ export class ModuleRegistry {
       }
     }
     this.modules.clear();
-    this.actorFactories.clear();
     this.logger.info('🗑️ All modules disposed.');
     this.logger.debug('📍 ModuleRegistry.disposeAll() EXIT');
   }
