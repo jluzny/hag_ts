@@ -1,262 +1,236 @@
 /**
- * Module registry that combines module management with configuration storage
- * Consolidates ModuleManager and ConfigurationRegistry responsibilities
+ * Module Registry - Manages application modules and their lifecycle.
  */
 
 import { Container } from '@needle-di/core';
 import { LoggerService } from './logger.ts';
-import { EventBus } from './event-system.ts';
-import { DomainActor, ActorFactory } from './actor-bootstrap.ts';
 
 /**
- * Module interface for domain-specific modules
+ * Base interface for all application modules.
  */
 export interface Module {
   readonly name: string;
   readonly domain: string;
   readonly version: string;
-  readonly description?: string;
-  
-  initialize(config: unknown): Promise<void> | void;
-  createActorFactory(): ActorFactory<DomainActor>;
+  readonly description: string;
+
+  initialize(config: unknown): Promise<void>;
   registerServices(container: Container): void;
-  getRequiredDependencies(): symbol[];
-  validateConfig(config: unknown): boolean;
-  dispose?(): Promise<void> | void;
+  createActorFactory?(): ActorFactory<DomainActor>;
+  getRequiredDependencies?(): symbol[];
+  validateConfig?(config: unknown): boolean;
+  dispose(): Promise<void>;
 }
 
 /**
- * Module metadata with configuration
- */
-export interface ModuleMetadata {
-  module: Module;
-  config: unknown;
-  factory?: ActorFactory<DomainActor>;
-  status: 'registered' | 'initialized' | 'active' | 'error';
-  error?: string;
-}
-
-/**
- * Base class for domain modules
+ * Base class for application modules.
  */
 export abstract class BaseModule implements Module {
   abstract readonly name: string;
   abstract readonly domain: string;
   abstract readonly version: string;
-  abstract readonly description?: string;
+  abstract readonly description: string;
 
-  protected container?: Container;
   protected logger?: LoggerService;
-  protected eventBus?: EventBus;
+  protected config?: unknown;
 
-  async initialize(_config: unknown): Promise<void> {
-    if (this.logger) {
-      this.logger.debug('📍 BaseModule.initialize() ENTRY');
-    }
-    // Override in subclasses - config parameter available for subclasses
-    if (this.logger) {
-      this.logger.debug('📍 BaseModule.initialize() EXIT');
-    }
-  }
-
-  abstract createActorFactory(): ActorFactory<DomainActor>;
-
-  registerServices(container: Container): void {
-    this.container = container;
+  async initialize(config: unknown): Promise<void> {
+    this.config = config;
     this.logger = new LoggerService(`HAG.module.${this.domain}`);
-    this.logger.debug('📍 BaseModule.registerServices() ENTRY');
-    this.eventBus = container.get(Symbol.for('EventBus')) as EventBus;
-    this.logger.debug('📍 BaseModule.registerServices() EXIT');
+    this.logger.debug(`📍 Module ${this.domain}.initialize() ENTRY`);
+    // Default initialization logic
+    this.logger.debug(`📍 Module ${this.domain}.initialize() EXIT`);
   }
 
-  getRequiredDependencies(): symbol[] {
-    if (this.logger) {
-      this.logger.debug('📍 BaseModule.getRequiredDependencies() ENTRY');
-    }
-    const result = [
-      Symbol.for('EventBus'),
-      Symbol.for('Logger'),
-    ];
-    if (this.logger) {
-      this.logger.debug('📍 BaseModule.getRequiredDependencies() EXIT');
-    }
-    return result;
+  registerServices(_container: Container): void {
+    this.logger?.debug(`📍 Module ${this.domain}.registerServices() ENTRY`);
+    // Default service registration logic (empty)
+    this.logger?.debug(`📍 Module ${this.domain}.registerServices() EXIT`);
   }
 
-  validateConfig(config: unknown): boolean {
-    if (this.logger) {
-      this.logger.debug('📍 BaseModule.validateConfig() ENTRY');
-    }
-    const result = config !== null && config !== undefined;
-    if (this.logger) {
-      this.logger.debug('📍 BaseModule.validateConfig() EXIT');
-    }
-    return result;
+  createActorFactory?(): ActorFactory<DomainActor> {
+    return undefined;
+  }
+
+  getRequiredDependencies?(): symbol[] {
+    return [];
+  }
+
+  validateConfig?(config: unknown): boolean {
+    return !!config; // Default validation
   }
 
   async dispose(): Promise<void> {
-    if (this.logger) {
-      this.logger.debug('📍 BaseModule.dispose() ENTRY');
-    }
-    // Override in subclasses
-    if (this.logger) {
-      this.logger.debug('📍 BaseModule.dispose() EXIT');
-    }
+    this.logger?.debug(`📍 Module ${this.domain}.dispose() ENTRY`);
+    // Default dispose logic
+    this.logger?.debug(`📍 Module ${this.domain}.dispose() EXIT`);
   }
 }
 
 /**
- * Module registry that manages modules and their configurations
+ * Domain Actor interface - represents a long-running process or service within a module.
+ */
+export interface DomainActor {
+  readonly name: string;
+  readonly domain: string;
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  getStatus?(): Record<string, unknown>;
+  handleEvent?(event: unknown): Promise<void>;
+}
+
+/**
+ * Actor Factory interface - responsible for creating DomainActor instances.
+ */
+export interface ActorFactory<T extends DomainActor> {
+  readonly domain: string;
+  create(config: unknown): T;
+  validateConfig?(config: unknown): boolean;
+}
+
+/**
+ * Status of an actor.
+ */
+export interface ActorStatus {
+  name: string;
+  domain: string;
+  state: 'stopped' | 'starting' | 'running' | 'stopping' | 'error';
+  lastUpdate: Date;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Manages the registration, initialization, and lifecycle of application modules.
  */
 export class ModuleRegistry {
-  private modules = new Map<string, ModuleMetadata>();
-  private commonConfig = new Map<string, unknown>();
-  private container: Container;
+  private modules = new Map<string, Module>();
+  private actorFactories = new Map<string, ActorFactory<DomainActor>>();
+  private commonConfig?: unknown;
   private logger: LoggerService;
 
-  constructor(container: Container, logger?: LoggerService) {
-    this.container = container;
-    this.logger = logger || new LoggerService('HAG.module-registry');
+  constructor(container: Container, logger: LoggerService) {
+    this.logger = logger;
     this.logger.debug('📍 ModuleRegistry.constructor() ENTRY');
+    // Register self in container for other modules to access if needed
+    container.bind({ provide: Symbol.for('ModuleRegistry'), useValue: this });
     this.logger.debug('📍 ModuleRegistry.constructor() EXIT');
   }
 
   /**
-   * Register a domain module with its configuration
+   * Register a module with the registry.
    */
   async registerModule(module: Module, config: unknown): Promise<void> {
     this.logger.debug('📍 ModuleRegistry.registerModule() ENTRY');
-    const domain = module.domain;
-    
-    try {
-      // Validate configuration
-      if (!module.validateConfig(config)) {
-        throw new Error(`Invalid configuration for module: ${domain}`);
-      }
-
-      // Check required dependencies
-      const requiredDeps = module.getRequiredDependencies();
-      for (const dep of requiredDeps) {
-        if (!this.container.has(dep)) {
-          throw new Error(`Missing required dependency: ${dep.toString()}`);
-        }
-      }
-
-      // Register module metadata
-      const metadata: ModuleMetadata = {
-        module,
-        config,
-        status: 'registered',
-      };
-      
-      this.modules.set(domain, metadata);
-      
-      this.logger.info(`🔌 Registered module: ${domain}`, {
-        name: module.name,
-        version: module.version,
-      });
-
-      // Initialize module
-      await this.initializeModule(domain);
-      
-    } catch (error) {
-      this.logger.error(`❌ Failed to register module: ${domain}`, error);
-      throw error;
+    if (this.modules.has(module.domain)) {
+      this.logger.warning(`⚠️ Module ${module.domain} already registered.`);
+      return;
     }
+
+    // Validate module configuration
+    if (module.validateConfig && !module.validateConfig(config)) {
+      throw new Error(`Invalid configuration for module: ${module.domain}`);
+    }
+
+    await module.initialize(config);
+    this.modules.set(module.domain, module);
+
+    // Register actor factory if provided by the module
+    const actorFactory = module.createActorFactory?.();
+    if (actorFactory) {
+      this.actorFactories.set(module.domain, actorFactory);
+      this.logger.info(`🏭 Registered actor factory for module: ${module.domain}`);
+    }
+
+    this.logger.info(`✅ Module registered: ${module.name} (${module.version})`);
     this.logger.debug('📍 ModuleRegistry.registerModule() EXIT');
   }
 
   /**
-   * Set common configuration shared across modules
+   * Set common configuration for all modules.
    */
-  setCommonConfig(key: string, value: unknown): void {
+  setCommonConfig(config: unknown): void {
     this.logger.debug('📍 ModuleRegistry.setCommonConfig() ENTRY');
-    this.commonConfig.set(key, value);
-    this.logger.debug(`📋 Set common config: ${key}`);
+    this.commonConfig = config;
     this.logger.debug('📍 ModuleRegistry.setCommonConfig() EXIT');
   }
 
   /**
-   * Get common configuration
+   * Get common configuration.
    */
-  getCommonConfig<T>(key: string): T | undefined {
+  getCommonConfig<T>(): T | undefined {
     this.logger.debug('📍 ModuleRegistry.getCommonConfig() ENTRY');
-    const result = this.commonConfig.get(key) as T | undefined;
+    const result = this.commonConfig as T;
     this.logger.debug('📍 ModuleRegistry.getCommonConfig() EXIT');
     return result;
   }
 
   /**
-   * Get module configuration
+   * Get configuration for a specific module.
    */
   getModuleConfig<T>(domain: string): T | undefined {
     this.logger.debug('📍 ModuleRegistry.getModuleConfig() ENTRY');
-    const result = this.modules.get(domain)?.config as T;
+    const module = this.modules.get(domain);
+    const result = module ? (module as BaseModule).config as T : undefined;
     this.logger.debug('📍 ModuleRegistry.getModuleConfig() EXIT');
     return result;
   }
 
   /**
-   * Get merged configuration (common + module-specific)
+   * Get merged configuration (module-specific + common).
    */
-  getMergedConfig<T>(domain: string): T {
+  getMergedConfig<T>(domain: string): T | undefined {
     this.logger.debug('📍 ModuleRegistry.getMergedConfig() ENTRY');
-    const common = Object.fromEntries(this.commonConfig);
-    const moduleSpecific = this.modules.get(domain)?.config || {};
-    
-    const result = { ...common, ...moduleSpecific } as T;
+    const moduleConfig = this.getModuleConfig<T>(domain);
+    const commonConfig = this.getCommonConfig<T>();
+    const result = { ...commonConfig, ...moduleConfig } as T;
     this.logger.debug('📍 ModuleRegistry.getMergedConfig() EXIT');
     return result;
   }
 
   /**
-   * Get module by domain
+   * Get a registered module by its domain.
    */
   getModule(domain: string): Module | undefined {
     this.logger.debug('📍 ModuleRegistry.getModule() ENTRY');
-    const result = this.modules.get(domain)?.module;
+    const result = this.modules.get(domain);
     this.logger.debug('📍 ModuleRegistry.getModule() EXIT');
     return result;
   }
 
   /**
-   * Get actor factory for a domain
+   * Get an actor factory for a given domain.
    */
   getActorFactory(domain: string): ActorFactory<DomainActor> | undefined {
     this.logger.debug('📍 ModuleRegistry.getActorFactory() ENTRY');
-    const result = this.modules.get(domain)?.factory;
+    const result = this.actorFactories.get(domain);
     this.logger.debug('📍 ModuleRegistry.getActorFactory() EXIT');
     return result;
   }
 
   /**
-   * Get all active modules
+   * Get all active modules.
    */
   getActiveModules(): Module[] {
     this.logger.debug('📍 ModuleRegistry.getActiveModules() ENTRY');
-    const result = Array.from(this.modules.values())
-      .filter(meta => meta.status === 'active')
-      .map(meta => meta.module);
+    const result = Array.from(this.modules.values());
     this.logger.debug('📍 ModuleRegistry.getActiveModules() EXIT');
     return result;
   }
 
   /**
-   * Get module status
+   * Get status of a specific module.
    */
-  getModuleStatus(): Array<{ domain: string; status: string; error?: string }> {
+  getModuleStatus(domain: string): ActorStatus | undefined {
     this.logger.debug('📍 ModuleRegistry.getModuleStatus() ENTRY');
-    const result = Array.from(this.modules.entries()).map(([domain, meta]) => ({
-      domain,
-      status: meta.status,
-      error: meta.error,
-    }));
+    const module = this.modules.get(domain);
+    // Assuming module has a getStatus method or similar
+    const result = module ? { name: module.name, domain: module.domain, state: 'running', lastUpdate: new Date() } : undefined;
     this.logger.debug('📍 ModuleRegistry.getModuleStatus() EXIT');
     return result;
   }
 
   /**
-   * Check if module exists
+   * Check if a module is registered.
    */
   hasModule(domain: string): boolean {
     this.logger.debug('📍 ModuleRegistry.hasModule() ENTRY');
@@ -266,7 +240,7 @@ export class ModuleRegistry {
   }
 
   /**
-   * Get registered module domains
+   * Get list of registered module domains.
    */
   getRegisteredModules(): string[] {
     this.logger.debug('📍 ModuleRegistry.getRegisteredModules() ENTRY');
@@ -276,62 +250,34 @@ export class ModuleRegistry {
   }
 
   /**
-   * Initialize a specific module
+   * Initialize all registered modules.
    */
-  private async initializeModule(domain: string): Promise<void> {
+  async initializeModule(domain: string, config: unknown): Promise<void> {
     this.logger.debug('📍 ModuleRegistry.initializeModule() ENTRY');
-    const metadata = this.modules.get(domain);
-    if (!metadata) {
-      throw new Error(`Module not found: ${domain}`);
-    }
-
-    try {
-      metadata.status = 'initialized';
-      
-      // Initialize module
-      await metadata.module.initialize(metadata.config);
-      
-      // Register module services in DI container
-      metadata.module.registerServices(this.container);
-      
-      // Create actor factory
-      metadata.factory = metadata.module.createActorFactory();
-      
-      metadata.status = 'active';
-      
-      this.logger.info(`✅ Initialized module: ${domain}`);
-      
-    } catch (error) {
-      metadata.status = 'error';
-      metadata.error = error instanceof Error ? error.message : String(error);
-      this.logger.error(`❌ Failed to initialize module: ${domain}`, error);
-      throw error;
+    const module = this.modules.get(domain);
+    if (module) {
+      await module.initialize(config);
+    } else {
+      this.logger.warning(`⚠️ Module ${domain} not found for initialization.`);
     }
     this.logger.debug('📍 ModuleRegistry.initializeModule() EXIT');
   }
 
   /**
-   * Dispose all modules
+   * Dispose all registered modules.
    */
   async disposeAll(): Promise<void> {
     this.logger.debug('📍 ModuleRegistry.disposeAll() ENTRY');
-    const disposePromises: Promise<void>[] = [];
-    
-    for (const [domain, metadata] of this.modules) {
-      if (metadata.module.dispose) {
-        disposePromises.push(
-          Promise.resolve(metadata.module.dispose()).catch((error: unknown) => {
-            this.logger.error(`❌ Error disposing module: ${domain}`, error);
-          })
-        );
+    for (const module of this.modules.values()) {
+      try {
+        await module.dispose();
+      } catch (error) {
+        this.logger.error(`❌ Error disposing module ${module.domain}:`, error);
       }
     }
-    
-    await Promise.allSettled(disposePromises);
     this.modules.clear();
-    this.commonConfig.clear();
-    
-    this.logger.info('🧹 Disposed all modules');
+    this.actorFactories.clear();
+    this.logger.info('🗑️ All modules disposed.');
     this.logger.debug('📍 ModuleRegistry.disposeAll() EXIT');
   }
 }

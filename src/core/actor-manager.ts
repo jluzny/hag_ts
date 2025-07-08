@@ -6,8 +6,7 @@
 import { Container } from '@needle-di/core';
 import { LoggerService } from './logger.ts';
 import { EventBus, BaseEvent } from './event-system.ts';
-import { DomainActor, ActorFactory, ActorStatus } from './actor-bootstrap.ts';
-import { ModuleRegistry, Module } from './module-registry.ts';
+import { ModuleRegistry, Module, DomainActor, ActorFactory, ActorStatus } from './module-registry.ts';
 import { createActor } from 'xstate';
 
 /**
@@ -30,17 +29,7 @@ interface StateMachineEvent {
 // deno-lint-ignore no-explicit-any
 type StateMachine = any;
 
-/**
- * Actor registration for domain actors
- */
-interface ActorRegistration {
-  type: 'domain';
-  factory: ActorFactory<DomainActor>;
-  config: unknown;
-  instance?: DomainActor;
-  status: ActorStatus;
-  module?: Module;
-}
+
 
 /**
  * State machine actor registration

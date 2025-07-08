@@ -33,6 +33,7 @@ export const TYPES = {
   HvacActorService: Symbol.for('HvacActorService'),
   ActorBootstrap: Symbol.for('ActorBootstrap'),
   ActorManager: Symbol.for('ActorManager'),
+  ModuleRegistry: Symbol.for('ModuleRegistry'),
 
   // Note: Experimental features are in experimental/ folder and have their own TYPES
 } as const;

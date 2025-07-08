@@ -11,13 +11,15 @@ import {
   disposeContainer,
 } from './core/container.ts';
 import { TYPES } from './core/types.ts';
-import { HVACController } from './hvac/controller.ts';
+import { HvacModule } from './hvac/hvac-module.ts';
+import { ModuleRegistry } from './core/module-registry.ts';
 import { ConfigLoader } from './config/loader.ts';
 import { extractErrorDetails } from './core/exceptions.ts';
 import { type LevelName, type Logger } from '@std/log';
 import { getAppLogger, setupLogging } from './core/logging.ts';
 import { type ApplicationOptions } from './config/config.ts';
 import { LogLevel } from './types/common.ts';
+import { LoggerService } from './core/logger.ts';
 
 let logger: Logger;
 
@@ -27,12 +29,22 @@ let logger: Logger;
 let container: ApplicationContainer | undefined;
 
 /**
+ * Module registry for managing application modules
+ */
+let moduleRegistry: ModuleRegistry | undefined;
+
+/**
  * Cleanup handler
  */
 async function cleanup(): Promise<void> {
+  logger?.debug('📍 cleanup() ENTRY');
+  if (moduleRegistry) {
+    await moduleRegistry.disposeAll();
+  }
   if (container) {
     await disposeContainer();
   }
+  logger?.debug('📍 cleanup() EXIT');
 }
 
 /**
@@ -73,6 +85,7 @@ async function runApplication(
   configPath?: string,
   logLevel?: string,
 ): Promise<void> {
+  logger?.debug('📍 runApplication() ENTRY');
   try {
     // Create and initialize container
     container = await createContainer(configPath);
@@ -87,11 +100,24 @@ async function runApplication(
     // deno-lint-ignore no-explicit-any
     setupLogging(appOptions.logLevel as any);
 
-    // Get HVAC controller
-    const controller = container.get<HVACController>(TYPES.HVACController);
+    // Get module registry from container
+    moduleRegistry = container.get<ModuleRegistry>(TYPES.ModuleRegistry);
+    logger?.debug('📍 Retrieved module registry from container');
+
+    // Get HVAC module from registry
+    const hvacModule = moduleRegistry.getModule('hvac') as HvacModule;
+    if (!hvacModule) {
+      throw new Error('HVAC module not found in registry');
+    }
+    logger?.debug('📍 Retrieved HVAC module from registry');
+
+    // Get controller from module
+    const controller = hvacModule.getHVACController();
+    logger?.debug('📍 Retrieved HVAC controller from module');
 
     // Start the controller
     await controller.start();
+    logger?.debug('📍 HVAC controller started successfully');
 
     logger.info('🏠 HAG HVAC automation is running...');
     logger.info('📊 Press Ctrl+C to stop gracefully');
@@ -104,6 +130,8 @@ async function runApplication(
     const details = extractErrorDetails(error);
     logger.error('❌ Application failed:', error, { message: details.message });
     throw error;
+  } finally {
+    logger?.debug('📍 runApplication() EXIT');
   }
 }
 
@@ -139,9 +167,23 @@ async function validateConfig(configPath: string): Promise<void> {
  * Get system status
  */
 async function getStatus(configPath?: string): Promise<void> {
+  logger?.debug('📍 getStatus() ENTRY');
   try {
     container = await createContainer(configPath);
-    const controller = container.get<HVACController>(TYPES.HVACController);
+    
+    // Get module registry from container
+    moduleRegistry = container.get<ModuleRegistry>(TYPES.ModuleRegistry);
+    logger?.debug('📍 Retrieved module registry for status check');
+    
+    // Get HVAC module from registry
+    const hvacModule = moduleRegistry.getModule('hvac') as HvacModule;
+    if (!hvacModule) {
+      throw new Error('HVAC module not found in registry');
+    }
+    logger?.debug('📍 Retrieved HVAC module for status check');
+    
+    const controller = hvacModule.getHVACController();
+    logger?.debug('📍 Retrieved HVAC controller for status check');
 
     // Start controller briefly to get status
     await controller.start();
@@ -169,6 +211,8 @@ async function getStatus(configPath?: string): Promise<void> {
   } catch (error) {
     logger.error('❌ Failed to get status:', error);
     Deno.exit(1);
+  } finally {
+    logger?.debug('📍 getStatus() EXIT');
   }
 }
 
@@ -180,9 +224,23 @@ async function manualOverride(
   configPath?: string,
   temperature?: number,
 ): Promise<void> {
+  logger?.debug('📍 manualOverride() ENTRY');
   try {
     container = await createContainer(configPath);
-    const controller = container.get<HVACController>(TYPES.HVACController);
+    
+    // Get module registry from container
+    moduleRegistry = container.get<ModuleRegistry>(TYPES.ModuleRegistry);
+    logger?.debug('📍 Retrieved module registry for manual override');
+    
+    // Get HVAC module from registry
+    const hvacModule = moduleRegistry.getModule('hvac') as HvacModule;
+    if (!hvacModule) {
+      throw new Error('HVAC module not found in registry');
+    }
+    logger?.debug('📍 Retrieved HVAC module for manual override');
+    
+    const controller = hvacModule.getHVACController();
+    logger?.debug('📍 Retrieved HVAC controller for manual override');
 
     await controller.start();
 
@@ -207,6 +265,8 @@ async function manualOverride(
   } catch (error) {
     logger.error('❌ Manual override error:', error);
     Deno.exit(1);
+  } finally {
+    logger?.debug('📍 manualOverride() EXIT');
   }
 }
 

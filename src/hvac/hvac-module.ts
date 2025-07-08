@@ -4,14 +4,15 @@
  */
 
 import { Container } from '@needle-di/core';
-import { BaseModule } from '../core/module-registry.ts';
-import { DomainActor, ActorFactory } from '../core/actor-bootstrap.ts';
-import { HvacActorFactory } from './hvac-domain-actor.ts';
-import { HvacActorService } from './hvac-actor-service.ts';
+import { BaseModule, Module } from '../core/module-registry.ts';
+import { HVACController } from './controller.ts';
 import { HVACStateMachine } from './state-machine.ts';
 import { TYPES } from '../core/types.ts';
 import { HvacOptions, HvacOptionsSchema } from '../config/config.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
+import { ApplicationOptions } from '../config/config.ts';
+import { ActorBootstrap } from '../core/actor-bootstrap.ts';
+import { EventBus } from '../core/event-system.ts';
 
 /**
  * HVAC Module implementing the module system
@@ -22,7 +23,19 @@ export class HvacModule extends BaseModule {
   readonly version = '1.0.0';
   readonly description = 'HVAC temperature control and automation module';
 
+  private stateMachine?: HVACStateMachine;
+  private controller?: HVACController;
   private hvacConfig?: HvacOptions;
+  private container?: Container;
+
+  /**
+   * Register services with container
+   */
+  override registerServices(container: Container): void {
+    super.registerServices(container);
+    this.container = container;
+    this.logger?.debug('📍 HvacModule.registerServices() - Container registered');
+  }
 
   /**
    * Initialize HVAC module
@@ -32,87 +45,42 @@ export class HvacModule extends BaseModule {
     
     // Store HVAC configuration directly
     this.hvacConfig = config as HvacOptions;
+
+    if (!this.container) {
+      throw new Error('Container not registered - call registerServices first');
+    }
+
+    // Create instances of state machine and controller
+    this.stateMachine = new HVACStateMachine(this.hvacConfig);
+    this.controller = new HVACController(
+      this.hvacConfig,
+      this.container.get<ApplicationOptions>(TYPES.ApplicationOptions),
+      this.container.get<HomeAssistantClient>(TYPES.HomeAssistantClient),
+      this.container.get<ActorBootstrap>(TYPES.ActorBootstrap),
+      this.container.get<EventBus>(TYPES.EventBus),
+    );
     
     this.logger?.info('✅ HVAC module initialized');
   }
 
   /**
-   * Create HVAC actor factory
+   * Get HVAC State Machine instance
    */
-  createActorFactory(): ActorFactory<DomainActor> {
-    if (!this.hvacConfig) {
-      throw new Error('HVAC module not initialized');
+  getHVACStateMachine(): HVACStateMachine {
+    if (!this.stateMachine) {
+      throw new Error('HVAC State Machine not initialized');
     }
-
-    return new HvacActorFactory();
+    return this.stateMachine;
   }
 
   /**
-   * Register HVAC-specific services in DI container
+   * Get HVAC Controller instance
    */
-  override registerServices(container: Container): void {
-    super.registerServices(container);
-
-    if (!this.hvacConfig) {
-      throw new Error('HVAC module not initialized - cannot register services');
+  getHVACController(): HVACController {
+    if (!this.controller) {
+      throw new Error('HVAC Controller not initialized');
     }
-
-    const hvacConfig = this.hvacConfig;
-
-    // Register HVAC state machine
-    container.bind({
-      provide: TYPES.HVACStateMachine,
-      useFactory: () => {
-        const logger = this.logger!;
-        logger.info('🔄 Creating HVAC state machine implementation');
-        return new HVACStateMachine(hvacConfig);
-      },
-    });
-
-    // Register HVAC actor service
-    container.bind({
-      provide: TYPES.HvacActorService,
-      useFactory: () => {
-        const logger = this.logger!;
-        const haClient = container.get(Symbol.for('HomeAssistantClient')) as HomeAssistantClient;
-        
-        return new HvacActorService(hvacConfig, logger, haClient);
-      },
-    });
-
-    this.logger?.info('🔌 Registered HVAC services in DI container');
-  }
-
-  /**
-   * Get required dependencies
-   */
-  override getRequiredDependencies(): symbol[] {
-    return [
-      ...super.getRequiredDependencies(),
-      Symbol.for('HomeAssistantClient'),
-    ];
-  }
-
-  /**
-   * Validate HVAC configuration
-   */
-  override validateConfig(config: unknown): boolean {
-    try {
-      HvacOptionsSchema.parse(config);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * Get HVAC configuration
-   */
-  getConfig(): HvacOptions {
-    if (!this.hvacConfig) {
-      throw new Error('HVAC module not initialized');
-    }
-    return this.hvacConfig;
+    return this.controller;
   }
 
   /**
@@ -120,6 +88,12 @@ export class HvacModule extends BaseModule {
    */
   override async dispose(): Promise<void> {
     this.logger?.info('🧹 Disposing HVAC module');
+    if (this.controller) {
+      await this.controller.stop();
+    }
+    if (this.stateMachine) {
+      this.stateMachine.stop();
+    }
     await super.dispose();
   }
 }

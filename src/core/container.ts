@@ -23,6 +23,7 @@ import { ActorBootstrap } from './actor-bootstrap.ts';
 import { HVACController } from '../hvac/controller.ts';
 import { ActorManager } from './actor-manager.ts';
 import { HvacModule } from '../hvac/hvac-module.ts';
+import { ModuleRegistry, Module } from './module-registry.ts';
 
 // Re-export for backward compatibility
 export { LoggerService, TYPES };
@@ -34,6 +35,7 @@ export class ApplicationContainer {
   private container: Container;
   private settings?: Settings;
   private logger?: LoggerService;
+  private moduleRegistry: ModuleRegistry;
 
   constructor() {
     this.container = new Container();
@@ -41,6 +43,7 @@ export class ApplicationContainer {
     const tempLogger = new LoggerService('HAG.container');
     tempLogger.debug('📍 ApplicationContainer.constructor() ENTRY');
     tempLogger.debug('📍 ApplicationContainer.constructor() EXIT');
+    this.moduleRegistry = new ModuleRegistry(this.container, new LoggerService('HAG.module-registry'));
   }
 
   /**
@@ -69,7 +72,7 @@ export class ApplicationContainer {
       this.registerHVACServices();
 
       // Register modules
-      await this.registerModules();
+      await this.registerModules(this.settings);
 
       // Register tools (if AI is enabled)
       if (this.settings.appOptions.useAi) {
@@ -88,10 +91,10 @@ export class ApplicationContainer {
   /**
    * Initialize container with settings object (for testing)
    */
-  initializeWithSettings(
+  async initializeWithSettings(
     settings: Settings,
     skipRegistrations: string[] = [],
-  ): void {
+  ): Promise<void> {
     const tempLogger = new LoggerService('HAG.container');
     tempLogger.debug('📍 ApplicationContainer.initializeWithSettings() ENTRY');
     try {
@@ -115,6 +118,9 @@ export class ApplicationContainer {
       if (!skipRegistrations.includes('hvac')) {
         this.registerHVACServices();
       }
+
+      // Register modules
+      await this.registerModules(settings);
 
       // Register tools (if AI is enabled)
       if (this.settings.appOptions.useAi) {
@@ -189,6 +195,12 @@ export class ApplicationContainer {
     });
 
 
+    // Module Registry
+    this.container.bind({
+      provide: TYPES.ModuleRegistry,
+      useValue: this.moduleRegistry,
+    });
+
     // Actor Manager (new unified system)
     this.container.bind({
       provide: TYPES.ActorManager,
@@ -249,14 +261,11 @@ export class ApplicationContainer {
     this.container.bind({
       provide: TYPES.HVACStateMachine,
       useFactory: () => {
-        const hvacOptions = this.container.get<HvacOptions>(TYPES.HvacOptions);
-        const _appOptions = this.container.get<ApplicationOptions>(
-          TYPES.ApplicationOptions,
-        );
-        const logger = new LoggerService('HAG.hvac.state-machine');
-
-        logger.info('🔄 Creating XState state machine implementation');
-        return new HVACStateMachine(hvacOptions);
+        const hvacModule = this.moduleRegistry.getModule('hvac') as HvacModule;
+        if (!hvacModule) {
+          throw new Error('HVAC module not registered');
+        }
+        return hvacModule.getHVACStateMachine();
       },
     });
 
@@ -264,19 +273,11 @@ export class ApplicationContainer {
     this.container.bind({
       provide: TYPES.HVACController,
       useFactory: () => {
-        const hvacOptions = this.container.get<HvacOptions>(TYPES.HvacOptions);
-        const appOptions = this.container.get<ApplicationOptions>(TYPES.ApplicationOptions);
-        const haClient = this.container.get<HomeAssistantClient>(TYPES.HomeAssistantClient);
-        const actorBootstrap = this.container.get<ActorBootstrap>(TYPES.ActorBootstrap);
-        const eventBus = this.container.get<EventBus>(TYPES.EventBus);
-        
-        return new HVACController(
-          hvacOptions,
-          appOptions,
-          haClient,
-          actorBootstrap,
-          eventBus,
-        );
+        const hvacModule = this.moduleRegistry.getModule('hvac') as HvacModule;
+        if (!hvacModule) {
+          throw new Error('HVAC module not registered');
+        }
+        return hvacModule.getHVACController();
       },
     });
 
@@ -394,19 +395,22 @@ export class ApplicationContainer {
   /**
    * Register domain modules
    */
-  private async registerModules(): Promise<void> {
+  private async registerModules(settings: Settings): Promise<void> {
     if (this.logger) {
       this.logger.debug('📍 ApplicationContainer.registerModules() ENTRY');
     }
-    if (!this.settings) {
+    if (!settings) {
       throw new Error('Settings not loaded');
     }
 
-    const actorManager = this.container.get<ActorManager>(TYPES.ActorManager);
-
     // Register HVAC module
     const hvacModule = new HvacModule();
-    await actorManager.registerModule(hvacModule, this.settings.hvacOptions);
+    
+    // Register services first
+    hvacModule.registerServices(this.container);
+    
+    // Then register with module registry
+    await this.moduleRegistry.registerModule(hvacModule, settings.hvacOptions);
 
     this.logger?.info('✅ Registered all domain modules');
     if (this.logger) {
@@ -436,19 +440,7 @@ export class ApplicationContainer {
     }
     // Stop services that need cleanup
     try {
-      if (this.isBound(TYPES.HVACController)) {
-        const controller = this.get<HVACController>(TYPES.HVACController);
-        if (controller?.stop && typeof controller.stop === 'function') {
-          await controller.stop();
-        }
-      }
-
-      if (this.isBound(TYPES.HomeAssistantClient)) {
-        const client = this.get<HomeAssistantClient>(TYPES.HomeAssistantClient);
-        if (client?.disconnect && typeof client.disconnect === 'function') {
-          await client.disconnect();
-        }
-      }
+      await this.moduleRegistry.disposeAll();
     } catch (_error) {
       // Ignore cleanup errors
     }
