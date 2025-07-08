@@ -7,7 +7,7 @@ import { HomeAssistantClient } from '../../../src/home-assistant/client.ts';
 import { HassOptions } from '../../../src/config/config.ts';
 import { ConnectionError } from '../../../src/core/exceptions.ts';
 import { HassServiceCallImpl } from '../../../src/home-assistant/models.ts';
-import { LoggerService } from '../../../src/core/logger.ts';
+import { LoggerService } from '../../../src/core/logging.ts';
 
 // Mock logger service
 class MockLoggerService extends LoggerService {

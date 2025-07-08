@@ -11,7 +11,7 @@ import {
 } from '../../../src/hvac/state-machine.ts';
 import { HvacOptions } from '../../../src/config/config.ts';
 import { HVACMode, SystemMode } from '../../../src/types/common.ts';
-import { LoggerService } from '../../../src/core/logger.ts';
+import { LoggerService } from '../../../src/core/logging.ts';
 
 // Mock HVAC options for testing
 const mockHvacOptions: HvacOptions = {

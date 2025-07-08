@@ -18,7 +18,7 @@ import {
   SystemMode,
 } from '../types/common.ts';
 import { StateError } from '../core/exceptions.ts';
-import { LoggerService } from '../core/logger.ts';
+import { LoggerService } from '../core/logging.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
 
 /**
@@ -279,23 +279,23 @@ export class CoolingStrategy {
 
     this.logger.info('EVALUATING cooling', {
       currentTemp: data.currentTemp,
-      indoorMax: thresholds.indoorMax,
-      shouldCool: data.currentTemp > thresholds.indoorMax,
+      indoorMin: thresholds.indoorMin,
+      shouldCool: data.currentTemp > thresholds.indoorMin,
     });
-    const shouldCool = data.currentTemp > thresholds.indoorMax;
+    const shouldCool = data.currentTemp > thresholds.indoorMin;
     const evaluationTime = Date.now() - evaluationStart;
 
     this.logger.info(
       shouldCool
         ? '✅ Cooling approved'
-        : '❌ Cooling rejected: temp below max',
+        : '❌ Cooling rejected: temp below min',
       {
         currentTemp: data.currentTemp,
-        indoorMax: thresholds.indoorMax,
+        indoorMin: thresholds.indoorMin,
         shouldCool,
-        tempDifference: data.currentTemp - thresholds.indoorMax,
+        tempDifference: data.currentTemp - thresholds.indoorMin,
         evaluationTimeMs: evaluationTime,
-        reason: shouldCool ? 'temp_above_maximum' : 'temp_below_maximum',
+        reason: shouldCool ? 'temp_above_minimum' : 'temp_below_minimum',
       },
     );
 
@@ -667,18 +667,33 @@ export function createHVACMachine(
       },
       shouldAutoCool: ({ context }) => {
         logger.info('Checking shouldAutoCool guard');
-        if (context.systemMode !== SystemMode.AUTO) return false;
-
-        if (!context.indoorTemp || !context.outdoorTemp) {
+        logger.info('🔍 shouldAutoCool context debug', {
+          systemMode: context.systemMode,
+          indoorTemp: context.indoorTemp,
+          outdoorTemp: context.outdoorTemp,
+          currentHour: context.currentHour,
+          isWeekday: context.isWeekday,
+        });
+        
+        if (context.systemMode !== SystemMode.AUTO) {
+          logger.info('❌ shouldAutoCool: systemMode not AUTO');
           return false;
         }
 
-        return coolingStrategy.shouldCool({
+        if (!context.indoorTemp || !context.outdoorTemp) {
+          logger.info('❌ shouldAutoCool: missing temperature data');
+          return false;
+        }
+
+        const result = coolingStrategy.shouldCool({
           currentTemp: context.indoorTemp,
           weatherTemp: context.outdoorTemp,
           hour: context.currentHour,
           isWeekday: context.isWeekday,
         });
+        
+        logger.info('🔍 shouldAutoCool result', { result });
+        return result;
       },
       canDefrost: ({ context }) => {
         if (!context.indoorTemp || !context.outdoorTemp) {

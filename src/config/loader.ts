@@ -9,7 +9,7 @@ import { load as loadEnv } from '@std/dotenv';
 import { join } from '@std/path';
 import { Settings, SettingsSchema } from './config.ts';
 import { ConfigurationError } from '../core/exceptions.ts';
-import { LoggerService } from '../core/logger.ts';
+import { LoggerService } from '../core/logging.ts';
 
 const logger = new LoggerService('ConfigLoader');
 

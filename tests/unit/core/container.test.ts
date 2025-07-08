@@ -22,7 +22,7 @@ import {
   HvacOptions,
   Settings,
 } from '../../../src/config/config.ts';
-import { LoggerService } from '../../../src/core/logger.ts';
+import { LoggerService } from '../../../src/core/logging.ts';
 import { LogLevel, SystemMode } from '../../../src/types/common.ts';
 
 // Mock configuration for testing - commented out as unused

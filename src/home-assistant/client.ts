@@ -8,7 +8,7 @@ import { injectable } from '@needle-di/core';
 // Using native WebSocket API instead of deprecated @std/ws
 import { delay } from '@std/async';
 import type { HassOptions } from '../config/config.ts';
-import { LoggerService } from '../core/logger.ts';
+import { LoggerService } from '../core/logging.ts';
 import {
   ConnectionError,
   StateError,

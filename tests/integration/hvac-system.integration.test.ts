@@ -14,7 +14,7 @@ import { HVACStateMachine } from '../../src/hvac/state-machine.ts';
 import { HVACMode, LogLevel, SystemMode } from '../../src/types/common.ts';
 import { Settings } from '../../src/config/config.ts';
 import { EventBus } from '../../src/core/event-system.ts';
-import { LoggerService } from '../../src/core/logger.ts';
+import { LoggerService } from '../../src/core/logging.ts';
 
 // Mock configuration for testing
 const mockSettings: Settings = {

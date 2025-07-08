@@ -90,28 +90,28 @@ Deno.test('Cooling Strategy - Basic Decision Logic', async (t) => {
   );
 
   await t.step(
-    'should not cool when indoor temperature is in comfort zone',
+    'should cool when indoor temperature is above minimum threshold',
     () => {
       const data = createStateChangeData({
-        currentTemp: 24.5, // Between 23.0 and 26.0
+        currentTemp: 24.5, // Above indoorMin 23.0
         weatherTemp: 30.0,
         hour: 14,
         isWeekday: true,
       });
 
-      assertEquals(strategy.shouldCool(data), false);
+      assertEquals(strategy.shouldCool(data), true);
     },
   );
 
-  await t.step('should not cool when at maximum threshold boundary', () => {
+  await t.step('should cool when at maximum threshold boundary', () => {
     const data = createStateChangeData({
-      currentTemp: 26.0, // Exactly at maximum
+      currentTemp: 26.0, // Above indoorMin 23.0
       weatherTemp: 30.0,
       hour: 14,
       isWeekday: true,
     });
 
-    assertEquals(strategy.shouldCool(data), false); // At threshold, should not cool
+    assertEquals(strategy.shouldCool(data), true); // Above minimum, should cool
   });
 
   await t.step('should cool when just above maximum threshold', () => {
@@ -456,15 +456,15 @@ Deno.test('Cooling Strategy - Edge Cases and Boundary Conditions', async (t) => 
       hour: 14,
       isWeekday: true,
     });
-    assertEquals(strategy.shouldCool(minThresholdData), false);
+    assertEquals(strategy.shouldCool(minThresholdData), false); // At minimum, should not cool
 
     const maxThresholdData = createStateChangeData({
-      currentTemp: 26.0, // Exactly at maximum
+      currentTemp: 26.0, // Above minimum threshold
       weatherTemp: 30.0,
       hour: 14,
       isWeekday: true,
     });
-    assertEquals(strategy.shouldCool(maxThresholdData), false);
+    assertEquals(strategy.shouldCool(maxThresholdData), true); // Above minimum, should cool
 
     // Test exact outdoor thresholds
     const outdoorMinData = createStateChangeData({

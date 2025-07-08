@@ -11,7 +11,7 @@ import { HvacOptions } from '../config/config.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
 import { ApplicationOptions } from '../config/config.ts';
 import { EventBus } from '../core/event-system.ts';
-import { LoggerService } from '../core/logger.ts';
+import { LoggerService } from '../core/logging.ts';
 
 /**
  * HVAC Module implementing the module system with dependency injection

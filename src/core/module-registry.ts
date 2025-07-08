@@ -3,7 +3,7 @@
  */
 
 import { Container } from '@needle-di/core';
-import { LoggerService } from './logger.ts';
+import { LoggerService } from './logging.ts';
 
 /**
  * Base interface for all application modules.

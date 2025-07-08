@@ -10,7 +10,7 @@ import { createContainer } from '../../src/core/container.ts';
 import { TYPES } from '../../src/core/types.ts';
 import { HomeAssistantClient } from '../../src/home-assistant/client.ts';
 import { HassOptions, Settings } from '../../src/config/config.ts';
-import { LoggerService } from '../../src/core/logger.ts';
+import { LoggerService } from '../../src/core/logging.ts';
 import { ConfigLoader } from '../../src/config/loader.ts';
 import { parseArgs } from '@std/cli';
 

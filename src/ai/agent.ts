@@ -6,7 +6,7 @@
  */
 
 import { injectable } from '@needle-di/core';
-import { LoggerService } from '../core/logger.ts';
+import { LoggerService } from '../core/logging.ts';
 import type { ApplicationOptions, HvacOptions } from '../config/config.ts';
 import { HVACStateMachine } from '../hvac/state-machine.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';

@@ -6,7 +6,7 @@
  * and interactive system testing.
  */
 
-import { LoggerService } from '../src/core/logger.ts';
+import { LoggerService } from '../src/core/logging.ts';
 
 /**
  * Interactive validation helper for system components

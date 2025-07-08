@@ -17,7 +17,6 @@ import { ConfigLoader } from './config/loader.ts';
 import { extractErrorDetails } from './core/exceptions.ts';
 import { type LevelName, type Logger } from '@std/log';
 import { getAppLogger, setupLogging } from './core/logging.ts';
-import { type ApplicationOptions } from './config/config.ts';
 import { LogLevel } from './types/common.ts';
 
 let logger: Logger;
@@ -86,18 +85,23 @@ async function runApplication(
 ): Promise<void> {
   logger?.debug('📍 runApplication() ENTRY');
   try {
-    // Create and initialize container
-    container = await createContainer(configPath);
-    const appOptions = container.get<ApplicationOptions>(
-      TYPES.ApplicationOptions,
-    );
+    // Load configuration first to get log level before creating container
+    const config = await ConfigLoader.loadSettings(configPath);
+    
+    // Apply CLI log level override if provided
     if (logLevel) {
-      appOptions.logLevel =
+      config.appOptions.logLevel =
         LogLevel[logLevel.toUpperCase() as keyof typeof LogLevel] ||
         LogLevel.INFO;
     }
+    
+    // Setup logging before creating container
     // deno-lint-ignore no-explicit-any
-    setupLogging(appOptions.logLevel as any);
+    setupLogging(config.appOptions.logLevel as any);
+    logger = getAppLogger();
+    
+    // Create and initialize container with pre-loaded config
+    container = await createContainer(configPath);
 
     // Get module registry from container
     moduleRegistry = container.get<ModuleRegistry>(TYPES.ModuleRegistry);

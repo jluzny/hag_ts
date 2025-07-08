@@ -5,7 +5,7 @@
  */
 
 import { EventEmitter } from 'node:events';
-import { LoggerService } from './logger.ts';
+import { LoggerService } from './logging.ts';
 import { HassEventImpl } from '../home-assistant/models.ts';
 
 export interface BaseEvent {

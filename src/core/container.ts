@@ -14,7 +14,7 @@ import type {
 import { ConfigLoader } from '../config/loader.ts';
 import { HVACAgent } from '../ai/agent.ts';
 import { TYPES } from './types.ts';
-import { LoggerService } from './logger.ts';
+import { LoggerService } from './logging.ts';
 import { HVACStateMachine } from '../hvac/state-machine.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
 import { EventBus } from './event-system.ts';

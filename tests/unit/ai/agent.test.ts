@@ -10,7 +10,7 @@ import { HVACStateMachine } from '../../../src/hvac/state-machine.ts';
 import { HomeAssistantClient } from '../../../src/home-assistant/client.ts';
 import { ApplicationOptions, HvacOptions } from '../../../src/config/config.ts';
 import { HVACMode, LogLevel, SystemMode } from '../../../src/types/common.ts';
-import { LoggerService } from '../../../src/core/logger.ts';
+import { LoggerService } from '../../../src/core/logging.ts';
 
 // Force disable AI tests for fast testing by removing API key
 try {
