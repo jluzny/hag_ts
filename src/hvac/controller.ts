@@ -1,8 +1,8 @@
 /**
- * HVAC Controller V2 - Uses generic actor bootstrap system
+ * HVAC Controller V3 - Module-registry based approach
  *
- * This controller demonstrates how to use the generic actor framework
- * for domain-specific HVAC management
+ * This controller works directly with the HVAC state machine
+ * and removes dependency on the legacy actor system
  */
 
 import { injectable } from '@needle-di/core';
@@ -11,18 +11,15 @@ import type { ApplicationOptions, HvacOptions } from '../config/config.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
 import { HVACMode, HVACStatus, OperationResult } from '../types/common.ts';
 import { HVACOperationError, StateError } from '../core/exceptions.ts';
-import { ActorBootstrap } from '../core/actor-bootstrap.ts';
 import { AppEvent, EventBus } from '../core/event-system.ts';
-import { HvacActorFactory, HvacDomainActor } from './hvac-domain-actor.ts';
+import { HVACStateMachine } from './state-machine.ts';
 
 /**
  * Sensor states update event
  */
 class SensorStatesUpdateEvent extends AppEvent {
   constructor(sensorStates: Record<string, string>) {
-    console.log('📍 SensorStatesUpdateEvent.constructor() ENTRY');
     super('hvac.sensor_states_updated', { sensorStates, timestamp: new Date().toISOString() });
-    console.log('📍 SensorStatesUpdateEvent.constructor() EXIT');
   }
 }
 
@@ -31,9 +28,7 @@ class SensorStatesUpdateEvent extends AppEvent {
  */
 class ModeChangeRequestEvent extends AppEvent {
   constructor(mode: string, temperature?: number) {
-    console.log('📍 ModeChangeRequestEvent.constructor() ENTRY');
     super('hvac.mode_change_request', { mode, temperature });
-    console.log('📍 ModeChangeRequestEvent.constructor() EXIT');
   }
 }
 
@@ -42,9 +37,7 @@ class ModeChangeRequestEvent extends AppEvent {
  */
 class EvaluateConditionsEvent extends AppEvent {
   constructor() {
-    console.log('📍 EvaluateConditionsEvent.constructor() ENTRY');
     super('hvac.evaluate_conditions', {});
-    console.log('📍 EvaluateConditionsEvent.constructor() EXIT');
   }
 }
 
@@ -57,29 +50,29 @@ export class HVACController {
   private appOptions: ApplicationOptions;
   private haClient: HomeAssistantClient;
   private logger: LoggerService;
-  private actorBootstrap: ActorBootstrap;
   private eventBus: EventBus;
-  private hvacActor?: HvacDomainActor;
+  private stateMachine: HVACStateMachine;
+  private sensorUpdateInterval?: number;
 
   constructor(
     hvacOptions?: HvacOptions,
     appOptions?: ApplicationOptions,
     haClient?: HomeAssistantClient,
-    actorBootstrap?: ActorBootstrap,
+    stateMachine?: HVACStateMachine,
     eventBus?: EventBus,
   ) {
-    console.log('📍 HVACController.constructor() ENTRY');
+    this.logger = new LoggerService('HAG.hvac.controller-v3');
+    this.logger.debug('📍 HVACController.constructor() ENTRY');
     this.hvacOptions = hvacOptions!;
     this.appOptions = appOptions!;
     this.haClient = haClient!;
-    this.actorBootstrap = actorBootstrap!;
+    this.stateMachine = stateMachine!;
     this.eventBus = eventBus!;
-    this.logger = new LoggerService('HAG.hvac.controller-v2');
-    console.log('📍 HVACController.constructor() EXIT');
+    this.logger.debug('📍 HVACController.constructor() EXIT');
   }
 
   /**
-   * Start the HVAC controller using actor bootstrap
+   * Start the HVAC controller using state machine directly
    */
   async start(): Promise<void> {
     this.logger.debug('📍 HVACController.start() ENTRY');
@@ -89,7 +82,7 @@ export class HVACController {
       return;
     }
 
-    this.logger.info('🚀 Starting HVAC controller with actor bootstrap', {
+    this.logger.info('🚀 Starting HVAC controller with state machine', {
       systemMode: this.hvacOptions.systemMode,
       aiEnabled: this.appOptions.useAi,
       hvacEntities: this.hvacOptions.hvacEntities.length,
@@ -106,35 +99,21 @@ export class HVACController {
       await this.haClient.connect();
       this.logger.info('✅ Step 1 completed: Home Assistant connected');
 
-      // Step 2: Register HVAC actor with bootstrap system
-      this.logger.info('⚙️ Step 2: Registering HVAC actor');
-      const hvacFactory = new HvacActorFactory();
-      const hvacConfig = {
-        hvacOptions: this.hvacOptions,
-        haClient: this.haClient,
-      };
+      // Step 2: Start HVAC state machine
+      this.logger.info('⚙️ Step 2: Starting HVAC state machine');
+      this.stateMachine.start();
+      this.logger.info('✅ Step 2 completed: HVAC state machine started');
 
-      this.actorBootstrap.registerActorFactory(hvacFactory, hvacConfig);
-      this.logger.info('✅ Step 2 completed: HVAC actor registered');
-
-      // Step 3: Start actor bootstrap system
-      this.logger.info('⚙️ Step 3: Starting actor bootstrap system');
-      await this.actorBootstrap.startAll();
-
-      // Get reference to HVAC actor
-      this.hvacActor = this.actorBootstrap.getActor('hvac') as HvacDomainActor;
-      this.logger.info('✅ Step 3 completed: Actor bootstrap system started');
-
-      // Step 4: Setup event-driven temperature monitoring
-      this.logger.info('⚙️ Step 4: Setting up event-driven temperature monitoring');
+      // Step 3: Setup event-driven temperature monitoring
+      this.logger.info('⚙️ Step 3: Setting up event-driven temperature monitoring');
       await this.setupEventDrivenMonitoring();
-      this.logger.info('✅ Step 4 completed: Event-driven monitoring setup');
+      this.logger.info('✅ Step 3 completed: Event-driven monitoring setup');
 
       this.running = true;
 
       this.logger.info('🎉 HVAC controller started successfully', {
-        actorStatus: this.hvacActor?.getStatus(),
-        registeredDomains: this.actorBootstrap.getRegisteredDomains(),
+        currentState: this.stateMachine.getCurrentState(),
+        status: this.stateMachine.getStatus(),
       });
     } catch (error) {
       this.logger.error('❌ Failed to start HVAC controller', error);
@@ -162,10 +141,16 @@ export class HVACController {
       this.abortController.abort();
     }
 
-    // Stop actor bootstrap system
-    this.logger.debug('⚙️ Stopping actor bootstrap system');
-    await this.actorBootstrap.stopAll();
-    this.logger.debug('✅ Actor bootstrap system stopped');
+    // Clear sensor update interval
+    if (this.sensorUpdateInterval) {
+      clearInterval(this.sensorUpdateInterval);
+      this.sensorUpdateInterval = undefined;
+    }
+
+    // Stop state machine
+    this.logger.debug('⚙️ Stopping HVAC state machine');
+    this.stateMachine.stop();
+    this.logger.debug('✅ HVAC state machine stopped');
 
     // Disconnect from Home Assistant
     try {
@@ -178,7 +163,6 @@ export class HVACController {
     }
 
     this.running = false;
-    this.hvacActor = undefined;
 
     this.logger.info('✅ HVAC controller stopped successfully');
     this.logger.debug('📍 HVACController.stop() EXIT');
@@ -190,8 +174,9 @@ export class HVACController {
   async getStatus(): Promise<HVACStatus> {
     this.logger.debug('📍 HVACController.getStatus() ENTRY');
     try {
-      const actorStatus = this.hvacActor?.getStatus();
-      const haConnected = await this.haClient.connected;
+      const haConnected = this.haClient.isConnected();
+      const currentState = this.stateMachine.getCurrentState();
+      const hvacMode = this.getCurrentHVACMode();
 
       const status: HVACStatus = {
         controller: {
@@ -202,8 +187,8 @@ export class HVACController {
           aiEnabled: this.appOptions.useAi,
         },
         stateMachine: {
-          currentState: actorStatus?.metadata?.hvacMode as string || 'unknown',
-          hvacMode: this.getCurrentHVACMode(),
+          currentState: currentState,
+          hvacMode: hvacMode,
         },
         timestamp: new Date().toISOString(),
       };
@@ -327,32 +312,27 @@ export class HVACController {
   }
 
   /**
-   * Setup event bus subscription for HVAC domain actor
+   * Setup event bus subscription for HVAC state machine
    */
   private setupEventBusSubscription(): void {
     this.logger.debug('📍 HVACController.setupEventBusSubscription() ENTRY');
-    if (!this.hvacActor) {
-      this.logger.error('❌ Cannot setup event subscription: HVAC actor not available');
-      this.logger.debug('📍 HVACController.setupEventBusSubscription() EXIT');
-      return;
-    }
 
-    this.logger.info('📡 Setting up event bus subscription for HVAC domain actor');
+    this.logger.info('📡 Setting up event bus subscription for HVAC state machine');
 
     // Subscribe to HVAC-related events
     this.eventBus.subscribeToEvent('hvac.sensor_states_updated', async (event) => {
-      await this.hvacActor!.handleEvent(event);
+      this.handleSensorStatesUpdate(event);
     });
 
     this.eventBus.subscribeToEvent('hvac.evaluate_conditions', async (event) => {
-      await this.hvacActor!.handleEvent(event);
+      this.handleEvaluateConditions();
     });
 
     this.eventBus.subscribeToEvent('hvac.mode_change_request', async (event) => {
-      await this.hvacActor!.handleEvent(event);
+      this.handleModeChangeRequest(event);
     });
 
-    this.logger.info('✅ Event bus subscription setup complete for HVAC domain actor');
+    this.logger.info('✅ Event bus subscription setup complete for HVAC state machine');
     this.logger.debug('📍 HVACController.setupEventBusSubscription() EXIT');
   }
 
@@ -467,22 +447,28 @@ export class HVACController {
    */
   private getCurrentHVACMode(): HVACMode {
     this.logger.debug('📍 HVACController.getCurrentHVACMode() ENTRY');
-    const actorStatus = this.hvacActor?.getStatus();
-    const currentState = actorStatus?.metadata?.hvacMode as string;
-
-    switch (currentState) {
-      case 'heating':
-        this.logger.debug('📍 HVACController.getCurrentHVACMode() EXIT');
-        return HVACMode.HEAT;
-      case 'cooling':
-        this.logger.debug('📍 HVACController.getCurrentHVACMode() EXIT');
-        return HVACMode.COOL;
-      case 'off':
-        this.logger.debug('📍 HVACController.getCurrentHVACMode() EXIT');
-        return HVACMode.OFF;
-      default:
-        this.logger.debug('📍 HVACController.getCurrentHVACMode() EXIT');
-        return HVACMode.OFF;
+    
+    try {
+      const currentState = this.stateMachine.getCurrentState();
+      
+      // Map state machine states to HVAC modes
+      switch (currentState) {
+        case 'heating':
+          this.logger.debug('📍 HVACController.getCurrentHVACMode() EXIT');
+          return HVACMode.HEAT;
+        case 'cooling':
+          this.logger.debug('📍 HVACController.getCurrentHVACMode() EXIT');
+          return HVACMode.COOL;
+        case 'idle':
+        case 'off':
+        default:
+          this.logger.debug('📍 HVACController.getCurrentHVACMode() EXIT');
+          return HVACMode.OFF;
+      }
+    } catch (error) {
+      this.logger.warning('⚠️ Error getting current HVAC mode', error);
+      this.logger.debug('📍 HVACController.getCurrentHVACMode() EXIT');
+      return HVACMode.OFF;
     }
   }
 
@@ -493,6 +479,63 @@ export class HVACController {
     this.logger.debug('📍 HVACController.isRunning() ENTRY');
     this.logger.debug('📍 HVACController.isRunning() EXIT');
     return this.running;
+  }
+
+  /**
+   * Handle sensor states update events
+   */
+  private handleSensorStatesUpdate(event: AppEvent): void {
+    this.logger.debug('📍 HVACController.handleSensorStatesUpdate() ENTRY');
+    const payload = event.payload as { sensorStates: Record<string, string>; timestamp: string };
+    
+    this.logger.info('📊 Processing sensor states update via state machine', {
+      sensorStates: payload.sensorStates,
+      timestamp: payload.timestamp,
+    });
+
+    // Send temperature update event to state machine
+    this.stateMachine.send({
+      type: 'TEMPERATURE_UPDATE',
+      sensorStates: payload.sensorStates,
+    });
+    
+    this.logger.debug('📍 HVACController.handleSensorStatesUpdate() EXIT');
+  }
+
+  /**
+   * Handle mode change requests
+   */
+  private handleModeChangeRequest(event: AppEvent): void {
+    this.logger.debug('📍 HVACController.handleModeChangeRequest() ENTRY');
+    const payload = event.payload as { mode: string; temperature?: number };
+    
+    this.logger.info('🎛️ Processing mode change request via state machine', {
+      mode: payload.mode,
+      temperature: payload.temperature,
+    });
+
+    // Send mode change event to state machine
+    this.stateMachine.send({
+      type: 'MODE_CHANGE',
+      mode: payload.mode as HVACMode,
+      temperature: payload.temperature,
+    });
+    
+    this.logger.debug('📍 HVACController.handleModeChangeRequest() EXIT');
+  }
+
+  /**
+   * Handle condition evaluation requests
+   */
+  private handleEvaluateConditions(): void {
+    this.logger.debug('📍 HVACController.handleEvaluateConditions() ENTRY');
+    
+    this.logger.info('🔍 Processing condition evaluation request via state machine');
+
+    // Trigger evaluation in state machine
+    this.stateMachine.evaluateConditions();
+    
+    this.logger.debug('📍 HVACController.handleEvaluateConditions() EXIT');
   }
 
 }

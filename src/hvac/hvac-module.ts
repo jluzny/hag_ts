@@ -4,14 +4,13 @@
  */
 
 import { Container } from '@needle-di/core';
-import { BaseModule, Module } from '../core/module-registry.ts';
+import { BaseModule } from '../core/module-registry.ts';
 import { HVACController } from './controller.ts';
 import { HVACStateMachine } from './state-machine.ts';
 import { TYPES } from '../core/types.ts';
-import { HvacOptions, HvacOptionsSchema } from '../config/config.ts';
+import { HvacOptions } from '../config/config.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
 import { ApplicationOptions } from '../config/config.ts';
-import { ActorBootstrap } from '../core/actor-bootstrap.ts';
 import { EventBus } from '../core/event-system.ts';
 
 /**
@@ -56,7 +55,7 @@ export class HvacModule extends BaseModule {
       this.hvacConfig,
       this.container.get<ApplicationOptions>(TYPES.ApplicationOptions),
       this.container.get<HomeAssistantClient>(TYPES.HomeAssistantClient),
-      this.container.get<ActorBootstrap>(TYPES.ActorBootstrap),
+      this.stateMachine,
       this.container.get<EventBus>(TYPES.EventBus),
     );
     

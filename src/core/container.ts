@@ -18,12 +18,9 @@ import { LoggerService } from './logger.ts';
 import { HVACStateMachine } from '../hvac/state-machine.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
 import { EventBus } from './event-system.ts';
-import { ActorSystem } from './actor-system.ts';
-import { ActorBootstrap } from './actor-bootstrap.ts';
-import { HVACController } from '../hvac/controller.ts';
 import { ActorManager } from './actor-manager.ts';
 import { HvacModule } from '../hvac/hvac-module.ts';
-import { ModuleRegistry, Module } from './module-registry.ts';
+import { ModuleRegistry } from './module-registry.ts';
 
 // Re-export for backward compatibility
 export { LoggerService, TYPES };
@@ -210,26 +207,6 @@ export class ApplicationContainer {
       },
     });
 
-    // Legacy ActorSystem (for backward compatibility)
-    this.container.bind({
-      provide: TYPES.ActorSystem,
-      useFactory: () => {
-        const eventBus = this.container.get(TYPES.EventBus) as EventBus;
-        const logger = new LoggerService('HAG.actor-system');
-        return new ActorSystem(eventBus, logger);
-      },
-    });
-
-    // Legacy ActorBootstrap (for backward compatibility)
-    this.container.bind({
-      provide: TYPES.ActorBootstrap,
-      useFactory: () => {
-        const eventBus = this.container.get(TYPES.EventBus) as EventBus;
-        const actorSystem = this.container.get(TYPES.ActorSystem) as ActorSystem;
-        const logger = new LoggerService('HAG.actor-bootstrap');
-        return new ActorBootstrap(eventBus, actorSystem, logger);
-      },
-    });
     tempLogger.debug('📍 ApplicationContainer.registerEventSystem() EXIT');
   }
 

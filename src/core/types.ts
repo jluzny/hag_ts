@@ -29,9 +29,6 @@ export const TYPES = {
 
   // Event System
   EventBus: Symbol.for('EventBus'),
-  ActorSystem: Symbol.for('ActorSystem'),
-  HvacActorService: Symbol.for('HvacActorService'),
-  ActorBootstrap: Symbol.for('ActorBootstrap'),
   ActorManager: Symbol.for('ActorManager'),
   ModuleRegistry: Symbol.for('ModuleRegistry'),
 
