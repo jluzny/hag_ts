@@ -493,10 +493,22 @@ export class HVACController {
       timestamp: payload.timestamp,
     });
 
-    // Send temperature update event to state machine
+    // Convert sensor states to numbers and map to indoor/outdoor
+    const indoorTemp = parseFloat(payload.sensorStates[this.hvacOptions.tempSensor]);
+    const outdoorTemp = parseFloat(payload.sensorStates[this.hvacOptions.outdoorSensor]);
+    
+    this.logger.info('🌡️ Parsed temperature values', {
+      indoorTemp,
+      outdoorTemp,
+      indoorSensor: this.hvacOptions.tempSensor,
+      outdoorSensor: this.hvacOptions.outdoorSensor,
+    });
+
+    // Send correct event type with proper data structure
     this.stateMachine.send({
-      type: 'TEMPERATURE_UPDATE',
-      sensorStates: payload.sensorStates,
+      type: 'UPDATE_TEMPERATURES',
+      indoor: indoorTemp,
+      outdoor: outdoorTemp,
     });
     
     this.logger.debug('📍 HVACController.handleSensorStatesUpdate() EXIT');

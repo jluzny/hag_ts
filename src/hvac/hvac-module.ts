@@ -50,11 +50,12 @@ export class HvacModule extends BaseModule {
     }
 
     // Create instances of state machine and controller
-    this.stateMachine = new HVACStateMachine(this.hvacConfig);
+    const haClient = this.container.get<HomeAssistantClient>(TYPES.HomeAssistantClient);
+    this.stateMachine = new HVACStateMachine(this.hvacConfig, haClient);
     this.controller = new HVACController(
       this.hvacConfig,
       this.container.get<ApplicationOptions>(TYPES.ApplicationOptions),
-      this.container.get<HomeAssistantClient>(TYPES.HomeAssistantClient),
+      haClient,
       this.stateMachine,
       this.container.get<EventBus>(TYPES.EventBus),
     );

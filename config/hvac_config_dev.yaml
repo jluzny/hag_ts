@@ -22,10 +22,10 @@ hvacOptions:
 
   hvacEntities:
     - entityId: "climate.living_room_ac"
-      enabled: true
+      enabled: false
       defrost: true
     - entityId: "climate.bedroom_ac"
-      enabled: false
+      enabled: true
       defrost: false
     - entityId: "climate.matej_ac"
       enabled: false
@@ -58,8 +58,8 @@ hvacOptions:
     presetMode: "windFree"
     temperatureThresholds:
       indoorMin: 15.
-      indoorMax: 23.5
-      outdoorMin: 15.0
+      indoorMax: 22.0
+      outdoorMin: 10.0
       outdoorMax: 45.0
 
   activeHours:
