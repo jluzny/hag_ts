@@ -3,64 +3,67 @@
  * Provides HVAC components through the unified module architecture
  */
 
-import { Container } from '@needle-di/core';
+import { injectable } from '@needle-di/core';
 import { BaseModule } from '../core/module-registry.ts';
 import { HVACController } from './controller.ts';
 import { HVACStateMachine } from './state-machine.ts';
-import { TYPES } from '../core/types.ts';
 import { HvacOptions } from '../config/config.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
 import { ApplicationOptions } from '../config/config.ts';
 import { EventBus } from '../core/event-system.ts';
+import { LoggerService } from '../core/logger.ts';
 
 /**
- * HVAC Module implementing the module system
+ * HVAC Module implementing the module system with dependency injection
  */
+@injectable()
 export class HvacModule extends BaseModule {
   readonly name = 'HVAC Control System';
   readonly domain = 'hvac';
   readonly version = '1.0.0';
   readonly description = 'HVAC temperature control and automation module';
 
-  private stateMachine?: HVACStateMachine;
-  private controller?: HVACController;
-  private hvacConfig?: HvacOptions;
-  private container?: Container;
+  private stateMachine: HVACStateMachine;
+  private controller: HVACController;
 
-  /**
-   * Register services with container
-   */
-  override registerServices(container: Container): void {
-    super.registerServices(container);
-    this.container = container;
-    this.logger?.debug('📍 HvacModule.registerServices() - Container registered');
+  constructor(
+    hvacOptions?: HvacOptions,
+    appOptions?: ApplicationOptions,
+    haClient?: HomeAssistantClient,
+    eventBus?: EventBus,
+  ) {
+    super();
+    
+    // Initialize logger for this module
+    this.logger = new LoggerService(`HAG.module.${this.domain}`);
+    this.logger.debug('📍 HvacModule.constructor() ENTRY');
+
+    // Validate required dependencies
+    if (!hvacOptions || !appOptions || !haClient || !eventBus) {
+      throw new Error('HvacModule requires all dependencies: hvacOptions, appOptions, haClient, eventBus');
+    }
+
+    // Create instances with injected dependencies
+    this.stateMachine = new HVACStateMachine(hvacOptions, haClient);
+    this.controller = new HVACController(
+      hvacOptions,
+      appOptions,
+      haClient,
+      this.stateMachine,
+      eventBus,
+    );
+    
+    this.logger.debug('📍 HvacModule.constructor() EXIT');
   }
 
   /**
-   * Initialize HVAC module
+   * Initialize HVAC module (simplified since dependencies are injected)
    */
   override async initialize(config: unknown): Promise<void> {
-    await super.initialize(config);
-    
-    // Store HVAC configuration directly
-    this.hvacConfig = config as HvacOptions;
-
-    if (!this.container) {
-      throw new Error('Container not registered - call registerServices first');
-    }
-
-    // Create instances of state machine and controller
-    const haClient = this.container.get<HomeAssistantClient>(TYPES.HomeAssistantClient);
-    this.stateMachine = new HVACStateMachine(this.hvacConfig, haClient);
-    this.controller = new HVACController(
-      this.hvacConfig,
-      this.container.get<ApplicationOptions>(TYPES.ApplicationOptions),
-      haClient,
-      this.stateMachine,
-      this.container.get<EventBus>(TYPES.EventBus),
-    );
-    
-    this.logger?.info('✅ HVAC module initialized');
+    this.logger.debug('📍 HvacModule.initialize() ENTRY');
+    this.config = config;
+    this.logger.info('✅ HVAC module initialized');
+    this.logger.debug('📍 HvacModule.initialize() EXIT');
   }
 
   /**

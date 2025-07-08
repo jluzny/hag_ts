@@ -15,7 +15,6 @@ export interface Module {
   readonly description: string;
 
   initialize(config: unknown): Promise<void>;
-  registerServices(container: Container): void;
   getRequiredDependencies?(): symbol[];
   validateConfig?(config: unknown): boolean;
   dispose(): Promise<void>;
@@ -41,11 +40,6 @@ export abstract class BaseModule implements Module {
     this.logger.debug(`📍 Module ${this.domain}.initialize() EXIT`);
   }
 
-  registerServices(_container: Container): void {
-    this.logger?.debug(`📍 Module ${this.domain}.registerServices() ENTRY`);
-    // Default service registration logic (empty)
-    this.logger?.debug(`📍 Module ${this.domain}.registerServices() EXIT`);
-  }
 
 
   getRequiredDependencies?(): symbol[] {

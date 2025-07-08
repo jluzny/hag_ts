@@ -175,32 +175,39 @@ export class ApplicationContainer {
   }
 
   /**
-   * Register HVAC services
+   * Register HVAC services using direct DI
    */
   public registerHVACServices(): void {
     if (this.logger) {
       this.logger.debug('📍 ApplicationContainer.registerHVACServices() ENTRY');
     }
-    // Register state machine based on experimental feature flag
+
+    // Register HVAC module as a DI service
+    this.container.bind({
+      provide: TYPES.HvacModule,
+      useFactory: () => {
+        const hvacOptions = this.container.get<HvacOptions>(TYPES.HvacOptions);
+        const appOptions = this.container.get<ApplicationOptions>(TYPES.ApplicationOptions);
+        const haClient = this.container.get<HomeAssistantClient>(TYPES.HomeAssistantClient);
+        const eventBus = this.container.get<EventBus>(TYPES.EventBus);
+        return new HvacModule(hvacOptions, appOptions, haClient, eventBus);
+      },
+    });
+
+    // Register HVAC State Machine - direct access from module
     this.container.bind({
       provide: TYPES.HVACStateMachine,
       useFactory: () => {
-        const hvacModule = this.moduleRegistry.getModule('hvac') as HvacModule;
-        if (!hvacModule) {
-          throw new Error('HVAC module not registered');
-        }
+        const hvacModule = this.container.get<HvacModule>(TYPES.HvacModule);
         return hvacModule.getHVACStateMachine();
       },
     });
 
-    // Register HVAC Controller
+    // Register HVAC Controller - direct access from module
     this.container.bind({
       provide: TYPES.HVACController,
       useFactory: () => {
-        const hvacModule = this.moduleRegistry.getModule('hvac') as HvacModule;
-        if (!hvacModule) {
-          throw new Error('HVAC module not registered');
-        }
+        const hvacModule = this.container.get<HvacModule>(TYPES.HvacModule);
         return hvacModule.getHVACController();
       },
     });
@@ -210,29 +217,16 @@ export class ApplicationContainer {
       this.container.bind({
         provide: TYPES.HVACAgent,
         useFactory: () => {
-          const hvacOptions = this.container.get<HvacOptions>(
-            TYPES.HvacOptions,
-          );
-          const appOptions = this.container.get<ApplicationOptions>(
-            TYPES.ApplicationOptions,
-          );
-          const stateMachine = this.container.get<HVACStateMachine>(
-            TYPES.HVACStateMachine,
-          ) as unknown as HVACStateMachine;
-          const haClient = this.container.get<HomeAssistantClient>(
-            TYPES.HomeAssistantClient,
-          );
+          const hvacOptions = this.container.get<HvacOptions>(TYPES.HvacOptions);
+          const appOptions = this.container.get<ApplicationOptions>(TYPES.ApplicationOptions);
+          const stateMachine = this.container.get<HVACStateMachine>(TYPES.HVACStateMachine);
+          const haClient = this.container.get<HomeAssistantClient>(TYPES.HomeAssistantClient);
           const logger = new LoggerService('HAG.ai');
-          return new HVACAgent(
-            hvacOptions,
-            appOptions,
-            stateMachine,
-            haClient,
-            logger,
-          );
+          return new HVACAgent(hvacOptions, appOptions, stateMachine, haClient, logger);
         },
       });
     }
+    
     if (this.logger) {
       this.logger.debug('📍 ApplicationContainer.registerHVACServices() EXIT');
     }
@@ -286,13 +280,10 @@ export class ApplicationContainer {
       throw new Error('Settings not loaded');
     }
 
-    // Register HVAC module
-    const hvacModule = new HvacModule();
+    // Get HVAC module from DI container (already registered in registerHVACServices)
+    const hvacModule = this.container.get<HvacModule>(TYPES.HvacModule);
     
-    // Register services first
-    hvacModule.registerServices(this.container);
-    
-    // Then register with module registry
+    // Register with module registry for lifecycle management
     await this.moduleRegistry.registerModule(hvacModule, settings.hvacOptions);
 
     this.logger?.info('✅ Registered all domain modules');

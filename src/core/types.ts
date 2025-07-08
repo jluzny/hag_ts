@@ -22,6 +22,7 @@ export const TYPES = {
   HomeAssistantClient: Symbol.for('HomeAssistantClient'),
 
   // HVAC
+  HvacModule: Symbol.for('HvacModule'),
   HVACStateMachine: Symbol.for('HVACStateMachine'),
   HVACController: Symbol.for('HVACController'),
   HVACAgent: Symbol.for('HVACAgent'),
