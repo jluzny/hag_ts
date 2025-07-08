@@ -11,6 +11,9 @@ export class LoggerService {
 
   constructor(loggerName: string = 'HAG') {
     this.logger = getLogger(loggerName);
+    // Use the underlying logger for debug to avoid infinite recursion
+    this.logger.debug('📍 LoggerService.constructor() ENTRY');
+    this.logger.debug('📍 LoggerService.constructor() EXIT');
   }
 
   /**
@@ -18,17 +21,20 @@ export class LoggerService {
    * Uses native @std/log structured logging via args parameter
    */
   info(message: string, context?: LogContext): void {
+    this.logger.debug('📍 LoggerService.info() ENTRY');
     if (context) {
       this.logger.info(message, context);
     } else {
       this.logger.info(message);
     }
+    this.logger.debug('📍 LoggerService.info() EXIT');
   }
 
   /**
    * Log error with enhanced context and stack trace
    */
   error(message: string, error?: unknown, context?: LogContext): void {
+    this.logger.debug('📍 LoggerService.error() ENTRY');
     const errorContext: LogContext = { ...context };
 
     if (error instanceof Error) {
@@ -41,12 +47,14 @@ export class LoggerService {
     }
 
     this.logger.error(message, errorContext);
+    this.logger.debug('📍 LoggerService.error() EXIT');
   }
 
   /**
    * Log debug level with detailed context
    */
   debug(message: string, context?: LogContext): void {
+    // Skip ENTRY/EXIT logging for debug method to avoid infinite recursion
     if (context) {
       this.logger.debug(message, context);
     } else {
@@ -58,10 +66,12 @@ export class LoggerService {
    * Log warning with context
    */
   warning(message: string, context?: LogContext): void {
+    this.logger.debug('📍 LoggerService.warning() ENTRY');
     if (context) {
       this.logger.warn(message, context);
     } else {
       this.logger.warn(message);
     }
+    this.logger.debug('📍 LoggerService.warning() EXIT');
   }
 }

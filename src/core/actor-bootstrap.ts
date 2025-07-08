@@ -57,9 +57,11 @@ export class ActorBootstrap {
     actorSystem: ActorSystem,
     logger?: LoggerService,
   ) {
+    this.logger = logger || new LoggerService('HAG.actor-bootstrap');
+    this.logger.debug('📍 ActorBootstrap.constructor() ENTRY');
     this.eventBus = eventBus;
     this.actorSystem = actorSystem;
-    this.logger = logger || new LoggerService('HAG.actor-bootstrap');
+    this.logger.debug('📍 ActorBootstrap.constructor() EXIT');
   }
 
   /**
@@ -69,6 +71,7 @@ export class ActorBootstrap {
     factory: ActorFactory<T>,
     config: unknown,
   ): void {
+    this.logger.debug('📍 ActorBootstrap.registerActorFactory() ENTRY');
     const domain = factory.domain;
 
     // Validate configuration if factory provides validation
@@ -88,12 +91,14 @@ export class ActorBootstrap {
     });
 
     this.logger.info(`🏭 Registered actor factory for domain: ${domain}`);
+    this.logger.debug('📍 ActorBootstrap.registerActorFactory() EXIT');
   }
 
   /**
    * Start all registered actors
    */
   async startAll(): Promise<void> {
+    this.logger.debug('📍 ActorBootstrap.startAll() ENTRY');
     if (this.isStarted) {
       this.logger.warning('⚠️ Actor bootstrap already started');
       return;
@@ -115,12 +120,14 @@ export class ActorBootstrap {
     this.logger.info('✅ Actor bootstrap system started', {
       activeActors: this.getActiveActors().length,
     });
+    this.logger.debug('📍 ActorBootstrap.startAll() EXIT');
   }
 
   /**
    * Stop all actors
    */
   async stopAll(): Promise<void> {
+    this.logger.debug('📍 ActorBootstrap.stopAll() ENTRY');
     if (!this.isStarted) {
       this.logger.warning('⚠️ Actor bootstrap not started');
       return;
@@ -140,6 +147,7 @@ export class ActorBootstrap {
     this.isStarted = false;
 
     this.logger.info('✅ Actor bootstrap system stopped');
+    this.logger.debug('📍 ActorBootstrap.stopAll() EXIT');
   }
 
   /**
@@ -149,6 +157,7 @@ export class ActorBootstrap {
     domain: string,
     registration: ActorRegistration,
   ): Promise<void> {
+    this.logger.debug('📍 ActorBootstrap.startActor() ENTRY');
     try {
       this.updateActorStatus(domain, 'starting');
 
@@ -181,6 +190,7 @@ export class ActorBootstrap {
       this.logger.error(`❌ Failed to start actor: ${domain}`, error);
       throw error;
     }
+    this.logger.debug('📍 ActorBootstrap.startActor() EXIT');
   }
 
   /**
@@ -190,6 +200,7 @@ export class ActorBootstrap {
     domain: string,
     registration: ActorRegistration,
   ): Promise<void> {
+    this.logger.debug('📍 ActorBootstrap.stopActor() ENTRY');
     if (!registration.instance) return;
 
     try {
@@ -211,12 +222,14 @@ export class ActorBootstrap {
       this.logger.error(`❌ Failed to stop actor: ${domain}`, error);
       throw error;
     }
+    this.logger.debug('📍 ActorBootstrap.stopActor() EXIT');
   }
 
   /**
    * Subscribe actor to relevant events
    */
   private subscribeActorToEvents(actor: DomainActor): void {
+    this.logger.debug('📍 ActorBootstrap.subscribeActorToEvents() ENTRY');
     if (!actor.handleEvent) return;
     
     // Subscribe to all domain events and system events
@@ -283,6 +296,7 @@ export class ActorBootstrap {
       domain: actor.domain,
       subscribedEvents: subscribedEvents,
     });
+    this.logger.debug('📍 ActorBootstrap.subscribeActorToEvents() EXIT');
   }
 
   /**
@@ -293,6 +307,7 @@ export class ActorBootstrap {
     state: ActorStatus['state'],
     metadata?: Record<string, unknown>,
   ): void {
+    this.logger.debug('📍 ActorBootstrap.updateActorStatus() ENTRY');
     const registration = this.registrations.get(domain);
     if (registration) {
       registration.status = {
@@ -302,58 +317,77 @@ export class ActorBootstrap {
         metadata: metadata ? { ...registration.status.metadata, ...metadata } : registration.status.metadata,
       };
     }
+    this.logger.debug('📍 ActorBootstrap.updateActorStatus() EXIT');
   }
 
   /**
    * Get status of all actors
    */
   getAllActorStatus(): ActorStatus[] {
-    return Array.from(this.registrations.values()).map(reg => ({
+    this.logger.debug('📍 ActorBootstrap.getAllActorStatus() ENTRY');
+    const result = Array.from(this.registrations.values()).map(reg => ({
       ...reg.status,
       ...(reg.instance ? reg.instance.getStatus() : {}),
     }));
+    this.logger.debug('📍 ActorBootstrap.getAllActorStatus() EXIT');
+    return result;
   }
 
   /**
    * Get status of a specific actor
    */
   getActorStatus(domain: string): ActorStatus | undefined {
+    this.logger.debug('📍 ActorBootstrap.getActorStatus() ENTRY');
     const registration = this.registrations.get(domain);
     if (!registration) return undefined;
 
-    return {
+    const result = {
       ...registration.status,
       ...(registration.instance ? registration.instance.getStatus() : {}),
     };
+    this.logger.debug('📍 ActorBootstrap.getActorStatus() EXIT');
+    return result;
   }
 
   /**
    * Get list of active actors
    */
   getActiveActors(): DomainActor[] {
-    return Array.from(this.registrations.values())
+    this.logger.debug('📍 ActorBootstrap.getActiveActors() ENTRY');
+    const result = Array.from(this.registrations.values())
       .map(reg => reg.instance)
       .filter((actor): actor is DomainActor => actor !== undefined);
+    this.logger.debug('📍 ActorBootstrap.getActiveActors() EXIT');
+    return result;
   }
 
   /**
    * Get actor by domain
    */
   getActor(domain: string): DomainActor | undefined {
-    return this.registrations.get(domain)?.instance;
+    this.logger.debug('📍 ActorBootstrap.getActor() ENTRY');
+    const result = this.registrations.get(domain)?.instance;
+    this.logger.debug('📍 ActorBootstrap.getActor() EXIT');
+    return result;
   }
 
   /**
    * Check if bootstrap system is running
    */
   isRunning(): boolean {
-    return this.isStarted;
+    this.logger.debug('📍 ActorBootstrap.isRunning() ENTRY');
+    const result = this.isStarted;
+    this.logger.debug('📍 ActorBootstrap.isRunning() EXIT');
+    return result;
   }
 
   /**
    * Get registered domains
    */
   getRegisteredDomains(): string[] {
-    return Array.from(this.registrations.keys());
+    this.logger.debug('📍 ActorBootstrap.getRegisteredDomains() ENTRY');
+    const result = Array.from(this.registrations.keys());
+    this.logger.debug('📍 ActorBootstrap.getRegisteredDomains() EXIT');
+    return result;
   }
 }

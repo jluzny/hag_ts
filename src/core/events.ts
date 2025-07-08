@@ -30,19 +30,31 @@ interface HvacModeChangedPayload {
  */
 export class HassStateChangedEvent extends AppEvent {
   constructor(payload: HassStateChangedPayload) {
+    // Note: Using console.log here since we don't have logger instance
+    // console.log('📍 HassStateChangedEvent.constructor() ENTRY');
     super('hass.state_changed', payload);
+    // console.log('📍 HassStateChangedEvent.constructor() EXIT');
   }
 
   get entityId(): string {
-    return (this.payload as HassStateChangedPayload).entityId;
+    // console.log('📍 HassStateChangedEvent.entityId() ENTRY');
+    const result = (this.payload as HassStateChangedPayload).entityId;
+    // console.log('📍 HassStateChangedEvent.entityId() EXIT');
+    return result;
   }
 
   get oldState(): unknown {
-    return (this.payload as HassStateChangedPayload).oldState;
+    // console.log('📍 HassStateChangedEvent.oldState() ENTRY');
+    const result = (this.payload as HassStateChangedPayload).oldState;
+    // console.log('📍 HassStateChangedEvent.oldState() EXIT');
+    return result;
   }
 
   get newState(): unknown {
-    return (this.payload as HassStateChangedPayload).newState;
+    // console.log('📍 HassStateChangedEvent.newState() ENTRY');
+    const result = (this.payload as HassStateChangedPayload).newState;
+    // console.log('📍 HassStateChangedEvent.newState() EXIT');
+    return result;
   }
 }
 
@@ -51,11 +63,16 @@ export class HassStateChangedEvent extends AppEvent {
  */
 export class SystemShutdownEvent extends AppEvent {
   constructor(payload: SystemShutdownPayload) {
+    // console.log('📍 SystemShutdownEvent.constructor() ENTRY');
     super('system.shutdown', payload);
+    // console.log('📍 SystemShutdownEvent.constructor() EXIT');
   }
 
   get reason(): string {
-    return (this.payload as SystemShutdownPayload).reason;
+    // console.log('📍 SystemShutdownEvent.reason() ENTRY');
+    const result = (this.payload as SystemShutdownPayload).reason;
+    // console.log('📍 SystemShutdownEvent.reason() EXIT');
+    return result;
   }
 }
 
@@ -64,15 +81,23 @@ export class SystemShutdownEvent extends AppEvent {
  */
 export class HvacModeChangedEvent extends AppEvent {
   constructor(payload: HvacModeChangedPayload) {
+    // console.log('📍 HvacModeChangedEvent.constructor() ENTRY');
     super('hvac.mode_changed', payload);
+    // console.log('📍 HvacModeChangedEvent.constructor() EXIT');
   }
 
   get mode(): string {
-    return (this.payload as HvacModeChangedPayload).mode;
+    // console.log('📍 HvacModeChangedEvent.mode() ENTRY');
+    const result = (this.payload as HvacModeChangedPayload).mode;
+    // console.log('📍 HvacModeChangedEvent.mode() EXIT');
+    return result;
   }
 
   get previousMode(): string {
-    return (this.payload as HvacModeChangedPayload).previousMode;
+    // console.log('📍 HvacModeChangedEvent.previousMode() ENTRY');
+    const result = (this.payload as HvacModeChangedPayload).previousMode;
+    // console.log('📍 HvacModeChangedEvent.previousMode() EXIT');
+    return result;
   }
 }
 
@@ -85,11 +110,17 @@ export class EventBuilder {
     oldState: unknown,
     newState: unknown,
   ): HassStateChangedEvent {
-    return new HassStateChangedEvent({ entityId, oldState, newState });
+    // console.log('📍 EventBuilder.hassStateChanged() ENTRY');
+    const result = new HassStateChangedEvent({ entityId, oldState, newState });
+    // console.log('📍 EventBuilder.hassStateChanged() EXIT');
+    return result;
   }
 
   static systemShutdown(reason: string): SystemShutdownEvent {
-    return new SystemShutdownEvent({ reason });
+    // console.log('📍 EventBuilder.systemShutdown() ENTRY');
+    const result = new SystemShutdownEvent({ reason });
+    // console.log('📍 EventBuilder.systemShutdown() EXIT');
+    return result;
   }
 
   static hvacModeChanged(
@@ -98,11 +129,14 @@ export class EventBuilder {
     targetTemp: number,
     currentTemp: number,
   ): HvacModeChangedEvent {
-    return new HvacModeChangedEvent({
+    // console.log('📍 EventBuilder.hvacModeChanged() ENTRY');
+    const result = new HvacModeChangedEvent({
       mode,
       previousMode,
       targetTemp,
       currentTemp,
     });
+    // console.log('📍 EventBuilder.hvacModeChanged() EXIT');
+    return result;
   }
 }

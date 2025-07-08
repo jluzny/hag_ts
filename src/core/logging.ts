@@ -102,6 +102,7 @@ function formatMessageWithEmojis(message: string): string {
 }
 
 function formatContext(args: unknown[]): string {
+  // console.log('📍 formatContext() ENTRY');
   if (args.length === 0) return '';
 
   const contextStr = args
@@ -116,10 +117,13 @@ function formatContext(args: unknown[]): string {
     .filter(Boolean)
     .join(' ');
 
-  return contextStr ? ` ${dim(green(`{${contextStr}}`))}` : '';
+  const result = contextStr ? ` ${dim(green(`{${contextStr}}`))}` : '';
+  // console.log('📍 formatContext() EXIT');
+  return result;
 }
 
 export function setupLogging(logLevel: LevelName = 'INFO') {
+  // console.log('📍 setupLogging() ENTRY');
   const level = logLevel.toUpperCase() as LevelName;
   setup({
     handlers: {
@@ -175,8 +179,12 @@ export function setupLogging(logLevel: LevelName = 'INFO') {
       },
     },
   });
+  // console.log('📍 setupLogging() EXIT');
 }
 
 export function getAppLogger() {
-  return getLogger('HAG');
+  // console.log('📍 getAppLogger() ENTRY');
+  const result = getLogger('HAG');
+  // console.log('📍 getAppLogger() EXIT');
+  return result;
 }

@@ -31,14 +31,17 @@ export class ActorSystem {
   private eventBus: EventBus;
 
   constructor(eventBus: EventBus, logger?: LoggerService) {
-    this.eventBus = eventBus;
     this.logger = logger || new LoggerService('HAG.actor-system');
+    this.logger.debug('📍 ActorSystem.constructor() ENTRY');
+    this.eventBus = eventBus;
+    this.logger.debug('📍 ActorSystem.constructor() EXIT');
   }
 
   /**
    * Create and start an XState actor
    */
   createActor(name: string, machine: XStateMachine): XStateActor {
+    this.logger.debug('📍 ActorSystem.createActor() ENTRY');
     // deno-lint-ignore no-explicit-any
     const actor = createActor(machine as any) as XStateActor;
     actor.start();
@@ -46,6 +49,7 @@ export class ActorSystem {
     this.actors.set(name, actor);
     this.logger.debug(`🎭 Started actor: ${name}`);
 
+    this.logger.debug('📍 ActorSystem.createActor() EXIT');
     return actor;
   }
 
@@ -53,13 +57,17 @@ export class ActorSystem {
    * Get actor by name
    */
   getActor(name: string): XStateActor | undefined {
-    return this.actors.get(name);
+    this.logger.debug('📍 ActorSystem.getActor() ENTRY');
+    const result = this.actors.get(name);
+    this.logger.debug('📍 ActorSystem.getActor() EXIT');
+    return result;
   }
 
   /**
    * Send message to specific actor
    */
   send(actorName: string, event: XStateEvent): void {
+    this.logger.debug('📍 ActorSystem.send() ENTRY');
     const actor = this.actors.get(actorName);
     if (actor) {
       this.logger.debug(`📨 Sending to ${actorName}:`, event);
@@ -67,6 +75,7 @@ export class ActorSystem {
     } else {
       this.logger.warning(`❌ Actor not found: ${actorName}`);
     }
+    this.logger.debug('📍 ActorSystem.send() EXIT');
   }
 
   /**
@@ -74,6 +83,7 @@ export class ActorSystem {
    * Converts EventBus events to actor messages
    */
   subscribeActorToEvents(actorName: string, eventType: string): () => void {
+    this.logger.debug('📍 ActorSystem.subscribeActorToEvents() ENTRY');
     const actor = this.actors.get(actorName);
     if (!actor) {
       this.logger.warning(
@@ -88,6 +98,7 @@ export class ActorSystem {
       actor.send({ type: messageType, event });
     });
 
+    this.logger.debug('📍 ActorSystem.subscribeActorToEvents() EXIT');
     return typeof unsubscribe === 'function' ? unsubscribe : () => {};
   }
 
@@ -95,47 +106,59 @@ export class ActorSystem {
    * Broadcast event to all actors
    */
   broadcast(event: XStateEvent): void {
+    this.logger.debug('📍 ActorSystem.broadcast() ENTRY');
     this.actors.forEach((actor, name) => {
       this.logger.debug(`📢 Broadcasting to ${name}:`, event);
       actor.send(event);
     });
+    this.logger.debug('📍 ActorSystem.broadcast() EXIT');
   }
 
   /**
    * Get current state of an actor
    */
   getActorState(actorName: string): unknown {
+    this.logger.debug('📍 ActorSystem.getActorState() ENTRY');
     const actor = this.actors.get(actorName);
-    return actor ? actor.getSnapshot() : null;
+    const result = actor ? actor.getSnapshot() : null;
+    this.logger.debug('📍 ActorSystem.getActorState() EXIT');
+    return result;
   }
 
   /**
    * Stop and remove an actor
    */
   stopActor(actorName: string): void {
+    this.logger.debug('📍 ActorSystem.stopActor() ENTRY');
     const actor = this.actors.get(actorName);
     if (actor) {
       actor.stop();
       this.actors.delete(actorName);
       this.logger.debug(`🛑 Stopped actor: ${actorName}`);
     }
+    this.logger.debug('📍 ActorSystem.stopActor() EXIT');
   }
 
   /**
    * Stop all actors
    */
   stopAll(): void {
+    this.logger.debug('📍 ActorSystem.stopAll() ENTRY');
     this.actors.forEach((actor, name) => {
       actor.stop();
       this.logger.debug(`🛑 Stopped actor: ${name}`);
     });
     this.actors.clear();
+    this.logger.debug('📍 ActorSystem.stopAll() EXIT');
   }
 
   /**
    * Get list of active actors
    */
   getActiveActors(): string[] {
-    return Array.from(this.actors.keys());
+    this.logger.debug('📍 ActorSystem.getActiveActors() ENTRY');
+    const result = Array.from(this.actors.keys());
+    this.logger.debug('📍 ActorSystem.getActiveActors() EXIT');
+    return result;
   }
 }

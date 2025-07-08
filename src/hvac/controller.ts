@@ -20,7 +20,9 @@ import { HvacActorFactory, HvacDomainActor } from './hvac-domain-actor.ts';
  */
 class SensorStatesUpdateEvent extends AppEvent {
   constructor(sensorStates: Record<string, string>) {
+    console.log('📍 SensorStatesUpdateEvent.constructor() ENTRY');
     super('hvac.sensor_states_updated', { sensorStates, timestamp: new Date().toISOString() });
+    console.log('📍 SensorStatesUpdateEvent.constructor() EXIT');
   }
 }
 
@@ -29,7 +31,9 @@ class SensorStatesUpdateEvent extends AppEvent {
  */
 class ModeChangeRequestEvent extends AppEvent {
   constructor(mode: string, temperature?: number) {
+    console.log('📍 ModeChangeRequestEvent.constructor() ENTRY');
     super('hvac.mode_change_request', { mode, temperature });
+    console.log('📍 ModeChangeRequestEvent.constructor() EXIT');
   }
 }
 
@@ -38,7 +42,9 @@ class ModeChangeRequestEvent extends AppEvent {
  */
 class EvaluateConditionsEvent extends AppEvent {
   constructor() {
+    console.log('📍 EvaluateConditionsEvent.constructor() ENTRY');
     super('hvac.evaluate_conditions', {});
+    console.log('📍 EvaluateConditionsEvent.constructor() EXIT');
   }
 }
 
@@ -62,20 +68,24 @@ export class HVACController {
     actorBootstrap?: ActorBootstrap,
     eventBus?: EventBus,
   ) {
+    console.log('📍 HVACController.constructor() ENTRY');
     this.hvacOptions = hvacOptions!;
     this.appOptions = appOptions!;
     this.haClient = haClient!;
     this.actorBootstrap = actorBootstrap!;
     this.eventBus = eventBus!;
     this.logger = new LoggerService('HAG.hvac.controller-v2');
+    console.log('📍 HVACController.constructor() EXIT');
   }
 
   /**
    * Start the HVAC controller using actor bootstrap
    */
   async start(): Promise<void> {
+    this.logger.debug('📍 HVACController.start() ENTRY');
     if (this.running) {
       this.logger.warning('🔄 HVAC controller already running');
+      this.logger.debug('📍 HVACController.start() EXIT');
       return;
     }
 
@@ -131,14 +141,17 @@ export class HVACController {
       await this.stop();
       throw error;
     }
+    this.logger.debug('📍 HVACController.start() EXIT');
   }
 
   /**
    * Stop the HVAC controller
    */
   async stop(): Promise<void> {
+    this.logger.debug('📍 HVACController.stop() ENTRY');
     if (!this.running) {
       this.logger.warning('⚠️ HVAC controller not running');
+      this.logger.debug('📍 HVACController.stop() EXIT');
       return;
     }
 
@@ -168,12 +181,14 @@ export class HVACController {
     this.hvacActor = undefined;
 
     this.logger.info('✅ HVAC controller stopped successfully');
+    this.logger.debug('📍 HVACController.stop() EXIT');
   }
 
   /**
    * Get current status
    */
   async getStatus(): Promise<HVACStatus> {
+    this.logger.debug('📍 HVACController.getStatus() ENTRY');
     try {
       const actorStatus = this.hvacActor?.getStatus();
       const haConnected = await this.haClient.connected;
@@ -193,9 +208,11 @@ export class HVACController {
         timestamp: new Date().toISOString(),
       };
 
+      this.logger.debug('📍 HVACController.getStatus() EXIT');
       return status;
     } catch (error) {
       this.logger.error('❌ Failed to get status', error);
+      this.logger.debug('📍 HVACController.getStatus() EXIT');
       throw new StateError('Failed to get HVAC status');
     }
   }
@@ -204,23 +221,29 @@ export class HVACController {
    * Trigger manual evaluation
    */
   async triggerEvaluation(): Promise<OperationResult> {
+    this.logger.debug('📍 HVACController.triggerEvaluation() ENTRY');
     if (!this.running) {
+      this.logger.debug('📍 HVACController.triggerEvaluation() EXIT');
       throw new StateError('HVAC controller is not running');
     }
 
     try {
       await this.triggerSensorEvents();
-      return {
+      const result = {
         success: true,
         timestamp: new Date().toISOString(),
       };
+      this.logger.debug('📍 HVACController.triggerEvaluation() EXIT');
+      return result;
     } catch (error) {
       this.logger.error('❌ Manual evaluation failed', error);
-      return {
+      const result = {
         success: false,
         error: error instanceof Error ? error.message : String(error),
         timestamp: new Date().toISOString(),
       };
+      this.logger.debug('📍 HVACController.triggerEvaluation() EXIT');
+      return result;
     }
   }
 
@@ -231,6 +254,7 @@ export class HVACController {
     action: string,
     options: Record<string, unknown> = {},
   ): OperationResult {
+    this.logger.debug('📍 HVACController.manualOverride() ENTRY');
     try {
       this.logger.info('🎛️ Processing manual override via events', {
         action,
@@ -255,22 +279,26 @@ export class HVACController {
         eventType: event.type,
       });
 
-      return {
+      const result = {
         success: true,
         data: { action, mode, temperature, eventPublished: true },
         timestamp: new Date().toISOString(),
       };
+      this.logger.debug('📍 HVACController.manualOverride() EXIT');
+      return result;
     } catch (error) {
       this.logger.error('❌ Manual override failed', error, {
         action,
         options,
       });
 
-      return {
+      const result = {
         success: false,
         error: error instanceof Error ? error.message : String(error),
         timestamp: new Date().toISOString(),
       };
+      this.logger.debug('📍 HVACController.manualOverride() EXIT');
+      return result;
     }
   }
 
@@ -278,6 +306,7 @@ export class HVACController {
    * Setup event-driven temperature monitoring
    */
   private async setupEventDrivenMonitoring(): Promise<void> {
+    this.logger.debug('📍 HVACController.setupEventDrivenMonitoring() ENTRY');
     // Get all sensors for HVAC system
     const sensors = this.getSensors();
     
@@ -294,14 +323,17 @@ export class HVACController {
     
     // Trigger initial reading for all sensors
     await this.triggerSensorEvents();
+    this.logger.debug('📍 HVACController.setupEventDrivenMonitoring() EXIT');
   }
 
   /**
    * Setup event bus subscription for HVAC domain actor
    */
   private setupEventBusSubscription(): void {
+    this.logger.debug('📍 HVACController.setupEventBusSubscription() ENTRY');
     if (!this.hvacActor) {
       this.logger.error('❌ Cannot setup event subscription: HVAC actor not available');
+      this.logger.debug('📍 HVACController.setupEventBusSubscription() EXIT');
       return;
     }
 
@@ -321,22 +353,27 @@ export class HVACController {
     });
 
     this.logger.info('✅ Event bus subscription setup complete for HVAC domain actor');
+    this.logger.debug('📍 HVACController.setupEventBusSubscription() EXIT');
   }
 
   /**
    * Get all sensors for HVAC system
    */
   private getSensors(): string[] {
-    return [
+    this.logger.debug('📍 HVACController.getSensors() ENTRY');
+    const sensors = [
       this.hvacOptions.tempSensor,
       this.hvacOptions.outdoorSensor,
     ];
+    this.logger.debug('📍 HVACController.getSensors() EXIT');
+    return sensors;
   }
 
   /**
    * Setup event handling for sensors
    */
   private setupSensorsEventHandling(sensors: string[]): void {
+    this.logger.debug('📍 HVACController.setupSensorsEventHandling() ENTRY');
     this.logger.info('📡 Setting up event handlers for sensors', {
       sensors,
       totalSensors: sensors.length,
@@ -361,12 +398,14 @@ export class HVACController {
       sensors,
       totalSensors: sensors.length,
     });
+    this.logger.debug('📍 HVACController.setupSensorsEventHandling() EXIT');
   }
 
   /**
    * Handle sensor state changes
    */
   private async handleSensorChange(entityId: string, newState: string): Promise<void> {
+    this.logger.debug('📍 HVACController.handleSensorChange() ENTRY');
     try {
       this.logger.debug('📊 Processing sensor change', {
         entityId,
@@ -382,12 +421,14 @@ export class HVACController {
         newState,
       });
     }
+    this.logger.debug('📍 HVACController.handleSensorChange() EXIT');
   }
 
   /**
    * Trigger events for all sensors
    */
   private async triggerSensorEvents(): Promise<void> {
+    this.logger.debug('📍 HVACController.triggerSensorEvents() ENTRY');
     try {
       this.logger.debug('📊 Triggering events for all sensors');
 
@@ -418,23 +459,29 @@ export class HVACController {
         error,
       );
     }
+    this.logger.debug('📍 HVACController.triggerSensorEvents() EXIT');
   }
 
   /**
    * Get current HVAC mode from actor
    */
   private getCurrentHVACMode(): HVACMode {
+    this.logger.debug('📍 HVACController.getCurrentHVACMode() ENTRY');
     const actorStatus = this.hvacActor?.getStatus();
     const currentState = actorStatus?.metadata?.hvacMode as string;
 
     switch (currentState) {
       case 'heating':
+        this.logger.debug('📍 HVACController.getCurrentHVACMode() EXIT');
         return HVACMode.HEAT;
       case 'cooling':
+        this.logger.debug('📍 HVACController.getCurrentHVACMode() EXIT');
         return HVACMode.COOL;
       case 'off':
+        this.logger.debug('📍 HVACController.getCurrentHVACMode() EXIT');
         return HVACMode.OFF;
       default:
+        this.logger.debug('📍 HVACController.getCurrentHVACMode() EXIT');
         return HVACMode.OFF;
     }
   }
@@ -443,6 +490,8 @@ export class HVACController {
    * Check if controller is running
    */
   isRunning(): boolean {
+    this.logger.debug('📍 HVACController.isRunning() ENTRY');
+    this.logger.debug('📍 HVACController.isRunning() EXIT');
     return this.running;
   }
 

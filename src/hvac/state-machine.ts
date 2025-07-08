@@ -48,9 +48,13 @@ export class HeatingStrategy {
   private lastDefrost?: Date;
   private logger = new LoggerService('HAG.hvac.heating-strategy');
 
-  constructor(private hvacOptions: HvacOptions) {}
+  constructor(private hvacOptions: HvacOptions) {
+    this.logger.debug('📍 HeatingStrategy.constructor() ENTRY');
+    this.logger.debug('📍 HeatingStrategy.constructor() EXIT');
+  }
 
   shouldHeat(data: StateChangeData): boolean {
+    this.logger.debug('📍 HeatingStrategy.shouldHeat() ENTRY');
     const evaluationStart = Date.now();
     const { heating } = this.hvacOptions;
     const thresholds = heating.temperatureThresholds;
@@ -123,6 +127,7 @@ export class HeatingStrategy {
       },
     );
 
+    this.logger.debug('📍 HeatingStrategy.shouldHeat() EXIT');
     return shouldHeat;
   }
 
@@ -214,9 +219,13 @@ export class HeatingStrategy {
 export class CoolingStrategy {
   private logger = new LoggerService('HAG.hvac.cooling-strategy');
 
-  constructor(private hvacOptions: HvacOptions) {}
+  constructor(private hvacOptions: HvacOptions) {
+    this.logger.debug('📍 CoolingStrategy.constructor() ENTRY');
+    this.logger.debug('📍 CoolingStrategy.constructor() EXIT');
+  }
 
   shouldCool(data: StateChangeData): boolean {
+    this.logger.debug('📍 CoolingStrategy.shouldCool() ENTRY');
     const evaluationStart = Date.now();
     const { cooling } = this.hvacOptions;
     const thresholds = cooling.temperatureThresholds;
@@ -739,13 +748,16 @@ export class HVACStateMachine {
 
   constructor(hvacOptions?: HvacOptions, haClient?: HomeAssistantClient) {
     this.logger = new LoggerService('HAG.hvac.state-machine');
+    this.logger.debug('📍 HVACStateMachine.constructor() ENTRY');
     this.machine = createHVACMachine(hvacOptions!, this.logger, haClient);
+    this.logger.debug('📍 HVACStateMachine.constructor() EXIT');
   }
 
   /**
    * Start the state machine
    */
   start(): void {
+    this.logger.debug('📍 HVACStateMachine.start() ENTRY');
     this.logger.info('🚀 Starting HVAC state machine', {
       machineId: this.machine.id,
       initialState: 'idle', // XState v5 doesn't expose initial directly

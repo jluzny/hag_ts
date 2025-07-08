@@ -33,24 +33,29 @@ export class EventBus extends EventEmitter {
     super();
     this.setMaxListeners(100);
     this.logger = logger || new LoggerService('HAG.event-bus');
+    this.logger.debug('📍 EventBus.constructor() ENTRY');
+    this.logger.debug('📍 EventBus.constructor() EXIT');
   }
 
   /**
    * Publish any event (new generic method)
    */
   publishEvent<T extends BaseEvent>(event: T): void {
+    this.logger.debug('📍 EventBus.publishEvent() ENTRY');
     this.logger.debug(`📤 ${event.type}`, {
       listeners: this.listenerCount(event.type),
       timestamp: event.timestamp,
     });
 
     this.emit(event.type, event);
+    this.logger.debug('📍 EventBus.publishEvent() EXIT');
   }
 
   /**
    * Publish a Home Assistant event (legacy compatibility)
    */
   publish(event: HassEventImpl): void {
+    this.logger.debug('📍 EventBus.publish() ENTRY');
     this.logger.debug('📤 Publishing event', {
       type: event.eventType,
       origin: event.origin,
@@ -58,6 +63,7 @@ export class EventBus extends EventEmitter {
     });
 
     this.emit(event.eventType, event);
+    this.logger.debug('📍 EventBus.publish() EXIT');
   }
 
   /**
@@ -67,6 +73,7 @@ export class EventBus extends EventEmitter {
     eventType: string,
     handler: (event: T) => Promise<void> | void,
   ): () => void {
+    this.logger.debug('📍 EventBus.subscribeToEvent() ENTRY');
     const wrappedHandler = async (event: T) => {
       try {
         await handler(event);
@@ -82,6 +89,7 @@ export class EventBus extends EventEmitter {
     });
 
     // Return unsubscribe function
+    this.logger.debug('📍 EventBus.subscribeToEvent() EXIT');
     return () => this.off(eventType, wrappedHandler);
   }
 
@@ -92,6 +100,7 @@ export class EventBus extends EventEmitter {
     eventType: string,
     handler: (event: HassEventImpl) => Promise<void> | void,
   ): void {
+    this.logger.debug('📍 EventBus.subscribe() ENTRY');
     const wrappedHandler = async (event: HassEventImpl) => {
       try {
         await handler(event);
@@ -109,18 +118,21 @@ export class EventBus extends EventEmitter {
       eventType,
       listeners: this.listenerCount(eventType),
     });
+    this.logger.debug('📍 EventBus.subscribe() EXIT');
   }
 
   /**
    * Clear all subscriptions
    */
   clear(): void {
+    this.logger.debug('📍 EventBus.clear() ENTRY');
     const count = this.eventNames().reduce(
       (sum, name) => sum + this.listenerCount(name as string),
       0,
     );
     this.removeAllListeners();
     this.logger.info('🧹 Cleared all subscriptions', { count });
+    this.logger.debug('📍 EventBus.clear() EXIT');
   }
 }
 

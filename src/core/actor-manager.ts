@@ -72,18 +72,21 @@ export class ActorManager {
   private isStarted = false;
 
   constructor(container: Container, logger?: LoggerService) {
-    this.container = container;
     this.logger = logger || new LoggerService('HAG.actor-manager');
+    this.logger.debug('📍 ActorManager.constructor() ENTRY');
+    this.container = container;
     this.eventBus = container.get(Symbol.for('EventBus')) as EventBus;
     this.moduleRegistry = new ModuleRegistry(container, 
       new LoggerService('HAG.module-registry')
     );
+    this.logger.debug('📍 ActorManager.constructor() EXIT');
   }
 
   /**
    * Register a domain module
    */
   async registerModule(module: Module, config: unknown): Promise<void> {
+    this.logger.debug('📍 ActorManager.registerModule() ENTRY');
     try {
       await this.moduleRegistry.registerModule(module, config);
       
@@ -115,6 +118,7 @@ export class ActorManager {
       this.logger.error(`❌ Failed to register module: ${module.domain}`, error);
       throw error;
     }
+    this.logger.debug('📍 ActorManager.registerModule() EXIT');
   }
 
   /**
@@ -124,6 +128,7 @@ export class ActorManager {
     factory: ActorFactory<T>,
     config: unknown,
   ): void {
+    this.logger.debug('📍 ActorManager.registerActorFactory() ENTRY');
     const domain = factory.domain;
 
     // Validate configuration if factory provides validation
@@ -145,12 +150,14 @@ export class ActorManager {
 
     this.registrations.set(domain, registration);
     this.logger.info(`🏭 Registered actor factory for domain: ${domain}`);
+    this.logger.debug('📍 ActorManager.registerActorFactory() EXIT');
   }
 
   /**
    * Create and register a state machine actor
    */
   createStateMachineActor(name: string, machine: StateMachine, domain = 'state-machine'): StateMachineActor {
+    this.logger.debug('📍 ActorManager.createStateMachineActor() ENTRY');
     // deno-lint-ignore no-explicit-any
     const actor = createActor(machine as any) as StateMachineActor;
     
@@ -169,6 +176,7 @@ export class ActorManager {
     this.registrations.set(name, registration);
     this.logger.info(`🎭 Created state machine actor: ${name}`);
     
+    this.logger.debug('📍 ActorManager.createStateMachineActor() EXIT');
     return actor;
   }
 
@@ -176,6 +184,7 @@ export class ActorManager {
    * Start all registered actors
    */
   async startAll(): Promise<void> {
+    this.logger.debug('📍 ActorManager.startAll() ENTRY');
     if (this.isStarted) {
       this.logger.warning('⚠️ Actor manager already started');
       return;
@@ -201,12 +210,14 @@ export class ActorManager {
     this.logger.info('✅ Actor manager started', {
       activeActors: this.getActiveActors().length,
     });
+    this.logger.debug('📍 ActorManager.startAll() EXIT');
   }
 
   /**
    * Stop all actors
    */
   async stopAll(): Promise<void> {
+    this.logger.debug('📍 ActorManager.stopAll() ENTRY');
     if (!this.isStarted) {
       this.logger.warning('⚠️ Actor manager not started');
       return;
@@ -233,6 +244,7 @@ export class ActorManager {
     
     this.isStarted = false;
     this.logger.info('✅ Actor manager stopped');
+    this.logger.debug('📍 ActorManager.stopAll() EXIT');
   }
 
   /**
@@ -242,6 +254,7 @@ export class ActorManager {
     name: string,
     registration: ActorRegistration,
   ): Promise<void> {
+    this.logger.debug('📍 ActorManager.startDomainActor() ENTRY');
     try {
       this.updateActorStatus(name, 'starting');
       this.logger.info(`🎭 Starting domain actor: ${name}`);
@@ -273,6 +286,7 @@ export class ActorManager {
       this.logger.error(`❌ Failed to start domain actor: ${name}`, error);
       throw error;
     }
+    this.logger.debug('📍 ActorManager.startDomainActor() EXIT');
   }
 
   /**
@@ -282,6 +296,7 @@ export class ActorManager {
     name: string,
     registration: StateMachineActorRegistration,
   ): Promise<void> {
+    this.logger.debug('📍 ActorManager.startStateMachineActor() ENTRY');
     return new Promise((resolve, reject) => {
       try {
         this.updateActorStatus(name, 'starting');
@@ -294,6 +309,7 @@ export class ActorManager {
         });
 
         this.logger.info(`✅ State machine actor started: ${name}`);
+        this.logger.debug('📍 ActorManager.startStateMachineActor() EXIT');
         resolve();
       } catch (error) {
         this.updateActorStatus(name, 'error', {
@@ -312,6 +328,7 @@ export class ActorManager {
     name: string,
     registration: ActorRegistration,
   ): Promise<void> {
+    this.logger.debug('📍 ActorManager.stopDomainActor() ENTRY');
     if (!registration.instance) return;
 
     try {
@@ -330,6 +347,7 @@ export class ActorManager {
       this.logger.error(`❌ Failed to stop domain actor: ${name}`, error);
       throw error;
     }
+    this.logger.debug('📍 ActorManager.stopDomainActor() EXIT');
   }
 
   /**
@@ -339,6 +357,7 @@ export class ActorManager {
     name: string,
     registration: StateMachineActorRegistration,
   ): Promise<void> {
+    this.logger.debug('📍 ActorManager.stopStateMachineActor() ENTRY');
     return new Promise((resolve, reject) => {
       try {
         this.updateActorStatus(name, 'stopping');
@@ -348,6 +367,7 @@ export class ActorManager {
 
         this.updateActorStatus(name, 'stopped');
         this.logger.info(`✅ State machine actor stopped: ${name}`);
+        this.logger.debug('📍 ActorManager.stopStateMachineActor() EXIT');
         resolve();
       } catch (error) {
         this.updateActorStatus(name, 'error', {
@@ -363,6 +383,7 @@ export class ActorManager {
    * Subscribe domain actor to events
    */
   private subscribeActorToEvents(actor: DomainActor): void {
+    this.logger.debug('📍 ActorManager.subscribeActorToEvents() ENTRY');
     if (!actor.handleEvent) return;
     
     const eventTypes = [
@@ -389,6 +410,7 @@ export class ActorManager {
       domain: actor.domain,
       subscribedEvents: eventTypes,
     });
+    this.logger.debug('📍 ActorManager.subscribeActorToEvents() EXIT');
   }
 
   /**
@@ -399,6 +421,7 @@ export class ActorManager {
     state: ActorStatus['state'],
     metadata?: Record<string, unknown>,
   ): void {
+    this.logger.debug('📍 ActorManager.updateActorStatus() ENTRY');
     const registration = this.registrations.get(name);
     if (!registration) return;
 
@@ -417,12 +440,14 @@ export class ActorManager {
         metadata: metadata ? { ...registration.status.metadata, ...metadata } : registration.status.metadata,
       };
     }
+    this.logger.debug('📍 ActorManager.updateActorStatus() EXIT');
   }
 
   /**
    * Send message to state machine actor
    */
   sendToStateMachineActor(actorName: string, event: StateMachineEvent): void {
+    this.logger.debug('📍 ActorManager.sendToStateMachineActor() ENTRY');
     const registration = this.registrations.get(actorName);
     if (registration?.type === 'state-machine') {
       this.logger.debug(`📨 Sending to state machine actor ${actorName}:`, event);
@@ -430,13 +455,15 @@ export class ActorManager {
     } else {
       this.logger.warning(`❌ State machine actor not found: ${actorName}`);
     }
+    this.logger.debug('📍 ActorManager.sendToStateMachineActor() EXIT');
   }
 
   /**
    * Get all actor status
    */
   getAllActorStatus(): ActorStatus[] {
-    return Array.from(this.registrations.values()).map(reg => {
+    this.logger.debug('📍 ActorManager.getAllActorStatus() ENTRY');
+    const result = Array.from(this.registrations.values()).map(reg => {
       if (reg.type === 'domain') {
         return {
           ...reg.status,
@@ -446,26 +473,33 @@ export class ActorManager {
         return reg.status;
       }
     });
+    this.logger.debug('📍 ActorManager.getAllActorStatus() EXIT');
+    return result;
   }
 
   /**
    * Get actor by name
    */
   getActor(name: string): DomainActor | StateMachineActor | undefined {
+    this.logger.debug('📍 ActorManager.getActor() ENTRY');
     const registration = this.registrations.get(name);
     if (!registration) return undefined;
 
+    let result: DomainActor | StateMachineActor | undefined;
     if (registration.type === 'domain') {
-      return registration.instance;
+      result = registration.instance;
     } else {
-      return registration.actor;
+      result = registration.actor;
     }
+    this.logger.debug('📍 ActorManager.getActor() EXIT');
+    return result;
   }
 
   /**
    * Get active actors
    */
   getActiveActors(): Array<DomainActor | StateMachineActor> {
+    this.logger.debug('📍 ActorManager.getActiveActors() ENTRY');
     const actors: Array<DomainActor | StateMachineActor> = [];
     
     for (const registration of this.registrations.values()) {
@@ -476,6 +510,7 @@ export class ActorManager {
       }
     }
     
+    this.logger.debug('📍 ActorManager.getActiveActors() EXIT');
     return actors;
   }
 
@@ -483,20 +518,29 @@ export class ActorManager {
    * Get module registry
    */
   getModuleRegistry(): ModuleRegistry {
-    return this.moduleRegistry;
+    this.logger.debug('📍 ActorManager.getModuleRegistry() ENTRY');
+    const result = this.moduleRegistry;
+    this.logger.debug('📍 ActorManager.getModuleRegistry() EXIT');
+    return result;
   }
 
   /**
    * Check if manager is running
    */
   isRunning(): boolean {
-    return this.isStarted;
+    this.logger.debug('📍 ActorManager.isRunning() ENTRY');
+    const result = this.isStarted;
+    this.logger.debug('📍 ActorManager.isRunning() EXIT');
+    return result;
   }
 
   /**
    * Get registered actor names
    */
   getRegisteredActors(): string[] {
-    return Array.from(this.registrations.keys());
+    this.logger.debug('📍 ActorManager.getRegisteredActors() ENTRY');
+    const result = Array.from(this.registrations.keys());
+    this.logger.debug('📍 ActorManager.getRegisteredActors() EXIT');
+    return result;
   }
 }
