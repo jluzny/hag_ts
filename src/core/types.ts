@@ -29,7 +29,6 @@ export const TYPES = {
 
   // Event System
   EventBus: Symbol.for('EventBus'),
-  ActorManager: Symbol.for('ActorManager'),
   ModuleRegistry: Symbol.for('ModuleRegistry'),
 
   // Note: Experimental features are in experimental/ folder and have their own TYPES

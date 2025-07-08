@@ -18,7 +18,6 @@ import { LoggerService } from './logger.ts';
 import { HVACStateMachine } from '../hvac/state-machine.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
 import { EventBus } from './event-system.ts';
-import { ActorManager } from './actor-manager.ts';
 import { HvacModule } from '../hvac/hvac-module.ts';
 import { ModuleRegistry } from './module-registry.ts';
 
@@ -85,50 +84,6 @@ export class ApplicationContainer {
     tempLogger.debug('📍 ApplicationContainer.initialize() EXIT');
   }
 
-  /**
-   * Initialize container with settings object (for testing)
-   */
-  async initializeWithSettings(
-    settings: Settings,
-    skipRegistrations: string[] = [],
-  ): Promise<void> {
-    const tempLogger = new LoggerService('HAG.container');
-    tempLogger.debug('📍 ApplicationContainer.initializeWithSettings() ENTRY');
-    try {
-      // Use provided settings
-      this.settings = settings;
-
-      // Register configuration
-      this.registerConfiguration();
-
-      // Register core services
-      if (!skipRegistrations.includes('core')) {
-        this.registerCoreServices();
-      }
-
-      // Register Home Assistant services
-      if (!skipRegistrations.includes('homeassistant')) {
-        this.registerHomeAssistantServices();
-      }
-
-      // Register HVAC services
-      if (!skipRegistrations.includes('hvac')) {
-        this.registerHVACServices();
-      }
-
-      // Register modules
-      await this.registerModules(settings);
-
-      // Register tools (if AI is enabled)
-      if (this.settings.appOptions.useAi) {
-        // TODO : Uncomment when tools are implemented
-        // this.registerTools();
-      }
-    } catch (error) {
-      throw error;
-    }
-    tempLogger.debug('📍 ApplicationContainer.initializeWithSettings() EXIT');
-  }
 
   /**
    * Register configuration objects
@@ -198,14 +153,6 @@ export class ApplicationContainer {
       useValue: this.moduleRegistry,
     });
 
-    // Actor Manager (new unified system)
-    this.container.bind({
-      provide: TYPES.ActorManager,
-      useFactory: () => {
-        const logger = new LoggerService('HAG.actor-manager');
-        return new ActorManager(this.container, logger);
-      },
-    });
 
     tempLogger.debug('📍 ApplicationContainer.registerEventSystem() EXIT');
   }
@@ -325,49 +272,8 @@ export class ApplicationContainer {
     return result;
   }
 
-  /**
-   * Check if service is bound
-   */
-  isBound(serviceIdentifier: symbol): boolean {
-    if (this.logger) {
-      this.logger.debug('📍 ApplicationContainer.isBound() ENTRY');
-    }
-    const result = this.container.has(serviceIdentifier);
-    if (this.logger) {
-      this.logger.debug('📍 ApplicationContainer.isBound() EXIT');
-    }
-    return result;
-  }
 
-  /**
-   * Get container instance for advanced usage
-   */
-  getContainer(): Container {
-    if (this.logger) {
-      this.logger.debug('📍 ApplicationContainer.getContainer() ENTRY');
-    }
-    const result = this.container;
-    if (this.logger) {
-      this.logger.debug('📍 ApplicationContainer.getContainer() EXIT');
-    }
-    return result;
-  }
 
-  /**
-   * Get application settings
-   */
-  getSettings(): Settings {
-    if (this.logger) {
-      this.logger.debug('📍 ApplicationContainer.getSettings() ENTRY');
-    }
-    if (!this.settings) {
-      throw new Error('Settings not loaded');
-    }
-    if (this.logger) {
-      this.logger.debug('📍 ApplicationContainer.getSettings() EXIT');
-    }
-    return this.settings;
-  }
 
   /**
    * Register domain modules

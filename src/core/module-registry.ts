@@ -105,7 +105,6 @@ export interface ActorStatus {
 export class ModuleRegistry {
   private modules = new Map<string, Module>();
   private actorFactories = new Map<string, ActorFactory<DomainActor>>();
-  private commonConfig?: unknown;
   private logger: LoggerService;
 
   constructor(container: Container, logger: LoggerService) {
@@ -134,58 +133,11 @@ export class ModuleRegistry {
     await module.initialize(config);
     this.modules.set(module.domain, module);
 
-    // Register actor factory if provided by the module
-    const actorFactory = module.createActorFactory?.();
-    if (actorFactory) {
-      this.actorFactories.set(module.domain, actorFactory);
-      this.logger.info(`🏭 Registered actor factory for module: ${module.domain}`);
-    }
 
     this.logger.info(`✅ Module registered: ${module.name} (${module.version})`);
     this.logger.debug('📍 ModuleRegistry.registerModule() EXIT');
   }
 
-  /**
-   * Set common configuration for all modules.
-   */
-  setCommonConfig(config: unknown): void {
-    this.logger.debug('📍 ModuleRegistry.setCommonConfig() ENTRY');
-    this.commonConfig = config;
-    this.logger.debug('📍 ModuleRegistry.setCommonConfig() EXIT');
-  }
-
-  /**
-   * Get common configuration.
-   */
-  getCommonConfig<T>(): T | undefined {
-    this.logger.debug('📍 ModuleRegistry.getCommonConfig() ENTRY');
-    const result = this.commonConfig as T;
-    this.logger.debug('📍 ModuleRegistry.getCommonConfig() EXIT');
-    return result;
-  }
-
-  /**
-   * Get configuration for a specific module.
-   */
-  getModuleConfig<T>(domain: string): T | undefined {
-    this.logger.debug('📍 ModuleRegistry.getModuleConfig() ENTRY');
-    const module = this.modules.get(domain);
-    const result = module ? (module as BaseModule).config as T : undefined;
-    this.logger.debug('📍 ModuleRegistry.getModuleConfig() EXIT');
-    return result;
-  }
-
-  /**
-   * Get merged configuration (module-specific + common).
-   */
-  getMergedConfig<T>(domain: string): T | undefined {
-    this.logger.debug('📍 ModuleRegistry.getMergedConfig() ENTRY');
-    const moduleConfig = this.getModuleConfig<T>(domain);
-    const commonConfig = this.getCommonConfig<T>();
-    const result = { ...commonConfig, ...moduleConfig } as T;
-    this.logger.debug('📍 ModuleRegistry.getMergedConfig() EXIT');
-    return result;
-  }
 
   /**
    * Get a registered module by its domain.
@@ -197,71 +149,7 @@ export class ModuleRegistry {
     return result;
   }
 
-  /**
-   * Get an actor factory for a given domain.
-   */
-  getActorFactory(domain: string): ActorFactory<DomainActor> | undefined {
-    this.logger.debug('📍 ModuleRegistry.getActorFactory() ENTRY');
-    const result = this.actorFactories.get(domain);
-    this.logger.debug('📍 ModuleRegistry.getActorFactory() EXIT');
-    return result;
-  }
 
-  /**
-   * Get all active modules.
-   */
-  getActiveModules(): Module[] {
-    this.logger.debug('📍 ModuleRegistry.getActiveModules() ENTRY');
-    const result = Array.from(this.modules.values());
-    this.logger.debug('📍 ModuleRegistry.getActiveModules() EXIT');
-    return result;
-  }
-
-  /**
-   * Get status of a specific module.
-   */
-  getModuleStatus(domain: string): ActorStatus | undefined {
-    this.logger.debug('📍 ModuleRegistry.getModuleStatus() ENTRY');
-    const module = this.modules.get(domain);
-    // Assuming module has a getStatus method or similar
-    const result = module ? { name: module.name, domain: module.domain, state: 'running', lastUpdate: new Date() } : undefined;
-    this.logger.debug('📍 ModuleRegistry.getModuleStatus() EXIT');
-    return result;
-  }
-
-  /**
-   * Check if a module is registered.
-   */
-  hasModule(domain: string): boolean {
-    this.logger.debug('📍 ModuleRegistry.hasModule() ENTRY');
-    const result = this.modules.has(domain);
-    this.logger.debug('📍 ModuleRegistry.hasModule() EXIT');
-    return result;
-  }
-
-  /**
-   * Get list of registered module domains.
-   */
-  getRegisteredModules(): string[] {
-    this.logger.debug('📍 ModuleRegistry.getRegisteredModules() ENTRY');
-    const result = Array.from(this.modules.keys());
-    this.logger.debug('📍 ModuleRegistry.getRegisteredModules() EXIT');
-    return result;
-  }
-
-  /**
-   * Initialize all registered modules.
-   */
-  async initializeModule(domain: string, config: unknown): Promise<void> {
-    this.logger.debug('📍 ModuleRegistry.initializeModule() ENTRY');
-    const module = this.modules.get(domain);
-    if (module) {
-      await module.initialize(config);
-    } else {
-      this.logger.warning(`⚠️ Module ${domain} not found for initialization.`);
-    }
-    this.logger.debug('📍 ModuleRegistry.initializeModule() EXIT');
-  }
 
   /**
    * Dispose all registered modules.
