@@ -57,8 +57,8 @@ hvacOptions:
     temperature: 24.0
     presetMode: "windFree"
     temperatureThresholds:
-      indoorMin: 15.
-      indoorMax: 22.0
+      indoorMin: 24.
+      indoorMax: 25.0
       outdoorMin: 10.0
       outdoorMax: 45.0
 

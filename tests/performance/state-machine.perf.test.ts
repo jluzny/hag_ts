@@ -103,7 +103,7 @@ async function testXStatePerformance(): Promise<void> {
   results.push(
     await benchmarkOperation(
       'Temperature Update',
-      async () => {
+      () => {
         stateMachine.send({
           type: 'UPDATE_TEMPERATURES',
           indoor: 20 + Math.random() * 10,

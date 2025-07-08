@@ -32,12 +32,13 @@ export abstract class BaseModule implements Module {
   protected logger?: LoggerService;
   protected config?: unknown;
 
-  async initialize(config: unknown): Promise<void> {
+  initialize(config: unknown): Promise<void> {
     this.config = config;
     this.logger = new LoggerService(`HAG.module.${this.domain}`);
     this.logger.debug(`📍 Module ${this.domain}.initialize() ENTRY`);
     // Default initialization logic
     this.logger.debug(`📍 Module ${this.domain}.initialize() EXIT`);
+    return Promise.resolve();
   }
 
 
@@ -50,10 +51,11 @@ export abstract class BaseModule implements Module {
     return !!config; // Default validation
   }
 
-  async dispose(): Promise<void> {
+  dispose(): Promise<void> {
     this.logger?.debug(`📍 Module ${this.domain}.dispose() ENTRY`);
     // Default dispose logic
     this.logger?.debug(`📍 Module ${this.domain}.dispose() EXIT`);
+    return Promise.resolve();
   }
 }
 

@@ -33,7 +33,8 @@ export type HVACEvent =
   | { type: 'DEFROST_COMPLETE' }
   | { type: 'UPDATE_CONDITIONS'; data: Partial<HVACContext> }
   | { type: 'UPDATE_TEMPERATURES'; indoor: number; outdoor: number }
-  | { type: 'MANUAL_OVERRIDE'; mode: HVACMode; temperature?: number };
+  | { type: 'MANUAL_OVERRIDE'; mode: HVACMode; temperature?: number }
+  | { type: 'MODE_CHANGE'; mode: HVACMode; temperature?: number };
 
 /**
  * State machine type definitions

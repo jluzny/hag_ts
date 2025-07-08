@@ -26,7 +26,6 @@ import { LoggerService } from '../../../src/core/logger.ts';
 import { LogLevel, SystemMode } from '../../../src/types/common.ts';
 
 // Mock configuration for testing - commented out as unused
-// const _mockSettings: Settings = {
 //   appOptions: {
 //     logLevel: LogLevel.ERROR, // Use ERROR to minimize test output
 //     useAi: false,

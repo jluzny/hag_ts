@@ -111,7 +111,6 @@ Deno.test('HVAC State Machine', async (t) => {
     }); // Below heating threshold
     stateMachine.evaluateConditions();
 
-    const _currentState = stateMachine.getCurrentState();
     // The state machine may stay in 'idle' or 'off' state depending on active hours and other conditions
     // Let's check if we're at least processing the temperature update correctly
     const status = stateMachine.getStatus();
@@ -132,7 +131,6 @@ Deno.test('HVAC State Machine', async (t) => {
     }); // Above cooling threshold
     stateMachine.evaluateConditions();
 
-    const _currentState = stateMachine.getCurrentState();
     // The state machine may stay in 'idle' or 'off' state depending on active hours and other conditions
     // Let's verify the temperature update works correctly
     const status = stateMachine.getStatus();
@@ -323,8 +321,8 @@ Deno.test('HVAC State Machine', async (t) => {
     });
       stateMachine.evaluateConditions();
 
-      const _currentState = stateMachine.getCurrentState();
-      assertExists(_currentState);
+        const currentState = stateMachine.getCurrentState();
+        assertExists(currentState);
       // State should be consistent with temperature
     }
     stateMachine.stop();

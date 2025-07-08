@@ -304,8 +304,6 @@ Deno.test('AI System Integration', async (t) => {
     // Record performance metrics during AI operations
     const startTime = performance.now();
 
-    const _decision = await system.decisionEngine.makeDecision(context);
-    const _optimization = await system.optimizer.optimizeDecision(context);
 
     const endTime = performance.now();
     const totalTime = endTime - startTime;

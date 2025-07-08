@@ -171,10 +171,10 @@ export class HVACController {
   /**
    * Get current status
    */
-  async getStatus(): Promise<HVACStatus> {
+  getStatus(): HVACStatus {
     this.logger.debug('📍 HVACController.getStatus() ENTRY');
     try {
-      const haConnected = this.haClient.isConnected();
+      const haConnected = this.haClient.connected;
       const currentState = this.stateMachine.getCurrentState();
       const hvacMode = this.getCurrentHVACMode();
 
@@ -320,15 +320,15 @@ export class HVACController {
     this.logger.info('📡 Setting up event bus subscription for HVAC state machine');
 
     // Subscribe to HVAC-related events
-    this.eventBus.subscribeToEvent('hvac.sensor_states_updated', async (event) => {
+    this.eventBus.subscribeToEvent('hvac.sensor_states_updated', (event) => {
       this.handleSensorStatesUpdate(event);
     });
 
-    this.eventBus.subscribeToEvent('hvac.evaluate_conditions', async (event) => {
+    this.eventBus.subscribeToEvent('hvac.evaluate_conditions', (_event) => {
       this.handleEvaluateConditions();
     });
 
-    this.eventBus.subscribeToEvent('hvac.mode_change_request', async (event) => {
+    this.eventBus.subscribeToEvent('hvac.mode_change_request', (event) => {
       this.handleModeChangeRequest(event);
     });
 
@@ -466,7 +466,7 @@ export class HVACController {
           return HVACMode.OFF;
       }
     } catch (error) {
-      this.logger.warning('⚠️ Error getting current HVAC mode', error);
+      this.logger.warning('⚠️ Error getting current HVAC mode', error instanceof Error ? { error: error.message } : { error: String(error) });
       this.logger.debug('📍 HVACController.getCurrentHVACMode() EXIT');
       return HVACMode.OFF;
     }

@@ -13,7 +13,11 @@ import { HVACMode, LogLevel, SystemMode } from '../../../src/types/common.ts';
 import { LoggerService } from '../../../src/core/logger.ts';
 
 // Force disable AI tests for fast testing by removing API key
-Deno.env.delete('OPENAI_API_KEY');
+try {
+  Deno.env.delete('OPENAI_API_KEY');
+} catch {
+  // Ignore if env access not available
+}
 
 // Mock type interfaces
 interface MockHVACStateMachine {

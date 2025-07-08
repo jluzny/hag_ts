@@ -62,7 +62,7 @@ export class ApplicationContainer {
       this.logger = this.container.get<LoggerService>(TYPES.Logger);
 
       // Register Home Assistant services
-      this.registerHomeAssistantServices();
+      this.registerHomeAssistantServices([]);
 
       // Register HVAC services
       this.registerHVACServices();
@@ -160,17 +160,21 @@ export class ApplicationContainer {
   /**
    * Register Home Assistant services
    */
-  private registerHomeAssistantServices(): void {
+  private registerHomeAssistantServices(excludeServices: string[] = []): void {
     const tempLogger = new LoggerService('HAG.container');
     tempLogger.debug('📍 ApplicationContainer.registerHomeAssistantServices() ENTRY');
-    this.container.bind({
-      provide: TYPES.HomeAssistantClient,
-      useFactory: () => {
-        const config = this.container.get<HassOptions>(TYPES.HassOptions);
-        const logger = new LoggerService('HAG.home-assistant.client');
-        return new HomeAssistantClient(config, logger);
-      },
-    });
+    
+    if (!excludeServices.includes('homeassistant')) {
+      this.container.bind({
+        provide: TYPES.HomeAssistantClient,
+        useFactory: () => {
+          const config = this.container.get<HassOptions>(TYPES.HassOptions);
+          const logger = new LoggerService('HAG.home-assistant.client');
+          return new HomeAssistantClient(config, logger);
+        },
+      });
+    }
+    
     tempLogger.debug('📍 ApplicationContainer.registerHomeAssistantServices() EXIT');
   }
 
@@ -266,6 +270,49 @@ export class ApplicationContainer {
     return result;
   }
 
+  /**
+   * Check if service is bound to container
+   */
+  isBound(serviceIdentifier: symbol): boolean {
+    try {
+      this.container.get(serviceIdentifier);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Get settings from container
+   */
+  getSettings(): Settings {
+    if (!this.settings) {
+      throw new Error('Settings not loaded');
+    }
+    return this.settings;
+  }
+
+  /**
+   * Initialize container with settings and optional excluded services
+   */
+  async initializeWithSettings(settings: Settings, excludeServices: string[] = []): Promise<void> {
+    this.settings = settings;
+    this.registerConfiguration();
+    this.registerCoreServices();
+    this.logger = this.container.get<LoggerService>(TYPES.Logger);
+    this.registerHomeAssistantServices(excludeServices);
+    this.registerHVACServices();
+    await this.registerModules(settings);
+    await this.registerExperimentalFeatures();
+  }
+
+  /**
+   * Get underlying container for advanced operations
+   */
+  getContainer(): Container {
+    return this.container;
+  }
+
 
 
 
@@ -295,7 +342,7 @@ export class ApplicationContainer {
   /**
    * Note: Experimental features are handled separately in the experimental/ folder
    */
-  private async registerExperimentalFeatures(): Promise<void> {
+  private registerExperimentalFeatures(): Promise<void> {
     if (this.logger) {
       this.logger.debug('📍 ApplicationContainer.registerExperimentalFeatures() ENTRY');
     }
@@ -303,6 +350,7 @@ export class ApplicationContainer {
     if (this.logger) {
       this.logger.debug('📍 ApplicationContainer.registerExperimentalFeatures() EXIT');
     }
+    return Promise.resolve();
   }
 
   /**

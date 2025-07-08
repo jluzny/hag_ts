@@ -59,11 +59,12 @@ export class HvacModule extends BaseModule {
   /**
    * Initialize HVAC module (simplified since dependencies are injected)
    */
-  override async initialize(config: unknown): Promise<void> {
-    this.logger.debug('📍 HvacModule.initialize() ENTRY');
+  override initialize(config: unknown): Promise<void> {
+    this.logger?.debug('📍 HvacModule.initialize() ENTRY');
     this.config = config;
-    this.logger.info('✅ HVAC module initialized');
-    this.logger.debug('📍 HvacModule.initialize() EXIT');
+    this.logger?.info('✅ HVAC module initialized');
+    this.logger?.debug('📍 HvacModule.initialize() EXIT');
+    return Promise.resolve();
   }
 
   /**

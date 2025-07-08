@@ -19,7 +19,6 @@ import { type LevelName, type Logger } from '@std/log';
 import { getAppLogger, setupLogging } from './core/logging.ts';
 import { type ApplicationOptions } from './config/config.ts';
 import { LogLevel } from './types/common.ts';
-import { LoggerService } from './core/logger.ts';
 
 let logger: Logger;
 
@@ -187,7 +186,7 @@ async function getStatus(configPath?: string): Promise<void> {
 
     // Start controller briefly to get status
     await controller.start();
-    const status = await controller.getStatus();
+    const status = controller.getStatus();
     await controller.stop();
 
     logger.info('📊 HAG System Status');
