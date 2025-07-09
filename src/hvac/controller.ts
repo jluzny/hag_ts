@@ -14,14 +14,6 @@ import { HVACOperationError, StateError } from '../core/exceptions.ts';
 import { AppEvent, EventBus } from '../core/event-system.ts';
 import { HVACStateMachine } from './state-machine.ts';
 
-/**
- * Sensor states update event
- */
-class SensorStatesUpdateEvent extends AppEvent {
-  constructor(sensorStates: Record<string, string>) {
-    super('hvac.sensor_states_updated', { sensorStates, timestamp: new Date().toISOString() });
-  }
-}
 
 /**
  * Mode change request event
@@ -32,14 +24,6 @@ class ModeChangeRequestEvent extends AppEvent {
   }
 }
 
-/**
- * Condition evaluation request event
- */
-class EvaluateConditionsEvent extends AppEvent {
-  constructor() {
-    super('hvac.evaluate_conditions', {});
-  }
-}
 
 @injectable()
 export class HVACController {
@@ -205,30 +189,26 @@ export class HVACController {
   /**
    * Trigger manual evaluation
    */
-  async triggerEvaluation(): Promise<OperationResult> {
-    this.logger.debug('📍 HVACController.triggerEvaluation() ENTRY');
+  triggerEvaluation(): OperationResult {
     if (!this.running) {
-      this.logger.debug('📍 HVACController.triggerEvaluation() EXIT');
       throw new StateError('HVAC controller is not running');
     }
 
     try {
-      await this.triggerSensorEvents();
-      const result = {
+      // Send evaluation request directly to state machine
+      this.stateMachine.send({ type: 'AUTO_EVALUATE' });
+      
+      return {
         success: true,
         timestamp: new Date().toISOString(),
       };
-      this.logger.debug('📍 HVACController.triggerEvaluation() EXIT');
-      return result;
     } catch (error) {
       this.logger.error('❌ Manual evaluation failed', error);
-      const result = {
+      return {
         success: false,
         error: error instanceof Error ? error.message : String(error),
         timestamp: new Date().toISOString(),
       };
-      this.logger.debug('📍 HVACController.triggerEvaluation() EXIT');
-      return result;
     }
   }
 
@@ -306,34 +286,27 @@ export class HVACController {
     // Subscribe HVAC domain actor to event bus
     this.setupEventBusSubscription();
     
-    // Trigger initial reading for all sensors
-    await this.triggerSensorEvents();
+    // Get initial sensor readings once at startup
+    await this.getInitialSensorReadings();
     this.logger.debug('📍 HVACController.setupEventDrivenMonitoring() EXIT');
   }
 
   /**
-   * Setup event bus subscription for HVAC state machine
+   * Setup event bus subscription for manual operations only
    */
   private setupEventBusSubscription(): void {
-    this.logger.debug('📍 HVACController.setupEventBusSubscription() ENTRY');
+    this.logger.info('📡 Setting up event bus subscription for manual operations');
 
-    this.logger.info('📡 Setting up event bus subscription for HVAC state machine');
-
-    // Subscribe to HVAC-related events
-    this.eventBus.subscribeToEvent('hvac.sensor_states_updated', (event) => {
-      this.handleSensorStatesUpdate(event);
+    // Only subscribe to manual override events (sensors handled directly via HA events)
+    this.eventBus.subscribeToEvent('hvac.mode_change_request', (event) => {
+      this.handleModeChangeRequest(event);
     });
 
     this.eventBus.subscribeToEvent('hvac.evaluate_conditions', (_event) => {
       this.handleEvaluateConditions();
     });
 
-    this.eventBus.subscribeToEvent('hvac.mode_change_request', (event) => {
-      this.handleModeChangeRequest(event);
-    });
-
-    this.logger.info('✅ Event bus subscription setup complete for HVAC state machine');
-    this.logger.debug('📍 HVACController.setupEventBusSubscription() EXIT');
+    this.logger.info('✅ Event bus subscription setup complete');
   }
 
   /**
@@ -382,64 +355,81 @@ export class HVACController {
   }
 
   /**
-   * Handle sensor state changes
+   * Handle sensor state changes - process only the changed sensor
    */
-  private async handleSensorChange(entityId: string, newState: string): Promise<void> {
-    this.logger.debug('📍 HVACController.handleSensorChange() ENTRY');
+  private handleSensorChange(entityId: string, newState: string): void {
     try {
-      this.logger.debug('📊 Processing sensor change', {
+      this.logger.debug('📊 Processing single sensor change', {
         entityId,
         newState,
         timestamp: new Date().toISOString(),
       });
 
-      // Trigger complete sensor reading for all sensors
-      await this.triggerSensorEvents();
+      // Get current temperatures from state machine context and update only the changed sensor
+      const currentContext = this.stateMachine.getStatus().context;
+      let indoorTemp = currentContext.indoorTemp;
+      let outdoorTemp = currentContext.outdoorTemp;
+
+      // Update only the sensor that changed
+      if (entityId === this.hvacOptions.tempSensor) {
+        indoorTemp = parseFloat(newState);
+      } else if (entityId === this.hvacOptions.outdoorSensor) {
+        outdoorTemp = parseFloat(newState);
+      }
+
+      // Send temperature update directly to state machine
+      if (indoorTemp !== undefined && outdoorTemp !== undefined) {
+        this.stateMachine.send({
+          type: 'UPDATE_TEMPERATURES',
+          indoor: indoorTemp,
+          outdoor: outdoorTemp,
+        });
+      }
     } catch (error) {
       this.logger.error('❌ Failed to handle sensor change', error, {
         entityId,
         newState,
       });
     }
-    this.logger.debug('📍 HVACController.handleSensorChange() EXIT');
   }
 
   /**
-   * Trigger events for all sensors
+   * Get initial sensor readings at startup only
    */
-  private async triggerSensorEvents(): Promise<void> {
-    this.logger.debug('📍 HVACController.triggerSensorEvents() ENTRY');
+  private async getInitialSensorReadings(): Promise<void> {
     try {
-      this.logger.debug('📊 Triggering events for all sensors');
+      this.logger.info('📊 Getting initial sensor readings');
 
       const sensors = this.getSensors();
       const sensorStates: Record<string, string> = {};
 
-      // Get all sensor readings
+      // Get all sensor readings once at startup
       for (const sensorId of sensors) {
         const state = await this.haClient.getState(sensorId);
         sensorStates[sensorId] = state.state;
       }
 
-      // Publish generic sensor state change event
-      const stateChangeEvent = new SensorStatesUpdateEvent(sensorStates);
-      this.eventBus.publishEvent(stateChangeEvent);
+      // Parse temperatures and send directly to state machine
+      const indoorTemp = parseFloat(sensorStates[this.hvacOptions.tempSensor]);
+      const outdoorTemp = parseFloat(sensorStates[this.hvacOptions.outdoorSensor]);
 
-      // Publish evaluation request event
-      const evaluationEvent = new EvaluateConditionsEvent();
-      this.eventBus.publishEvent(evaluationEvent);
-
-      this.logger.debug('✅ Sensor events published', {
-        sensorStates,
-        events: [stateChangeEvent.type, evaluationEvent.type],
+      this.logger.info('🌡️ Initial temperature readings', {
+        indoorTemp,
+        outdoorTemp,
+        indoorSensor: this.hvacOptions.tempSensor,
+        outdoorSensor: this.hvacOptions.outdoorSensor,
       });
+
+      // Send initial temperatures directly to state machine
+      this.stateMachine.send({
+        type: 'UPDATE_TEMPERATURES',
+        indoor: indoorTemp,
+        outdoor: outdoorTemp,
+      });
+
     } catch (error) {
-      this.logger.error(
-        '❌ Failed to trigger sensor events',
-        error,
-      );
+      this.logger.error('❌ Failed to get initial sensor readings', error);
     }
-    this.logger.debug('📍 HVACController.triggerSensorEvents() EXIT');
   }
 
   /**
@@ -460,7 +450,8 @@ export class HVACController {
           this.logger.debug('📍 HVACController.getCurrentHVACMode() EXIT');
           return HVACMode.COOL;
         case 'idle':
-        case 'off':
+        case 'evaluating':
+        case 'defrosting':
         default:
           this.logger.debug('📍 HVACController.getCurrentHVACMode() EXIT');
           return HVACMode.OFF;
@@ -481,38 +472,6 @@ export class HVACController {
     return this.running;
   }
 
-  /**
-   * Handle sensor states update events
-   */
-  private handleSensorStatesUpdate(event: AppEvent): void {
-    this.logger.debug('📍 HVACController.handleSensorStatesUpdate() ENTRY');
-    const payload = event.payload as { sensorStates: Record<string, string>; timestamp: string };
-    
-    this.logger.info('📊 Processing sensor states update via state machine', {
-      sensorStates: payload.sensorStates,
-      timestamp: payload.timestamp,
-    });
-
-    // Convert sensor states to numbers and map to indoor/outdoor
-    const indoorTemp = parseFloat(payload.sensorStates[this.hvacOptions.tempSensor]);
-    const outdoorTemp = parseFloat(payload.sensorStates[this.hvacOptions.outdoorSensor]);
-    
-    this.logger.info('🌡️ Parsed temperature values', {
-      indoorTemp,
-      outdoorTemp,
-      indoorSensor: this.hvacOptions.tempSensor,
-      outdoorSensor: this.hvacOptions.outdoorSensor,
-    });
-
-    // Send correct event type with proper data structure
-    this.stateMachine.send({
-      type: 'UPDATE_TEMPERATURES',
-      indoor: indoorTemp,
-      outdoor: outdoorTemp,
-    });
-    
-    this.logger.debug('📍 HVACController.handleSensorStatesUpdate() EXIT');
-  }
 
   /**
    * Handle mode change requests
@@ -544,8 +503,8 @@ export class HVACController {
     
     this.logger.info('🔍 Processing condition evaluation request via state machine');
 
-    // Trigger evaluation in state machine
-    this.stateMachine.evaluateConditions();
+    // Send AUTO_EVALUATE event to state machine (event-driven approach)
+    this.stateMachine.send({ type: 'AUTO_EVALUATE' });
     
     this.logger.debug('📍 HVACController.handleEvaluateConditions() EXIT');
   }

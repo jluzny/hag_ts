@@ -5,7 +5,7 @@
  */
 
 import { assertEquals } from '@std/assert';
-import { HeatingStrategy } from '../../../src/hvac/state-machine.ts';
+import { HVACStrategy } from '../../../src/hvac/state-machine.ts';
 import { HvacOptions } from '../../../src/config/config.ts';
 import { StateChangeData, SystemMode } from '../../../src/types/common.ts';
 
@@ -67,7 +67,7 @@ function createStateChangeData(
 }
 
 Deno.test('Heating Strategy - Basic Decision Logic', async (t) => {
-  const strategy = new HeatingStrategy(baseHvacOptions);
+  const strategy = new HVACStrategy(baseHvacOptions);
 
   await t.step('should heat when indoor temperature is below minimum', () => {
     const data = createStateChangeData({
@@ -77,7 +77,8 @@ Deno.test('Heating Strategy - Basic Decision Logic', async (t) => {
       isWeekday: true,
     });
 
-    assertEquals(strategy.shouldHeat(data), true);
+    const evaluation = strategy.evaluateConditions(data);
+    assertEquals(evaluation.shouldHeat, true);
   });
 
   await t.step(
@@ -90,7 +91,8 @@ Deno.test('Heating Strategy - Basic Decision Logic', async (t) => {
         isWeekday: true,
       });
 
-      assertEquals(strategy.shouldHeat(data), false);
+      const evaluation = strategy.evaluateConditions(data);
+      assertEquals(evaluation.shouldHeat, false);
     },
   );
 
@@ -104,7 +106,8 @@ Deno.test('Heating Strategy - Basic Decision Logic', async (t) => {
         isWeekday: true,
       });
 
-      assertEquals(strategy.shouldHeat(data), false);
+      const evaluation = strategy.evaluateConditions(data);
+      assertEquals(evaluation.shouldHeat, false);
     },
   );
 
@@ -116,7 +119,8 @@ Deno.test('Heating Strategy - Basic Decision Logic', async (t) => {
       isWeekday: true,
     });
 
-    assertEquals(strategy.shouldHeat(data), false); // At threshold, should not heat
+    const evaluation1 = strategy.evaluateConditions(data);
+    assertEquals(evaluation1.shouldHeat, false); // At threshold, should not heat
   });
 
   await t.step('should not heat when just below minimum threshold', () => {
@@ -127,12 +131,13 @@ Deno.test('Heating Strategy - Basic Decision Logic', async (t) => {
       isWeekday: true,
     });
 
-    assertEquals(strategy.shouldHeat(data), true);
+    const evaluation = strategy.evaluateConditions(data);
+    assertEquals(evaluation.shouldHeat, true);
   });
 });
 
 Deno.test('Heating Strategy - Outdoor Temperature Limits', async (t) => {
-  const strategy = new HeatingStrategy(baseHvacOptions);
+  const strategy = new HVACStrategy(baseHvacOptions);
 
   await t.step('should not heat when outdoor temperature is too low', () => {
     const data = createStateChangeData({
@@ -142,7 +147,8 @@ Deno.test('Heating Strategy - Outdoor Temperature Limits', async (t) => {
       isWeekday: true,
     });
 
-    assertEquals(strategy.shouldHeat(data), false);
+    const evaluation2 = strategy.evaluateConditions(data);
+    assertEquals(evaluation2.shouldHeat, false);
   });
 
   await t.step('should not heat when outdoor temperature is too high', () => {
@@ -153,7 +159,8 @@ Deno.test('Heating Strategy - Outdoor Temperature Limits', async (t) => {
       isWeekday: true,
     });
 
-    assertEquals(strategy.shouldHeat(data), false);
+    const evaluation3 = strategy.evaluateConditions(data);
+    assertEquals(evaluation3.shouldHeat, false);
   });
 
   await t.step(
@@ -166,7 +173,8 @@ Deno.test('Heating Strategy - Outdoor Temperature Limits', async (t) => {
         isWeekday: true,
       });
 
-      assertEquals(strategy.shouldHeat(data), true);
+      const evaluation = strategy.evaluateConditions(data);
+    assertEquals(evaluation.shouldHeat, true);
     },
   );
 
@@ -180,7 +188,8 @@ Deno.test('Heating Strategy - Outdoor Temperature Limits', async (t) => {
         isWeekday: true,
       });
 
-      assertEquals(strategy.shouldHeat(data), true);
+      const evaluation = strategy.evaluateConditions(data);
+    assertEquals(evaluation.shouldHeat, true);
     },
   );
 
@@ -195,8 +204,9 @@ Deno.test('Heating Strategy - Outdoor Temperature Limits', async (t) => {
         isWeekday: true,
       });
 
+      const evaluation4 = strategy.evaluateConditions(data);
       assertEquals(
-        strategy.shouldHeat(data),
+        evaluation4.shouldHeat,
         true,
         `Should heat at outdoor temp ${weatherTemp}`,
       );
@@ -205,7 +215,7 @@ Deno.test('Heating Strategy - Outdoor Temperature Limits', async (t) => {
 });
 
 Deno.test('Heating Strategy - Active Hours Logic', async (t) => {
-  const strategy = new HeatingStrategy(baseHvacOptions);
+  const strategy = new HVACStrategy(baseHvacOptions);
 
   await t.step('should heat during weekday active hours', () => {
     const activeHours = [7, 8, 10, 15, 20, 22];
@@ -218,8 +228,9 @@ Deno.test('Heating Strategy - Active Hours Logic', async (t) => {
         isWeekday: true,
       });
 
+      const evaluation5 = strategy.evaluateConditions(data);
       assertEquals(
-        strategy.shouldHeat(data),
+        evaluation5.shouldHeat,
         true,
         `Should heat at weekday hour ${hour}`,
       );
@@ -237,8 +248,9 @@ Deno.test('Heating Strategy - Active Hours Logic', async (t) => {
         isWeekday: true,
       });
 
+      const evaluation6 = strategy.evaluateConditions(data);
       assertEquals(
-        strategy.shouldHeat(data),
+        evaluation6.shouldHeat,
         false,
         `Should not heat at weekday hour ${hour}`,
       );
@@ -256,8 +268,9 @@ Deno.test('Heating Strategy - Active Hours Logic', async (t) => {
         isWeekday: false,
       });
 
+      const evaluation7 = strategy.evaluateConditions(data);
       assertEquals(
-        strategy.shouldHeat(data),
+        evaluation7.shouldHeat,
         true,
         `Should heat at weekend hour ${hour}`,
       );
@@ -275,8 +288,9 @@ Deno.test('Heating Strategy - Active Hours Logic', async (t) => {
         isWeekday: false,
       });
 
+      const evaluation8 = strategy.evaluateConditions(data);
       assertEquals(
-        strategy.shouldHeat(data),
+        evaluation8.shouldHeat,
         false,
         `Should not heat at weekend hour ${hour}`,
       );
@@ -287,7 +301,7 @@ Deno.test('Heating Strategy - Active Hours Logic', async (t) => {
     const noActiveHoursOptions = { ...baseHvacOptions };
     delete noActiveHoursOptions.activeHours;
 
-    const strategyNoHours = new HeatingStrategy(noActiveHoursOptions);
+    const strategyNoHours = new HVACStrategy(noActiveHoursOptions);
 
     // Should heat at any hour when no active hours defined
     const data = createStateChangeData({
@@ -297,12 +311,13 @@ Deno.test('Heating Strategy - Active Hours Logic', async (t) => {
       isWeekday: true,
     });
 
-    assertEquals(strategyNoHours.shouldHeat(data), true);
+    const evaluation = strategyNoHours.evaluateConditions(data);
+    assertEquals(evaluation.shouldHeat, true);
   });
 });
 
 Deno.test('Heating Strategy - Defrost Logic', async (t) => {
-  const strategy = new HeatingStrategy(baseHvacOptions);
+  const strategy = new HVACStrategy(baseHvacOptions);
 
   await t.step(
     'should need defrost when outdoor temperature is below threshold',
@@ -312,7 +327,8 @@ Deno.test('Heating Strategy - Defrost Logic', async (t) => {
         weatherTemp: -5.0, // Below defrost threshold (0.0)
       });
 
-      assertEquals(strategy.needsDefrost(data), true);
+      const evaluation = strategy.evaluateConditions(data);
+      assertEquals(evaluation.needsDefrost, true);
     },
   );
 
@@ -324,7 +340,8 @@ Deno.test('Heating Strategy - Defrost Logic', async (t) => {
         weatherTemp: 5.0, // Above defrost threshold (0.0)
       });
 
-      assertEquals(strategy.needsDefrost(data), false);
+      const evaluation = strategy.evaluateConditions(data);
+      assertEquals(evaluation.needsDefrost, false);
     },
   );
 
@@ -340,7 +357,8 @@ Deno.test('Heating Strategy - Defrost Logic', async (t) => {
       strategy.startDefrost();
 
       // Should not need another defrost immediately
-      assertEquals(strategy.needsDefrost(data), false);
+      const evaluation = strategy.evaluateConditions(data);
+      assertEquals(evaluation.needsDefrost, false);
     },
   );
 
@@ -361,13 +379,15 @@ Deno.test('Heating Strategy - Defrost Logic', async (t) => {
       strategy.startDefrost();
 
       // Immediately after, should not need defrost
-      assertEquals(strategy.needsDefrost(data), false);
+      const evaluation = strategy.evaluateConditions(data);
+      assertEquals(evaluation.needsDefrost, false);
 
       // Advance time by defrost period (3600 seconds = 1 hour)
       mockTime += 3600 * 1000 + 1000; // 1 hour + 1 second
 
       // Now should need defrost again
-      assertEquals(strategy.needsDefrost(data), true);
+      const evaluation2 = strategy.evaluateConditions(data);
+      assertEquals(evaluation2.needsDefrost, true);
     } finally {
       // Restore original Date.now
       Date.now = originalNow;
@@ -378,14 +398,15 @@ Deno.test('Heating Strategy - Defrost Logic', async (t) => {
     const noDefrostOptions = { ...baseHvacOptions };
     delete noDefrostOptions.heating.defrost;
 
-    const strategyNoDefrost = new HeatingStrategy(noDefrostOptions);
+    const strategyNoDefrost = new HVACStrategy(noDefrostOptions);
 
     const data = createStateChangeData({
       currentTemp: 18.0,
       weatherTemp: -10.0, // Very cold
     });
 
-    assertEquals(strategyNoDefrost.needsDefrost(data), false);
+    const evaluation = strategyNoDefrost.evaluateConditions(data);
+    assertEquals(evaluation.needsDefrost, false);
   });
 
   await t.step('should start defrost and update timestamp', () => {
@@ -397,13 +418,14 @@ Deno.test('Heating Strategy - Defrost Logic', async (t) => {
       weatherTemp: -5.0,
     });
 
-    assertEquals(strategy.needsDefrost(data), false);
+    const evaluation = strategy.evaluateConditions(data);
+    assertEquals(evaluation.needsDefrost, false);
   });
 });
 
 // Split complex scenarios into individual tests to avoid state pollution
 Deno.test('Heating Strategy - Cold Winter Morning', () => {
-  const strategy = new HeatingStrategy(baseHvacOptions);
+  const strategy = new HVACStrategy(baseHvacOptions);
   const data = createStateChangeData({
     currentTemp: 17.5, // Cold indoor
     weatherTemp: -8.0, // Cold outdoor but within range
@@ -411,12 +433,13 @@ Deno.test('Heating Strategy - Cold Winter Morning', () => {
     isWeekday: true,
   });
 
-  assertEquals(strategy.shouldHeat(data), true);
+  const evaluation = strategy.evaluateConditions(data);
+  assertEquals(evaluation.shouldHeat, true);
   // assertEquals(strategy.needsDefrost(data), true); // Should also need defrost
 });
 
 Deno.test('Heating Strategy - Mild Spring Day', () => {
-  const strategy = new HeatingStrategy(baseHvacOptions);
+  const strategy = new HVACStrategy(baseHvacOptions);
   const data = createStateChangeData({
     currentTemp: 18.5, // Slightly cool indoor
     weatherTemp: 12.0, // Mild outdoor
@@ -424,12 +447,13 @@ Deno.test('Heating Strategy - Mild Spring Day', () => {
     isWeekday: true,
   });
 
-  assertEquals(strategy.shouldHeat(data), true);
-  assertEquals(strategy.needsDefrost(data), false); // No defrost needed
+  const evaluation = strategy.evaluateConditions(data);
+  assertEquals(evaluation.shouldHeat, true);
+  assertEquals(evaluation.needsDefrost, false); // No defrost needed
 });
 
 Deno.test('Heating Strategy - Extreme Cold', () => {
-  const strategy = new HeatingStrategy(baseHvacOptions);
+  const strategy = new HVACStrategy(baseHvacOptions);
   const data = createStateChangeData({
     currentTemp: 16.0, // Very cold indoor
     weatherTemp: -20.0, // Extremely cold outdoor (below limit)
@@ -437,12 +461,13 @@ Deno.test('Heating Strategy - Extreme Cold', () => {
     isWeekday: true,
   });
 
-  assertEquals(strategy.shouldHeat(data), false); // Too cold outside
+  const evaluation9 = strategy.evaluateConditions(data);
+  assertEquals(evaluation9.shouldHeat, false); // Too cold outside
   // assertEquals(strategy.needsDefrost(data), true);  // Would need defrost if heating
 });
 
 Deno.test('Heating Strategy - Warm Day', () => {
-  const strategy = new HeatingStrategy(baseHvacOptions);
+  const strategy = new HVACStrategy(baseHvacOptions);
   const data = createStateChangeData({
     currentTemp: 18.0, // Cool indoor
     weatherTemp: 18.0, // Warm outdoor (above heating limit)
@@ -450,12 +475,13 @@ Deno.test('Heating Strategy - Warm Day', () => {
     isWeekday: true,
   });
 
-  assertEquals(strategy.shouldHeat(data), false); // Too warm outside for heating
-  assertEquals(strategy.needsDefrost(data), false); // No defrost needed
+  const evaluation10 = strategy.evaluateConditions(data);
+  assertEquals(evaluation10.shouldHeat, false); // Too warm outside for heating
+  assertEquals(evaluation10.needsDefrost, false); // No defrost needed
 });
 
 Deno.test('Heating Strategy - Night Time', () => {
-  const strategy = new HeatingStrategy(baseHvacOptions);
+  const strategy = new HVACStrategy(baseHvacOptions);
   const data = createStateChangeData({
     currentTemp: 17.0, // Cold indoor
     weatherTemp: 2.0, // Cool outdoor
@@ -463,12 +489,13 @@ Deno.test('Heating Strategy - Night Time', () => {
     isWeekday: true,
   });
 
-  assertEquals(strategy.shouldHeat(data), false); // Outside active hours
-  assertEquals(strategy.needsDefrost(data), false); // Above defrost threshold
+  const evaluation11 = strategy.evaluateConditions(data);
+  assertEquals(evaluation11.shouldHeat, false); // Outside active hours
+  assertEquals(evaluation11.needsDefrost, false); // Above defrost threshold
 });
 
 Deno.test('Heating Strategy - Weekend vs Weekday', () => {
-  const strategy = new HeatingStrategy(baseHvacOptions);
+  const strategy = new HVACStrategy(baseHvacOptions);
   const baseData = {
     currentTemp: 18.0,
     weatherTemp: 5.0,
@@ -477,15 +504,17 @@ Deno.test('Heating Strategy - Weekend vs Weekday', () => {
 
   // Weekday: start at 7 AM
   const weekdayData = createStateChangeData({ ...baseData, isWeekday: true });
-  assertEquals(strategy.shouldHeat(weekdayData), true);
+  const evaluation12 = strategy.evaluateConditions(weekdayData);
+  assertEquals(evaluation12.shouldHeat, true);
 
   // Weekend: start at 8 AM, so 7 AM should be inactive
   const weekendData = createStateChangeData({ ...baseData, isWeekday: false });
-  assertEquals(strategy.shouldHeat(weekendData), false);
+  const evaluation13 = strategy.evaluateConditions(weekendData);
+  assertEquals(evaluation13.shouldHeat, false);
 });
 
 Deno.test('Heating Strategy - Edge Cases and Boundary Conditions', async (t) => {
-  const strategy = new HeatingStrategy(baseHvacOptions);
+  const strategy = new HVACStrategy(baseHvacOptions);
 
   await t.step('should handle exact threshold temperatures', () => {
     // Test exact indoor thresholds
@@ -495,7 +524,8 @@ Deno.test('Heating Strategy - Edge Cases and Boundary Conditions', async (t) => 
       hour: 10,
       isWeekday: true,
     });
-    assertEquals(strategy.shouldHeat(minThresholdData), false);
+    const evaluation1 = strategy.evaluateConditions(minThresholdData);
+    assertEquals(evaluation1.shouldHeat, false);
 
     const maxThresholdData = createStateChangeData({
       currentTemp: 22.0, // Exactly at maximum
@@ -503,7 +533,8 @@ Deno.test('Heating Strategy - Edge Cases and Boundary Conditions', async (t) => 
       hour: 10,
       isWeekday: true,
     });
-    assertEquals(strategy.shouldHeat(maxThresholdData), false);
+    const evaluation2 = strategy.evaluateConditions(maxThresholdData);
+    assertEquals(evaluation2.shouldHeat, false);
 
     // Test exact outdoor thresholds
     const outdoorMinData = createStateChangeData({
@@ -512,7 +543,8 @@ Deno.test('Heating Strategy - Edge Cases and Boundary Conditions', async (t) => 
       hour: 10,
       isWeekday: true,
     });
-    assertEquals(strategy.shouldHeat(outdoorMinData), true);
+    const evaluation3 = strategy.evaluateConditions(outdoorMinData);
+    assertEquals(evaluation3.shouldHeat, true);
 
     const outdoorMaxData = createStateChangeData({
       currentTemp: 18.0,
@@ -520,7 +552,8 @@ Deno.test('Heating Strategy - Edge Cases and Boundary Conditions', async (t) => 
       hour: 10,
       isWeekday: true,
     });
-    assertEquals(strategy.shouldHeat(outdoorMaxData), true);
+    const evaluation4 = strategy.evaluateConditions(outdoorMaxData);
+    assertEquals(evaluation4.shouldHeat, true);
   });
 
   await t.step('should handle hour boundary conditions', () => {
@@ -531,7 +564,8 @@ Deno.test('Heating Strategy - Edge Cases and Boundary Conditions', async (t) => 
       hour: 7, // Start of weekday active hours
       isWeekday: true,
     });
-    assertEquals(strategy.shouldHeat(startHourWeekday), true);
+    const evaluation5 = strategy.evaluateConditions(startHourWeekday);
+    assertEquals(evaluation5.shouldHeat, true);
 
     const endHourWeekday = createStateChangeData({
       currentTemp: 18.0,
@@ -539,7 +573,8 @@ Deno.test('Heating Strategy - Edge Cases and Boundary Conditions', async (t) => 
       hour: 22, // End of active hours
       isWeekday: true,
     });
-    assertEquals(strategy.shouldHeat(endHourWeekday), true);
+    const evaluation6 = strategy.evaluateConditions(endHourWeekday);
+    assertEquals(evaluation6.shouldHeat, true);
 
     const startHourWeekend = createStateChangeData({
       currentTemp: 18.0,
@@ -547,16 +582,18 @@ Deno.test('Heating Strategy - Edge Cases and Boundary Conditions', async (t) => 
       hour: 8, // Start of weekend active hours
       isWeekday: false,
     });
-    assertEquals(strategy.shouldHeat(startHourWeekend), true);
+    const evaluation7 = strategy.evaluateConditions(startHourWeekend);
+    assertEquals(evaluation7.shouldHeat, true);
   });
 
   await t.step('should handle defrost threshold boundary', () => {
-    const strategy = new HeatingStrategy(baseHvacOptions); // Fresh instance
+    const strategy = new HVACStrategy(baseHvacOptions); // Fresh instance
     // Exactly at defrost threshold
     const exactThresholdData = createStateChangeData({
       weatherTemp: 0.0, // Exactly at defrost threshold
     });
-    assertEquals(strategy.needsDefrost(exactThresholdData), false);
+    const evaluation8 = strategy.evaluateConditions(exactThresholdData);
+    assertEquals(evaluation8.needsDefrost, false);
 
     // Just below defrost threshold - test commented out
     // const belowThresholdData = createStateChangeData({
