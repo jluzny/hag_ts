@@ -4,7 +4,13 @@
  * XState-powered state machine with heating/cooling strategies.
  */
 
-import { ActorRefFrom, assign, createActor, createMachine, raise } from 'xstate';
+import {
+  ActorRefFrom,
+  assign,
+  createActor,
+  createMachine,
+  raise,
+} from 'xstate';
 import { injectable } from '@needle-di/core';
 import {
   type DefrostOptions as _DefrostOptions,
@@ -25,10 +31,19 @@ import { HomeAssistantClient } from '../home-assistant/client.ts';
  * Simplified HVAC events that can trigger state transitions
  */
 export type HVACEvent =
-  | { type: 'MODE_CHANGE'; mode: HVACMode; temperature?: number; isManual?: boolean }
+  | {
+    type: 'MODE_CHANGE';
+    mode: HVACMode;
+    temperature?: number;
+    isManual?: boolean;
+  }
   | { type: 'AUTO_EVALUATE' }
   | { type: 'DEFROST_CONTROL'; action: 'start' | 'complete' }
-  | { type: 'UPDATE_DATA'; temperatures?: { indoor: number; outdoor: number }; conditions?: Partial<HVACContext> }
+  | {
+    type: 'UPDATE_DATA';
+    temperatures?: { indoor: number; outdoor: number };
+    conditions?: Partial<HVACContext>;
+  }
   // Legacy events for backward compatibility
   | { type: 'HEAT' }
   | { type: 'COOL' }
@@ -70,29 +85,35 @@ export class HVACStrategy {
    */
   evaluateConditions(data: StateChangeData): HVACEvaluation {
     const evaluationStart = Date.now();
-    
+
     const shouldHeat = this.shouldHeat(data);
     const shouldCool = this.shouldCool(data);
     const needsDefrost = this.needsDefrost(data);
-    
+
     const evaluationTime = Date.now() - evaluationStart;
-    
+
     let reason = 'no_action_needed';
     if (needsDefrost) reason = 'defrost_required';
     else if (shouldHeat) reason = 'heating_required';
     else if (shouldCool) reason = 'cooling_required';
-    
-    this.logger.info('🔍 HVAC conditions evaluated', {
-      shouldHeat,
-      shouldCool,
-      needsDefrost,
-      reason,
-      evaluationTimeMs: evaluationTime,
-      indoorTemp: data.currentTemp,
-      outdoorTemp: data.weatherTemp,
-      hour: data.hour,
-      isWeekday: data.isWeekday,
-    });
+
+    // Only log when action is needed (reduce noise)
+    if (shouldHeat || shouldCool || needsDefrost) {
+      this.logger.info('🔍 HVAC conditions evaluated', {
+        shouldHeat,
+        shouldCool,
+        needsDefrost,
+        reason,
+        evaluationTimeMs: evaluationTime,
+        indoorTemp: data.currentTemp,
+        outdoorTemp: data.weatherTemp,
+      });
+    } else {
+      this.logger.debug('🔍 HVAC conditions evaluated - no action needed', {
+        reason,
+        evaluationTimeMs: evaluationTime,
+      });
+    }
 
     return {
       shouldHeat,
@@ -118,15 +139,15 @@ export class HVACStrategy {
     }
 
     const shouldHeat = data.currentTemp < thresholds.indoorMin;
-    
+
     if (shouldHeat) {
-      this.logger.info('✅ Heating approved', {
+      this.logger.debug('✅ Heating approved', {
         currentTemp: data.currentTemp,
         indoorMin: thresholds.indoorMin,
         tempDifference: thresholds.indoorMin - data.currentTemp,
       });
     }
-    
+
     return shouldHeat;
   }
 
@@ -145,15 +166,15 @@ export class HVACStrategy {
     }
 
     const shouldCool = data.currentTemp > thresholds.indoorMin;
-    
+
     if (shouldCool) {
-      this.logger.info('✅ Cooling approved', {
+      this.logger.debug('✅ Cooling approved', {
         currentTemp: data.currentTemp,
         indoorMin: thresholds.indoorMin,
         tempDifference: data.currentTemp - thresholds.indoorMin,
       });
     }
-    
+
     return shouldCool;
   }
 
@@ -194,14 +215,20 @@ export class HVACStrategy {
   /**
    * Unified validation logic for temperature and time conditions
    */
-  private isValidCondition(data: StateChangeData, thresholds: { outdoorMin: number; outdoorMax: number }): boolean {
-    return this.isWithinTemperatureRange(data, thresholds) && 
-           this.isActiveHour(data.hour, data.isWeekday);
+  private isValidCondition(
+    data: StateChangeData,
+    thresholds: { outdoorMin: number; outdoorMax: number },
+  ): boolean {
+    return this.isWithinTemperatureRange(data, thresholds) &&
+      this.isActiveHour(data.hour, data.isWeekday);
   }
 
-  private isWithinTemperatureRange(data: StateChangeData, thresholds: { outdoorMin: number; outdoorMax: number }): boolean {
-    return data.weatherTemp >= thresholds.outdoorMin && 
-           data.weatherTemp <= thresholds.outdoorMax;
+  private isWithinTemperatureRange(
+    data: StateChangeData,
+    thresholds: { outdoorMin: number; outdoorMax: number },
+  ): boolean {
+    return data.weatherTemp >= thresholds.outdoorMin &&
+      data.weatherTemp <= thresholds.outdoorMax;
   }
 
   private isActiveHour(hour: number, isWeekday: boolean): boolean {
@@ -242,11 +269,17 @@ export function createHVACMachine(
           MODE_CHANGE: [
             {
               target: 'heating',
-              guard: ({ context, event }) => event.mode === HVACMode.HEAT && context.systemMode !== SystemMode.COOL_ONLY && context.systemMode !== SystemMode.OFF,
+              guard: ({ context, event }) =>
+                event.mode === HVACMode.HEAT &&
+                context.systemMode !== SystemMode.COOL_ONLY &&
+                context.systemMode !== SystemMode.OFF,
             },
             {
               target: 'cooling',
-              guard: ({ context, event }) => event.mode === HVACMode.COOL && context.systemMode !== SystemMode.HEAT_ONLY && context.systemMode !== SystemMode.OFF,
+              guard: ({ context, event }) =>
+                event.mode === HVACMode.COOL &&
+                context.systemMode !== SystemMode.HEAT_ONLY &&
+                context.systemMode !== SystemMode.OFF,
             },
             {
               target: 'evaluating',
@@ -273,7 +306,11 @@ export function createHVACMachine(
             actions: 'updateConditions',
           },
           UPDATE_TEMPERATURES: {
-            actions: ['updateTemperatures', 'triggerAutoEvaluate', raise({ type: 'AUTO_EVALUATE' })],
+            actions: [
+              'updateTemperatures',
+              'triggerAutoEvaluate',
+              raise({ type: 'AUTO_EVALUATE' }),
+            ],
           },
           MANUAL_OVERRIDE: {
             target: 'evaluating',
@@ -378,21 +415,41 @@ export function createHVACMachine(
     actions: {
       logStateEntry: ({ context, event }) => {
         const eventType = (event as unknown as { type?: string })?.type;
-        let message = '🔄 [HVAC] State transition';
-        if (eventType) {
-          message += ` triggered by: ${eventType}`;
+        // Only log significant state changes to reduce noise
+        if (
+          eventType &&
+          !['UPDATE_TEMPERATURES', 'UPDATE_CONDITIONS', 'UPDATE_DATA'].includes(
+            eventType,
+          )
+        ) {
+          logger.info('🔄 [HVAC] State transition', {
+            event: eventType,
+            indoorTemp: context.indoorTemp,
+            outdoorTemp: context.outdoorTemp,
+            systemMode: context.systemMode,
+          });
+        } else {
+          logger.debug('🔄 [HVAC] State entry', {
+            event: eventType,
+            indoorTemp: context.indoorTemp,
+            outdoorTemp: context.outdoorTemp,
+          });
         }
-        logger.info(message, {
-          toState: event.type,
-          event, // Log the entire event object for debugging
+      },
+      logModeStart: ({ context, event }) => {
+        const mode = (event as { mode?: string })?.mode || 'unknown';
+        const icon = mode === 'heating'
+          ? '🔥'
+          : mode === 'cooling'
+          ? '❄️'
+          : '🔍';
+        logger.info(`${icon} [HVAC] Starting ${mode} mode`, {
           indoorTemp: context.indoorTemp,
           outdoorTemp: context.outdoorTemp,
           systemMode: context.systemMode,
-          currentHour: context.currentHour,
-          isWeekday: context.isWeekday,
-          timestamp: new Date().toISOString(),
         });
       },
+      // Legacy actions for backward compatibility
       logHeatingStart: ({ context }) => {
         logger.info(`🔥 [HVAC] Starting heating mode`, {
           targetTemp: hvacOptions.heating.temperature,
@@ -400,7 +457,6 @@ export function createHVACMachine(
           outdoorTemp: context.outdoorTemp,
           presetMode: hvacOptions.heating.presetMode,
           thresholds: hvacOptions.heating.temperatureThresholds,
-          timestamp: new Date().toISOString(),
         });
       },
       logCoolingStart: ({ context }) => {
@@ -410,20 +466,18 @@ export function createHVACMachine(
           outdoorTemp: context.outdoorTemp,
           presetMode: hvacOptions.cooling.presetMode,
           thresholds: hvacOptions.cooling.temperatureThresholds,
-          timestamp: new Date().toISOString(),
         });
       },
       processManualOverride: (_, event) => {
         logger.info(`🎯 [HVAC] Manual override activated`, {
-          event,
-          timestamp: new Date().toISOString(),
+          eventType: (event as { type?: string })?.type || 'unknown',
         });
       },
       updateData: assign(({ context, event }) => {
         if (event.type !== 'UPDATE_DATA') return context;
-        
+
         let newContext = { ...context };
-        
+
         // Update temperatures if provided
         if (event.temperatures) {
           newContext = {
@@ -434,12 +488,12 @@ export function createHVACMachine(
             isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
           };
         }
-        
+
         // Update conditions if provided
         if (event.conditions) {
           newContext = { ...newContext, ...event.conditions };
         }
-        
+
         return newContext;
       }),
       updateConditions: assign(({ context, event }) => {
@@ -457,53 +511,120 @@ export function createHVACMachine(
         };
       }),
       triggerAutoEvaluate: ({ context }) => {
-        if (context.indoorTemp !== undefined && context.outdoorTemp !== undefined) {
-          logger.info('🎯 Triggering condition evaluation', {
-            currentState: 'idle',
-            hasTemperatureData: true,
+        if (
+          context.indoorTemp !== undefined && context.outdoorTemp !== undefined
+        ) {
+          logger.debug('🎯 Triggering condition evaluation', {
             indoorTemp: context.indoorTemp,
             outdoorTemp: context.outdoorTemp,
             systemMode: context.systemMode,
-            currentHour: context.currentHour,
-            isWeekday: context.isWeekday,
-            timestamp: new Date().toISOString(),
           });
-          
-          logger.info('Sending AUTO_EVALUATE event');
         }
       },
+      handleDefrost: ({ event }) => {
+        const action = (event as { action?: string })?.action || 'start';
+
+        if (action === 'start') {
+          hvacStrategy.startDefrost();
+          logger.info(`❄️ [HVAC] Defrost cycle started`, {
+            durationSeconds: hvacOptions.heating.defrost?.durationSeconds ||
+              300,
+          });
+        } else if (action === 'complete') {
+          logger.info(`✅ [HVAC] Defrost cycle completed`, {
+            nextState: 'heating',
+          });
+        }
+      },
+      // Legacy actions for backward compatibility
       startDefrost: () => {
         hvacStrategy.startDefrost();
         logger.info(`❄️ [HVAC] Defrost cycle started`, {
           durationSeconds: hvacOptions.heating.defrost?.durationSeconds || 300,
-          timestamp: new Date().toISOString(),
         });
       },
       completeDefrost: () => {
         logger.info(`✅ [HVAC] Defrost cycle completed`, {
-          timestamp: new Date().toISOString(),
           nextState: 'heating',
         });
       },
-      executeHeating: async () => {
+      executeMode: async ({ event }) => {
         if (!haClient) {
-          logger.warning('⚠️ No Home Assistant client available for heating control');
+          logger.warning(
+            '⚠️ No Home Assistant client available for HVAC control',
+          );
           return;
         }
 
-        const enabledEntities = hvacOptions.hvacEntities.filter(e => e.enabled);
-        
-        logger.info('🔥 Executing heating mode on entities', {
-          targetTemp: hvacOptions.heating.temperature,
-          presetMode: hvacOptions.heating.presetMode,
+        const mode = (event as { mode?: string })?.mode || 'unknown';
+        const isHeating = mode === 'heating';
+        const config = isHeating ? hvacOptions.heating : hvacOptions.cooling;
+        const hvacMode = isHeating ? 'heat' : 'cool';
+        const icon = isHeating ? '🔥' : '❄️';
+        const modeText = isHeating ? 'heating' : 'cooling';
+
+        const enabledEntities = hvacOptions.hvacEntities.filter((e) =>
+          e.enabled
+        );
+
+        logger.info(`${icon} Executing ${modeText} mode on entities`, {
+          targetTemp: config.temperature,
+          presetMode: config.presetMode,
           enabledEntities: enabledEntities.length,
-          entities: enabledEntities.map(e => e.entityId),
         });
 
         for (const entity of enabledEntities) {
           try {
-            await controlHVACEntity(haClient, entity.entityId, 'heat', hvacOptions.heating.temperature, hvacOptions.heating.presetMode, logger);
-            logger.info('✅ Heating entity controlled', {
+            await controlHVACEntity(
+              haClient,
+              entity.entityId,
+              hvacMode,
+              config.temperature,
+              config.presetMode,
+              logger,
+            );
+            logger.debug(`✅ ${modeText} entity controlled`, {
+              entityId: entity.entityId,
+              temperature: config.temperature,
+              presetMode: config.presetMode,
+            });
+          } catch (error) {
+            logger.error(`❌ Failed to control ${modeText} entity`, error, {
+              entityId: entity.entityId,
+            });
+          }
+        }
+      },
+      // Legacy actions for backward compatibility
+      executeHeating: async () => {
+        if (!haClient) {
+          logger.warning(
+            '⚠️ No Home Assistant client available for heating control',
+          );
+          return;
+        }
+
+        const enabledEntities = hvacOptions.hvacEntities.filter((e) =>
+          e.enabled
+        );
+
+        logger.info('🔥 Executing heating mode on entities', {
+          targetTemp: hvacOptions.heating.temperature,
+          presetMode: hvacOptions.heating.presetMode,
+          enabledEntities: enabledEntities.length,
+        });
+
+        for (const entity of enabledEntities) {
+          try {
+            await controlHVACEntity(
+              haClient,
+              entity.entityId,
+              'heat',
+              hvacOptions.heating.temperature,
+              hvacOptions.heating.presetMode,
+              logger,
+            );
+            logger.debug('✅ Heating entity controlled', {
               entityId: entity.entityId,
               temperature: hvacOptions.heating.temperature,
               presetMode: hvacOptions.heating.presetMode,
@@ -517,23 +638,33 @@ export function createHVACMachine(
       },
       executeCooling: async () => {
         if (!haClient) {
-          logger.warning('⚠️ No Home Assistant client available for cooling control');
+          logger.warning(
+            '⚠️ No Home Assistant client available for cooling control',
+          );
           return;
         }
 
-        const enabledEntities = hvacOptions.hvacEntities.filter(e => e.enabled);
-        
+        const enabledEntities = hvacOptions.hvacEntities.filter((e) =>
+          e.enabled
+        );
+
         logger.info('❄️ Executing cooling mode on entities', {
           targetTemp: hvacOptions.cooling.temperature,
           presetMode: hvacOptions.cooling.presetMode,
           enabledEntities: enabledEntities.length,
-          entities: enabledEntities.map(e => e.entityId),
         });
 
         for (const entity of enabledEntities) {
           try {
-            await controlHVACEntity(haClient, entity.entityId, 'cool', hvacOptions.cooling.temperature, hvacOptions.cooling.presetMode, logger);
-            logger.info('✅ Cooling entity controlled', {
+            await controlHVACEntity(
+              haClient,
+              entity.entityId,
+              'cool',
+              hvacOptions.cooling.temperature,
+              hvacOptions.cooling.presetMode,
+              logger,
+            );
+            logger.debug('✅ Cooling entity controlled', {
               entityId: entity.entityId,
               temperature: hvacOptions.cooling.temperature,
               presetMode: hvacOptions.cooling.presetMode,
@@ -550,104 +681,125 @@ export function createHVACMachine(
       /**
        * Unified guard logic - evaluates all conditions using single strategy
        */
-      
+
       canHeat: ({ context }) => {
         // Check system mode restrictions
-        if (context.systemMode === SystemMode.COOL_ONLY || context.systemMode === SystemMode.OFF) {
+        if (
+          context.systemMode === SystemMode.COOL_ONLY ||
+          context.systemMode === SystemMode.OFF
+        ) {
           return false;
         }
-        
+
         if (!context.indoorTemp || !context.outdoorTemp) {
           return false;
         }
-        
+
         const evaluation = hvacStrategy.evaluateConditions({
           currentTemp: context.indoorTemp,
           weatherTemp: context.outdoorTemp,
           hour: context.currentHour,
           isWeekday: context.isWeekday,
         });
-        
-        logger.info('🔍 Heat evaluation', { result: evaluation.shouldHeat, evaluation });
+
+        logger.debug('🔍 Heat evaluation', {
+          result: evaluation.shouldHeat,
+          reason: evaluation.reason,
+        });
         return evaluation.shouldHeat;
       },
-      
+
       canCool: ({ context }) => {
         // Check system mode restrictions
-        if (context.systemMode === SystemMode.HEAT_ONLY || context.systemMode === SystemMode.OFF) {
+        if (
+          context.systemMode === SystemMode.HEAT_ONLY ||
+          context.systemMode === SystemMode.OFF
+        ) {
           return false;
         }
-        
+
         if (!context.indoorTemp || !context.outdoorTemp) {
           return false;
         }
-        
+
         const evaluation = hvacStrategy.evaluateConditions({
           currentTemp: context.indoorTemp,
           weatherTemp: context.outdoorTemp,
           hour: context.currentHour,
           isWeekday: context.isWeekday,
         });
-        
-        logger.info('🔍 Cool evaluation', { result: evaluation.shouldCool, evaluation });
+
+        logger.debug('🔍 Cool evaluation', {
+          result: evaluation.shouldCool,
+          reason: evaluation.reason,
+        });
         return evaluation.shouldCool;
       },
-      
+
       shouldAutoHeat: ({ context }) => {
         // Check system mode is AUTO
         if (context.systemMode !== SystemMode.AUTO) {
           return false;
         }
-        
+
         if (!context.indoorTemp || !context.outdoorTemp) {
           return false;
         }
-        
+
         const evaluation = hvacStrategy.evaluateConditions({
           currentTemp: context.indoorTemp,
           weatherTemp: context.outdoorTemp,
           hour: context.currentHour,
           isWeekday: context.isWeekday,
         });
-        
-        logger.info('🔍 Auto heat evaluation', { result: evaluation.shouldHeat, evaluation });
+
+        logger.debug('🔍 Auto heat evaluation', {
+          result: evaluation.shouldHeat,
+          reason: evaluation.reason,
+        });
         return evaluation.shouldHeat;
       },
-      
+
       shouldAutoCool: ({ context }) => {
         // Check system mode is AUTO
         if (context.systemMode !== SystemMode.AUTO) {
           return false;
         }
-        
+
         if (!context.indoorTemp || !context.outdoorTemp) {
           return false;
         }
-        
+
         const evaluation = hvacStrategy.evaluateConditions({
           currentTemp: context.indoorTemp,
           weatherTemp: context.outdoorTemp,
           hour: context.currentHour,
           isWeekday: context.isWeekday,
         });
-        
-        logger.info('🔍 Auto cool evaluation', { result: evaluation.shouldCool, evaluation });
+
+        logger.debug('🔍 Auto cool evaluation', {
+          result: evaluation.shouldCool,
+          reason: evaluation.reason,
+        });
         return evaluation.shouldCool;
       },
-      
+
       canDefrost: ({ context }) => {
         if (!context.indoorTemp || !context.outdoorTemp) {
           return false;
         }
-        
+
         const evaluation = hvacStrategy.evaluateConditions({
           currentTemp: context.indoorTemp,
           weatherTemp: context.outdoorTemp,
           hour: context.currentHour,
           isWeekday: context.isWeekday,
         });
-        
-        logger.info('🔍 Defrost evaluation', { result: evaluation.needsDefrost, evaluation });
+
+        logger.debug('🔍 Defrost evaluation', {
+          result: evaluation.needsDefrost,
+          reason: evaluation.reason,
+        });
         return evaluation.needsDefrost;
       },
     },
@@ -842,7 +994,6 @@ export class HVACStateMachine {
     }
     return this.actor.getSnapshot().context;
   }
-
 
   /**
    * Trigger auto evaluation
