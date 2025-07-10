@@ -1,0 +1,44 @@
+# HAG HVAC Configuration for Unit Tests
+# Simple configuration without environment variables for testing
+
+appOptions:
+  logLevel: 'error' # Reduce log noise in tests
+  useAi: false
+  aiModel: 'gpt-4o-mini'
+  aiTemperature: 0.1
+
+hassOptions:
+  wsUrl: 'ws://localhost:8123/api/websocket'
+  restUrl: 'http://localhost:8123'
+  token: 'test_token'
+  maxRetries: 1
+  retryDelayMs: 100
+  stateCheckInterval: 300000
+
+hvacOptions:
+  tempSensor: 'sensor.indoor_temp'
+  outdoorSensor: 'sensor.outdoor_temp'
+  systemMode: 'auto'
+
+  hvacEntities:
+    - entityId: 'climate.test'
+      enabled: true
+      defrost: false
+
+  heating:
+    temperature: 21.0
+    presetMode: 'comfort'
+    temperatureThresholds:
+      indoorMin: 19.0
+      indoorMax: 22.0
+      outdoorMin: -10.0
+      outdoorMax: 15.0
+
+  cooling:
+    temperature: 24.0
+    presetMode: 'eco'
+    temperatureThresholds:
+      indoorMin: 23.0
+      indoorMax: 26.0
+      outdoorMin: 10.0
+      outdoorMax: 45.0

@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+/hag
+/hag.exe
+target/
+
+# Package manager
+bun.lock
+
+# Environment files
+.env
+.env.local
+
+# Coverage reports
+/coverage
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+app*.log
+debug*.log
+hvac*.log

@@ -1,0 +1,267 @@
+# HAG Project - Claude Development Notes
+
+## Project Overview
+
+HAG (Home Assistant aGentic HVAC Automation) is a TypeScript/Bun application that provides intelligent HVAC control through Home Assistant integration with optional AI-powered decision making.
+
+## Runtime Migration: Deno → Bun
+
+The project has been migrated from Deno to Bun runtime for improved performance and Node.js ecosystem compatibility.
+
+### Key Changes in Migration
+
+- **Runtime**: Deno → Bun v1.2.18
+- **Package Management**: `deno.json` → `package.json` with npm dependencies
+- **Build System**: Deno compile → Bun build
+- **Test Runner**: Deno test → Bun test
+- **Module Resolution**: JSR imports → npm packages with `npm:@jsr/` prefix
+
+## Current Architecture
+
+- **Language**: TypeScript with Bun runtime
+- **Dependency Injection**: @needle-di/core for type-safe DI
+- **State Management**: XState v5 for HVAC state machine
+- **AI Integration**: LangChain v0.3 with OpenAI for intelligent decisions
+- **CLI Framework**: @std/cli (via npm:@jsr/std\_\_cli)
+- **Configuration**: Zod schemas with YAML/environment variable support
+
+## Development Commands
+
+### Core Development
+
+```bash
+bun run dev                  # Development mode
+bun run dev:watch            # Development with file watching
+bun run prod                 # Production mode
+bun run prod:build           # Build for production
+```
+
+### Testing
+
+```bash
+bun test                     # All tests
+bun run test:unit            # Unit tests only
+bun run test:integration     # Integration tests only
+bun run test:performance     # Performance tests only
+bun run test:watch           # Watch mode
+bun run test:coverage        # With coverage
+```
+
+### Quality & Build
+
+```bash
+bun run build               # Build application
+bun run check               # TypeScript type checking
+bun run fmt                 # Format code (Prettier)
+bun run lint                # Lint code (ESLint)
+bun run ci                  # Full CI pipeline
+```
+
+## Key Dependencies & Versions
+
+### Core Dependencies
+
+- `xstate`: ^5.20.1 (state machine)
+- `@langchain/core`: ^0.3.61 (AI framework)
+- `@langchain/openai`: ^0.5.16 (OpenAI integration)
+- `langchain`: ^0.3.29 (main library)
+- `@needle-di/core`: ^1.0.0 (dependency injection)
+- `zod`: ^3.25.76 (schema validation)
+- `yaml`: ^2.4.1 (configuration parsing)
+
+### Bun-Specific Dependencies
+
+- `@std/cli`: npm:@jsr/std\_\_cli@^1.0.20 (CLI framework)
+- `@std/assert`: npm:@jsr/std\_\_assert@^1.0.13 (assertions)
+- `@std/log`: npm:@jsr/std\_\_log@^0.224.14 (logging)
+- `dotenv`: ^16.4.5 (environment variables)
+- `minimist`: ^1.2.8 (argument parsing)
+
+### Development Dependencies
+
+- `@types/bun`: latest (Bun type definitions)
+- `typescript`: ^5.4.2 (TypeScript compiler)
+- `eslint`: ^8.57.0 (linting)
+- `prettier`: ^3.2.5 (formatting)
+- `vitest`: ^3.2.4 (additional testing utilities)
+
+## Configuration Structure
+
+### Main Configuration Files
+
+- `package.json`: Dependencies, scripts, metadata
+- `tsconfig.json`: TypeScript compiler options
+- `bun.lock`: Dependency lock file
+- `eslint.config.js`: ESLint configuration
+
+### Application Configuration
+
+- `src/config/config.ts`: Zod validation schemas
+- `config/hvac_config_*.yaml`: Environment-specific configs
+- `.env`: Environment variables
+
+## TypeScript Configuration
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "types": ["bun-types"]
+  }
+}
+```
+
+## Project Structure
+
+```
+src/
+├── ai/                     # LangChain AI agent implementation
+│   ├── types/             # AI-specific types
+│   └── agent.ts           # Main AI agent
+├── config/                # Configuration loading and validation
+│   ├── config.ts          # Zod schemas
+│   └── loader.ts          # Configuration loader
+├── core/                  # Core system components
+│   ├── container.ts       # DI container
+│   ├── event-system.ts    # Event bus
+│   ├── exceptions.ts      # Custom exceptions
+│   ├── logging.ts         # Logging setup
+│   ├── module-registry.ts # Module registration
+│   └── types.ts           # Core types
+├── home-assistant/        # Home Assistant integration
+│   ├── client.ts          # HA WebSocket/REST client
+│   └── models.ts          # HA data models
+├── hvac/                  # HVAC control logic
+│   ├── controller.ts      # Main HVAC controller
+│   ├── hvac-module.ts     # HVAC module registration
+│   └── state-machine.ts   # XState state machine
+├── types/                 # Shared TypeScript types
+│   └── common.ts          # Common type definitions
+└── main.ts                # CLI entry point
+```
+
+## Testing Architecture
+
+```
+tests/
+├── unit/                  # Component unit tests
+│   ├── ai/               # AI component tests
+│   ├── config/           # Configuration tests
+│   ├── core/             # Core system tests
+│   ├── home-assistant/   # HA client tests
+│   ├── hvac/             # HVAC logic tests
+│   └── types/            # Type definition tests
+├── integration/          # System integration tests
+│   ├── home-assistant.integration.test.ts
+│   └── hvac-system.integration.test.ts
+└── performance/          # Performance benchmarks
+    └── state-machine.perf.test.ts
+```
+
+## Commit Message Guidelines
+
+- **Do not mention Claude or AI assistance in commit messages**
+- Keep commit messages focused on the technical changes
+- Use conventional commit format: `type: description`
+- Focus on business value and technical implementation
+- Example: `feat: migrate from Deno to Bun runtime`
+
+## Development Guidelines
+
+### Dependency Injection Pattern
+
+```typescript
+// Service registration
+this.container.bind({ provide: TYPES.Service, useClass: ServiceClass });
+this.container.bind({ provide: TYPES.Config, useValue: configObject });
+
+// Service injection
+constructor(
+  @inject(TYPES.Service) private service: ServiceType,
+) {}
+```
+
+### Error Handling
+
+- Use `{ error }` object wrapping for logger methods
+- Check `error instanceof Error` before accessing `.name` property
+- Use `import type` for decorator parameter types to avoid metadata issues
+
+### Type Safety
+
+- Use `import type` for types used only in decorators
+- Cast types as `any` when needed for library compatibility (e.g., LangChain)
+- Add `override` modifier for inherited properties like `Error.cause`
+
+## Common Issues & Solutions
+
+### Build Warnings
+
+- `experimentalDecorators` deprecation warning is expected and unavoidable
+- Required for @needle-di/core dependency injection to work
+- Will need library updates when new decorator standard is finalized
+
+### Bun-Specific Considerations
+
+- Use `bun run check` for TypeScript type checking
+- Bun's fast startup and execution improve development experience
+- Native support for TypeScript without transpilation step
+- Built-in test runner with Jest-compatible API
+
+### WebSocket Connection
+
+- Native WebSocket API requires different error handling pattern
+- Use event listeners instead of async iteration
+- Connection state management needs manual tracking
+
+## Performance Optimizations
+
+### Bun Runtime Benefits
+
+- Fast startup time compared to Node.js/Deno
+- Built-in bundler and transpiler
+- Optimized package installation and resolution
+- Native TypeScript support
+
+### Application Optimizations
+
+- XState v5 for efficient state management
+- Dependency injection for loose coupling
+- Event-driven architecture for responsiveness
+- Caching strategies for Home Assistant API calls
+
+## Deployment
+
+### Build Process
+
+```bash
+bun run prod:build         # Build optimized bundle
+bun run prod:start         # Start production server
+```
+
+### Production Configuration
+
+- Environment-specific YAML configs
+- Secure token management via environment variables
+- Logging configuration for production monitoring
+- Health check endpoints for system monitoring
+
+## Architecture Notes
+
+### Migration Benefits
+
+1. **Performance**: Bun's faster runtime and built-in optimizations
+2. **Ecosystem**: Better Node.js package compatibility
+3. **Development**: Faster test execution and hot reloading
+4. **Deployment**: Simplified build process and smaller bundle sizes
+
+### Future Considerations
+
+- Monitor Bun ecosystem maturity and stability
+- Consider migration to native Bun APIs where beneficial
+- Evaluate Bun's built-in features vs external dependencies
+- Plan for potential runtime-specific optimizations

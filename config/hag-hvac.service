@@ -1,0 +1,31 @@
+[Unit]
+Description=HAG HVAC Automation System
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=hag
+Group=hag
+WorkingDirectory=/opt/hag-hvac
+Environment=HASS_HassOptions__Token=your_home_assistant_token_here
+Environment=DENO_DIR=/opt/hag-hvac/.deno
+ExecStart=/usr/bin/deno task prod:systemd
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/hag-hvac
+
+# Resource limits
+LimitNOFILE=1024
+MemoryLimit=512M
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,55 @@
+{
+  "name": "hag-hvac-bun",
+  "version": "1.0.0",
+  "description": "Home Assistant aGentic HVAC Automation - Bun Runtime",
+  "main": "src/main.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/main.ts --config config/hvac_config_dev.yaml --log-level debug",
+    "dev:watch": "bun --watch run src/main.ts --config config/hvac_config_dev.yaml --log-level debug",
+    "prod": "bun run src/main.ts --config config/hvac_config_prod.yaml --log-level info",
+    "prod:build": "bun build src/main.ts --outdir target --target bun --minify && mkdir -p target && cp config/hvac_config_prod.yaml target/hvac_config_prod.yaml",
+    "prod:start": "bun run src/main.ts --config config/hvac_config_prod.yaml --log-level info",
+    "test": "bun test tests/ --ignore=tests/performance",
+    "test:unit": "bun test tests/unit/",
+    "test:integration": "bun test tests/integration/",
+    "test:performance": "bun test tests/performance/",
+    "test:watch": "bun test --watch tests/",
+    "test:coverage": "bun test --coverage tests/",
+    "build": "bun build src/main.ts --outdir target --target bun && mkdir -p target && cp config/hvac_config_dev.yaml target/hvac_config.yaml",
+    "check": "tsc --noEmit",
+    "check:src": "tsc --noEmit src/**/*.ts",
+    "fmt": "prettier --write .",
+    "lint": "eslint src/ tests/",
+    "ci": "bun run test && bun run check && bun run lint"
+  },
+  "dependencies": {
+    "@langchain/core": "^0.3.62",
+    "@langchain/openai": "^0.5.18",
+    "@needle-di/core": "^1.0.0",
+    "@std/assert": "npm:@jsr/std__assert@^1.0.13",
+    "@std/cli": "npm:@jsr/std__cli@^1.0.20",
+    "@std/log": "npm:@jsr/std__log@^0.224.14",
+    "dotenv": "^17.2.0",
+    "langchain": "^0.3.29",
+    "minimist": "^1.2.8",
+    "xstate": "^5.20.1",
+    "yaml": "^2.8.0",
+    "zod": "^4.0.4"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/minimist": "^1.2.5",
+    "@types/node": "^24.0.13",
+    "@typescript-eslint/eslint-plugin": "^8.36.0",
+    "@typescript-eslint/parser": "^8.36.0",
+    "eslint": "^9.30.1",
+    "globals": "^16.3.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+}
