@@ -61,7 +61,8 @@ type HAClientEvent =
   | { type: 'WS_ERROR'; error: string }
   | { type: 'AUTH_OK' }
   | { type: 'AUTH_FAILED'; error: string }
-  | { type: 'UPDATE_STATS'; stats: ConnectionStats };
+  | { type: 'UPDATE_STATS'; stats: ConnectionStats }
+  | { type: 'INCREMENT_MESSAGE_ID' };
 
 // Create the machine with full type safety
 function createHAClientMachine(
@@ -227,6 +228,11 @@ function createHAClientMachine(
               stats: ({ event, context }) => {
                 return event.type === 'UPDATE_STATS' ? event.stats : context.stats;
               }
+            })
+          },
+          INCREMENT_MESSAGE_ID: {
+            actions: assign({
+              messageId: ({ context }) => context.messageId + 1
             })
           }
         }
@@ -667,7 +673,8 @@ export class HomeAssistantClient {
     const snapshot = this.actor?.getSnapshot();
     if (snapshot) {
       const nextId = snapshot.context.messageId + 1;
-      // Update messageId in context
+      // Update messageId in context by sending an event
+      this.actor?.send({ type: 'INCREMENT_MESSAGE_ID' });
       return nextId;
     }
     return 1;
