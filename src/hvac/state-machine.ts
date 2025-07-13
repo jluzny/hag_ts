@@ -23,9 +23,9 @@ import {
   StateChangeData,
   SystemMode,
 } from '../types/common.ts';
-import { StateError } from '../core/exceptions.ts';
+import { StateError, toError } from '../core/exceptions.ts';
 import { LoggerService } from '../core/logging.ts';
-import { HomeAssistantClient } from '../home-assistant/client-xs.ts';
+import { HomeAssistantClient } from '../home-assistant/client.ts';
 
 /**
  * Simplified HVAC events that can trigger state transitions
@@ -260,6 +260,7 @@ export function createHVACMachine(
       isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
       lastDefrost: undefined,
       systemMode: hvacOptions.systemMode,
+      manualOverride: undefined,
     } satisfies HVACContext,
     states: {
       idle: {
@@ -321,6 +322,18 @@ export function createHVACMachine(
       evaluating: {
         entry: 'logStateEntry',
         always: [
+          {
+            target: 'idle',
+            guard: 'isManualOff',
+          },
+          {
+            target: 'heating',
+            guard: 'isManualHeat',
+          },
+          {
+            target: 'cooling',
+            guard: 'isManualCool',
+          },
           {
             target: 'heating',
             guard: 'shouldAutoHeat',
@@ -468,11 +481,23 @@ export function createHVACMachine(
           thresholds: hvacOptions.cooling.temperatureThresholds,
         });
       },
-      processManualOverride: (_, event) => {
+      processManualOverride: assign(({ context, event }) => {
+        if (event.type !== 'MANUAL_OVERRIDE') return context;
+        
         logger.info(`🎯 [HVAC] Manual override activated`, {
-          eventType: (event as { type?: string })?.type || 'unknown',
+          mode: (event as any).mode,
+          temperature: (event as any).temperature,
         });
-      },
+        
+        return {
+          ...context,
+          manualOverride: {
+            mode: (event as any).mode,
+            temperature: (event as any).temperature,
+            timestamp: new Date(),
+          },
+        } as any;
+      }),
       updateData: assign(({ context, event }) => {
         if (event.type !== 'UPDATE_DATA') return context;
 
@@ -679,6 +704,21 @@ export function createHVACMachine(
     },
     guards: {
       /**
+       * Manual override guards
+       */
+      isManualOff: ({ context }) => {
+        return (context as any).manualOverride?.mode === HVACMode.OFF;
+      },
+      
+      isManualHeat: ({ context }) => {
+        return (context as any).manualOverride?.mode === HVACMode.HEAT;
+      },
+      
+      isManualCool: ({ context }) => {
+        return (context as any).manualOverride?.mode === HVACMode.COOL;
+      },
+
+      /**
        * Unified guard logic - evaluates all conditions using single strategy
        */
 
@@ -859,16 +899,13 @@ export class HVACStateMachine {
 
   constructor(hvacOptions?: HvacOptions, haClient?: HomeAssistantClient) {
     this.logger = new LoggerService('HAG.hvac.state-machine');
-    this.logger.debug('📍 HVACStateMachine.constructor() ENTRY');
     this.machine = createHVACMachine(hvacOptions!, this.logger, haClient);
-    this.logger.debug('📍 HVACStateMachine.constructor() EXIT');
   }
 
   /**
    * Start the state machine
    */
   start(): void {
-    this.logger.debug('📍 HVACStateMachine.start() ENTRY');
     this.logger.info('🚀 Starting HVAC state machine', {
       machineId: this.machine.id,
       initialState: 'idle', // XState v5 doesn't expose initial directly
@@ -936,8 +973,7 @@ export class HVACStateMachine {
    */
   send(event: HVACEvent): void {
     if (!this.actor) {
-      this.logger.error('❌ Cannot send event: state machine not running', {
-        event,
+      this.logger.error('❌ Cannot send event: state machine not running', new Error('State machine not running'), {
         eventType: event.type,
       });
       throw new StateError('State machine is not running');

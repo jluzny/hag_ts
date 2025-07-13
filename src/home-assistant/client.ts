@@ -1,20 +1,25 @@
 /**
  * Home Assistant WebSocket and REST client for HAG JavaScript variant.
  *
- * Traditional async/await implementation with retry logic and connection management.
+ * XState-powered implementation with connection state management.
  */
 
 import { injectable } from "@needle-di/core";
-// Using native WebSocket API instead of deprecated @std/ws
-// Custom delay function to replace @std/async
-const delay = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
+import {
+  ActorRefFrom,
+  assign,
+  createActor,
+  createMachine,
+  fromPromise,
+  StateValue,
+} from 'xstate';
 import type { HassOptions } from "../config/config.ts";
 import { LoggerService } from "../core/logging.ts";
 import {
   ConnectionError,
   StateError,
-  ValidationError as _ValidationError,
+  getErrorMessage,
+  toError,
 } from "../core/exceptions.ts";
 import {
   ConnectionStats,
@@ -23,26 +28,294 @@ import {
   HassEventImpl,
   HassServiceCallImpl,
   HassStateImpl,
-  WebSocketState,
 } from "./models.ts";
+
+// Define state values as const for type safety
+const HAClientStates = {
+  disconnected: 'disconnected',
+  connecting: 'connecting',
+  authenticating: 'authenticating',
+  connected: 'connected',
+  reconnecting: 'reconnecting',
+  disconnecting: 'disconnecting',
+  error: 'error'
+} as const;
+
+
+// Strongly typed context interface
+interface HAClientContext {
+  ws?: WebSocket;
+  messageId: number;
+  stats: ConnectionStats;
+  retryCount: number;
+  error?: string;
+}
+
+// Discriminated union for events with proper typing
+type HAClientEvent =
+  | { type: 'CONNECT' }
+  | { type: 'DISCONNECT' }
+  | { type: 'RETRY' }
+  | { type: 'CONNECTION_LOST' }
+  | { type: 'WS_CONNECTED'; ws: WebSocket }
+  | { type: 'WS_ERROR'; error: string }
+  | { type: 'AUTH_OK' }
+  | { type: 'AUTH_FAILED'; error: string }
+  | { type: 'UPDATE_STATS'; stats: ConnectionStats };
+
+// Create the machine with full type safety
+function createHAClientMachine(
+  config: HassOptions,
+  logger: LoggerService,
+  webSocketFactory?: (url: string) => WebSocket
+) {
+  return createMachine({
+    /** @xstate-layout N4IgpgJg5mDOIC5QAoC2BDAxgCwJYDswBKAOlwGIAFAFQHkBRAYgG0AGAXUVAAOqsA9ixy9EIABKgANCAC0AZgAsATtIDsuydOkBOABxT5S+QF8tWtJlyCRYyTLhIoAJQAyAUWVsOXHgGFff0QwFTAWdhA2LgBhAEF+ThAAWmDNHVMtVQlpOU05HgA2SQAOGVJDAzMrLGw8fCJSchpaBmY2Zi5eAQkpZTltS2tIOwdnPCUe-wDg4K1dSJaY+ITk1PT0zOyCnP1tKR5dLWlq4rKaipq6xqbmttanJ1d3Ty9ff39g7Uj4SfGk-JSdKvT6JFKfLoXa5FDIqXaacrSMLaUrBa6PTJyKR3KQKIplCpFUoNUrtVQdDofOAfL56DFCKYyRZLLZ7ZYnBZI-a4w5SYnSO5XSrlaqKV7FJEyRTSfLo6TyGFM1TIjF0tktDltPqMjn8vnC4WiiWSiKRLCxZbrebPVJKKWyDJSCqSM3lZVq3L6g1G01m0i0-Gre1nFaXLFPGoPOJq6TGurGhqm1oW80M0DchRMw40-mO52e93e30+j1CkLhUCROIJhPxx7aJPfFOU+7fTWyLWyGqyVWu1UABSAAA=="" */
+    id: 'haClient',
+    initial: HAClientStates.disconnected,
+    types: {
+      context: {} as HAClientContext,
+      events: {} as HAClientEvent,
+    },
+    context: {
+      ws: undefined,
+      messageId: 1,
+      stats: {
+        totalConnections: 0,
+        totalReconnections: 0,
+        totalMessages: 0,
+        totalErrors: 0,
+      },
+      retryCount: 0,
+      error: undefined,
+    },
+    states: {
+      [HAClientStates.disconnected]: {
+        on: {
+          CONNECT: {
+            target: HAClientStates.connecting
+          }
+        }
+      },
+      [HAClientStates.connecting]: {
+        invoke: {
+          src: fromPromise(async () => {
+            return new Promise<WebSocket>((resolve, reject) => {
+              try {
+                const ws = webSocketFactory ? webSocketFactory(config.wsUrl) : new WebSocket(config.wsUrl);
+
+                ws.onopen = () => {
+                  logger.info('WebSocket connection established');
+                  resolve(ws);
+                };
+
+                ws.onerror = (event: Event | ErrorEvent) => {
+                  const errorEvent = event as ErrorEvent;
+                  const errorMessage = errorEvent.error?.message || errorEvent.message || 'Connection refused';
+                  
+                  logger.error('WebSocket connection failed', new Error(errorMessage), { url: config.wsUrl });
+                  reject(new Error(`WebSocket connection error: ${errorMessage}`));
+                };
+
+                ws.onclose = (event) => {
+                  if (event.code !== 1000) {
+                    const reason = event.reason || 'No reason provided';
+                    logger.error('WebSocket closed unexpectedly', new Error(reason), { url: config.wsUrl, code: event.code });
+                    reject(new Error(`WebSocket closed unexpectedly: ${event.code} - ${reason}`));
+                  }
+                };
+              } catch (error) {
+                reject(new Error(`WebSocket connection failed: ${getErrorMessage(error)}`));
+              }
+            });
+          }),
+          onDone: {
+            target: HAClientStates.authenticating,
+            actions: assign({
+              ws: ({ event }) => event.output
+            })
+          },
+          onError: {
+            target: HAClientStates.error,
+            actions: assign({
+              error: ({ event }) => getErrorMessage(event.error),
+              stats: ({ context }) => ({
+                ...context.stats,
+                totalErrors: context.stats.totalErrors + 1
+              })
+            })
+          }
+        }
+      },
+      [HAClientStates.authenticating]: {
+        invoke: {
+          src: fromPromise(async ({ input }: { input: HAClientContext }) => {
+            const { ws } = input;
+
+            return new Promise<void>((resolve, reject) => {
+              if (!ws) {
+                reject(new Error('WebSocket not available'));
+                return;
+              }
+
+              const authTimeout = setTimeout(() => {
+                reject(new Error('Authentication timeout'));
+              }, 20000);
+
+              const cleanup = () => {
+                clearTimeout(authTimeout);
+              };
+
+              ws.onmessage = (event) => {
+                if (typeof event.data === 'string') {
+                  const data = JSON.parse(event.data);
+
+                  if (data.type === 'auth_required') {
+                    logger.info('Auth required, sending token');
+                    try {
+                      ws.send(JSON.stringify({
+                        type: 'auth',
+                        access_token: config.token
+                      }));
+                    } catch (err) {
+                      cleanup();
+                      reject(new Error(`Failed to send auth: ${getErrorMessage(err)}`));
+                    }
+                  } else if (data.type === 'auth_ok') {
+                    logger.info('Authentication successful');
+                    cleanup();
+                    resolve();
+                  } else if (data.type === 'auth_invalid') {
+                    cleanup();
+                    reject(new Error('Authentication failed - invalid token'));
+                  }
+                }
+              };
+            });
+          }),
+          input: ({ context }) => context,
+          onDone: {
+            target: HAClientStates.connected,
+            actions: assign({
+              stats: ({ context }) => ({
+                ...context.stats,
+                totalConnections: context.stats.totalConnections + 1,
+                lastConnected: new Date()
+              }),
+              retryCount: 0,
+              error: undefined
+            })
+          },
+          onError: {
+            target: HAClientStates.error,
+            actions: assign({
+              error: ({ event }) => getErrorMessage(event.error)
+            })
+          }
+        }
+      },
+      [HAClientStates.connected]: {
+        on: {
+          DISCONNECT: {
+            target: HAClientStates.disconnecting
+          },
+          CONNECTION_LOST: {
+            target: HAClientStates.reconnecting
+          },
+          UPDATE_STATS: {
+            actions: assign({
+              stats: ({ event, context }) => {
+                return event.type === 'UPDATE_STATS' ? event.stats : context.stats;
+              }
+            })
+          }
+        }
+      },
+      [HAClientStates.reconnecting]: {
+        after: {
+          5000: {
+            target: HAClientStates.connecting,
+            actions: assign({
+              stats: ({ context }) => ({
+                ...context.stats,
+                totalReconnections: context.stats.totalReconnections + 1
+              })
+            })
+          }
+        },
+        on: {
+          DISCONNECT: {
+            target: HAClientStates.disconnecting
+          }
+        }
+      },
+      [HAClientStates.disconnecting]: {
+        entry: assign({
+          ws: ({ context }) => {
+            const { ws } = context;
+            if (ws) {
+              try {
+                ws.close();
+              } catch (err) {
+                logger.error('Error closing WebSocket', err);
+              }
+            }
+            return undefined;
+          }
+        }),
+        always: {
+          target: HAClientStates.disconnected
+        }
+      },
+      [HAClientStates.error]: {
+        on: {
+          RETRY: {
+            target: HAClientStates.connecting,
+            guard: ({ context }) => context.retryCount < config.maxRetries,
+            actions: assign({
+              retryCount: ({ context }) => context.retryCount + 1,
+              error: undefined
+            })
+          },
+          DISCONNECT: {
+            target: HAClientStates.disconnecting
+          }
+        },
+        after: {
+          5000: {
+            target: HAClientStates.connecting,
+            guard: ({ context }) => context.retryCount < config.maxRetries,
+            actions: assign({
+              retryCount: ({ context }) => context.retryCount + 1,
+              error: undefined
+            })
+          }
+        }
+      }
+    }
+  });
+}
+
+// Type-safe machine and actor types
+type HAClientMachine = ReturnType<typeof createHAClientMachine>;
+type HAClientActor = ActorRefFrom<HAClientMachine>;
+
+// Type guards for state checking
+function isConnectedState(state: StateValue): state is typeof HAClientStates.connected {
+  return state === HAClientStates.connected;
+}
+
+function isErrorState(state: StateValue): state is typeof HAClientStates.error {
+  return state === HAClientStates.error;
+}
+
 
 @injectable()
 export class HomeAssistantClient {
-  private ws?: WebSocket;
-  private messageId = 1;
-  private connectionState = WebSocketState.DISCONNECTED;
-  private eventHandlers = new Map<
-    string,
-    Set<(event: HassEventImpl) => void>
-  >();
+  private machine: HAClientMachine;
+  private actor?: HAClientActor;
+  private eventHandlers = new Map<string, Set<(event: HassEventImpl) => void>>();
   private subscriptions = new Set<string>();
-  private stats: ConnectionStats = {
-    totalConnections: 0,
-    totalReconnections: 0,
-    totalMessages: 0,
-    totalErrors: 0,
-  };
-  private reconnectTimer?: NodeJS.Timeout;
   private pingTimer?: NodeJS.Timeout;
   private config: HassOptions;
   private logger: LoggerService;
@@ -54,90 +327,67 @@ export class HomeAssistantClient {
   ) {
     this.config = config!;
     this.logger = logger!;
+    this.machine = createHAClientMachine(this.config, this.logger, this.webSocketFactory);
   }
 
   /**
    * Connect to Home Assistant WebSocket API
    */
   async connect(): Promise<void> {
-    this.logger.info("🚀 Starting Home Assistant connection process", {
-      wsUrl: this.config.wsUrl,
-      restUrl: this.config.restUrl,
-      maxRetries: this.config.maxRetries,
-      retryDelayMs: this.config.retryDelayMs,
-      currentState: this.connectionState,
-    });
+    this.logger.info("🚀 Starting Home Assistant connection process");
 
-    if (this.connectionState === WebSocketState.CONNECTED) {
-      this.logger.info("✅ Already connected to Home Assistant", {
-        stats: this.getStats(),
-      });
+    if (this.connected) {
+      this.logger.info("✅ Already connected to Home Assistant");
       return;
     }
 
-    this.connectionState = WebSocketState.CONNECTING;
-    let retryCount = 0;
+    if (!this.actor) {
+      this.actor = createActor(this.machine);
+      this.actor.start();
+    }
 
-    while (retryCount < this.config.maxRetries) {
-      try {
-        this.logger.info("🔄 Attempting Home Assistant connection", {
-          wsUrl: this.config.wsUrl,
-          attempt: retryCount + 1,
-          maxRetries: this.config.maxRetries,
-          retryDelayMs: this.config.retryDelayMs,
-        });
-
-        await this.establishConnection();
-        await this.authenticate();
-        await this.subscribeToEvents();
-
-        // connectionState is set to CONNECTED in authenticate() method
-        this.stats.totalConnections++;
-        this.stats.lastConnected = new Date();
-
-        this.startPingTimer();
-
-        this.logger.info("✅ Connected to Home Assistant successfully", {
-          totalAttempts: retryCount + 1,
-          connectionStats: this.getStats(),
-          subscriptions: Array.from(this.subscriptions),
-          eventHandlers: Array.from(this.eventHandlers.keys()),
-        });
-        return;
-      } catch (error) {
-        retryCount++;
-        this.stats.totalErrors++;
-        this.stats.lastError = new Date();
-
-        this.logger.error(`❌ Connection attempt ${retryCount} failed`, error, {
-          attempt: retryCount,
-          maxRetries: this.config.maxRetries,
-          wsUrl: this.config.wsUrl,
-          willRetry: retryCount < this.config.maxRetries,
-        });
-
-        if (retryCount >= this.config.maxRetries) {
-          this.connectionState = WebSocketState.ERROR;
-          this.logger.error("❌ All connection attempts exhausted", {
-            totalAttempts: retryCount,
-            maxRetries: this.config.maxRetries,
-            finalError: error,
-            stats: this.getStats(),
-          });
-          throw new ConnectionError(
-            `Failed to connect after ${this.config.maxRetries} attempts`,
-            this.config.wsUrl,
-            retryCount,
-          );
+    return new Promise((resolve, reject) => {
+      const subscription = this.actor!.subscribe((state) => {
+        if (isConnectedState(state.value)) {
+          this.setupConnectedState();
+          this.logger.info("✅ Connected to Home Assistant successfully");
+          subscription.unsubscribe();
+          resolve();
+        } else if (isErrorState(state.value) && state.context.retryCount >= this.config.maxRetries) {
+          this.logger.error("❌ All connection attempts exhausted");
+          subscription.unsubscribe();
+          reject(new ConnectionError(`Failed to connect after ${this.config.maxRetries} attempts: ${state.context.error}`));
         }
+      });
 
-        this.connectionState = WebSocketState.RECONNECTING;
-        this.logger.info("⏳ Waiting before retry", {
-          retryDelayMs: this.config.retryDelayMs,
-          nextAttempt: retryCount + 1,
-        });
-        await delay(this.config.retryDelayMs);
-      }
+      this.actor!.send({ type: 'CONNECT' });
+    });
+  }
+
+  private setupConnectedState(): void {
+    const ws = this.actor?.getSnapshot().context.ws;
+    if (ws) {
+      (ws as WebSocket).onmessage = async (event: MessageEvent) => {
+        if (typeof event.data === 'string') {
+          await this.handleMessage(JSON.parse(event.data));
+        }
+      };
+
+      (ws as WebSocket).onclose = () => {
+        this.logger.warning('Connection lost');
+        this.actor?.send({ type: 'CONNECTION_LOST' });
+      };
+
+      (ws as WebSocket).onerror = (event: Event | ErrorEvent) => {
+        const errorEvent = event as ErrorEvent;
+        const errorMessage = errorEvent.error?.message || errorEvent.message || 'WebSocket error';
+        
+        this.logger.error('WebSocket error in connected state', new Error(errorMessage));
+        this.actor?.send({ type: 'CONNECTION_LOST' });
+      };
+
+      this.startPingTimer();
+      this.subscribeToInitialEvents();
     }
   }
 
@@ -145,42 +395,23 @@ export class HomeAssistantClient {
    * Disconnect from Home Assistant
    */
   disconnect(): Promise<void> {
-    this.logger.info("🔌 Disconnecting from Home Assistant", {
-      currentState: this.connectionState,
-      stats: this.getStats(),
-      subscriptions: Array.from(this.subscriptions),
-      eventHandlers: Array.from(this.eventHandlers.keys()),
-    });
+    this.logger.info("🔌 Disconnecting from Home Assistant");
 
-    this.clearTimers();
-    this.connectionState = WebSocketState.DISCONNECTED;
-
-    if (this.ws) {
-      try {
-        this.logger.debug("🔌 Closing WebSocket connection", {
-          readyState: this.ws.readyState,
-          readyStateString: this.getReadyStateString(this.ws.readyState),
-        });
-        this.ws.close();
-        this.logger.debug("✅ WebSocket closed successfully");
-      } catch (error) {
-        this.logger.error("❌ Error closing WebSocket", error);
-      }
-      this.ws = undefined;
+    if (this.pingTimer) {
+      clearInterval(this.pingTimer);
+      this.pingTimer = undefined;
     }
-
-    const handlersCleared = this.eventHandlers.size;
-    const subscriptionsCleared = this.subscriptions.size;
 
     this.eventHandlers.clear();
     this.subscriptions.clear();
 
-    this.logger.info("✅ Disconnected from Home Assistant", {
-      handlersCleared,
-      subscriptionsCleared,
-      finalState: this.connectionState,
-    });
+    if (this.actor) {
+      this.actor.send({ type: 'DISCONNECT' });
+      this.actor.stop();
+      this.actor = undefined;
+    }
 
+    this.logger.info("✅ Disconnected from Home Assistant");
     return Promise.resolve();
   }
 
@@ -188,16 +419,21 @@ export class HomeAssistantClient {
    * Check if connected
    */
   get connected(): boolean {
-    return (
-      this.connectionState === WebSocketState.CONNECTED && this.ws !== undefined
-    );
+    const snapshot = this.actor?.getSnapshot();
+    return snapshot ? isConnectedState(snapshot.value) && snapshot.context.ws !== undefined : false;
   }
 
   /**
    * Get connection statistics
    */
   getStats(): ConnectionStats {
-    return { ...this.stats };
+    const context = this.actor?.getSnapshot().context;
+    return context ? { ...context.stats } : {
+      totalConnections: 0,
+      totalReconnections: 0,
+      totalMessages: 0,
+      totalErrors: 0,
+    };
   }
 
   /**
@@ -207,21 +443,12 @@ export class HomeAssistantClient {
     this.logger.debug("🔍 Getting entity state", { entityId });
 
     if (!this.connected) {
-      this.logger.error(
-        "❌ Cannot get state: not connected to Home Assistant",
-        { entityId },
-      );
+      this.logger.error("❌ Cannot get state: not connected to Home Assistant", undefined, { entityId });
       throw new ConnectionError("Not connected to Home Assistant");
     }
 
     try {
       const url = `${this.config.restUrl}/states/${entityId}`;
-      this.logger.debug("🌐 Making REST API call", {
-        url,
-        method: "GET",
-        entityId,
-      });
-
       const response = await fetch(url, {
         headers: {
           Authorization: `Bearer ${this.config.token}`,
@@ -229,35 +456,11 @@ export class HomeAssistantClient {
         },
       });
 
-      this.logger.debug("🌐 REST API response received", {
-        entityId,
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok,
-      });
-
       if (!response.ok) {
         if (response.status === 404) {
-          this.logger.warning("⚠️ Entity not found", {
-            entityId,
-            status: response.status,
-          });
-          throw new StateError(
-            `Entity not found: ${entityId}`,
-            undefined,
-            entityId,
-          );
+          throw new StateError(`Entity not found: ${entityId}`, undefined, entityId);
         }
-        this.logger.error("❌ REST API error", {
-          entityId,
-          status: response.status,
-          statusText: response.statusText,
-        });
-        throw new StateError(
-          `HTTP ${response.status}: ${response.statusText}`,
-          undefined,
-          entityId,
-        );
+        throw new StateError(`HTTP ${response.status}: ${response.statusText}`, undefined, entityId);
       }
 
       const data = await response.json();
@@ -267,8 +470,6 @@ export class HomeAssistantClient {
         entityId,
         state: state.state,
         friendlyName: state.attributes?.friendly_name,
-        lastChanged: state.lastChanged,
-        lastUpdated: state.lastUpdated,
       });
 
       return state;
@@ -278,9 +479,7 @@ export class HomeAssistantClient {
       }
       this.logger.error("❌ Failed to get entity state", error, { entityId });
       throw new StateError(
-        `Failed to get state for ${entityId}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Failed to get state for ${entityId}: ${getErrorMessage(error)}`,
         undefined,
         entityId,
       );
@@ -294,48 +493,24 @@ export class HomeAssistantClient {
     this.logger.info("🔧 Calling Home Assistant service", {
       domain: serviceCall.domain,
       service: serviceCall.service,
-      entityId: serviceCall.serviceData?.entity_id,
-      serviceData: serviceCall.serviceData,
     });
 
     if (!this.connected) {
-      this.logger.error(
-        "❌ Cannot call service: not connected to Home Assistant",
-        {
-          domain: serviceCall.domain,
-          service: serviceCall.service,
-        },
-      );
       throw new ConnectionError("Not connected to Home Assistant");
     }
 
     try {
-      const message = serviceCall.toWebSocketMessage(this.getNextMessageId());
-
-      this.logger.debug("📤 Sending service call message", {
-        messageId: message.id,
-        domain: serviceCall.domain,
-        service: serviceCall.service,
-        target: serviceCall.target,
-        serviceData: serviceCall.serviceData,
-      });
-
+      const messageId = this.getNextMessageId();
+      const message = serviceCall.toWebSocketMessage(messageId);
       await this.sendMessage(message);
-
       this.logger.info("✅ Service called successfully", {
         domain: serviceCall.domain,
         service: serviceCall.service,
-        messageId: message.id,
       });
     } catch (error) {
-      this.logger.error("❌ Failed to call service", error, {
-        domain: serviceCall.domain,
-        service: serviceCall.service,
-      });
+      this.logger.error("❌ Failed to call service", error);
       throw new ConnectionError(
-        `Failed to call service ${serviceCall.domain}.${serviceCall.service}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Failed to call service ${serviceCall.domain}.${serviceCall.service}: ${getErrorMessage(error)}`,
       );
     }
   }
@@ -347,9 +522,6 @@ export class HomeAssistantClient {
     this.logger.info("📡 Subscribing to Home Assistant events", { eventType });
 
     if (!this.connected) {
-      this.logger.error("❌ Cannot subscribe to events: not connected", {
-        eventType,
-      });
       throw new ConnectionError("Not connected to Home Assistant");
     }
 
@@ -364,20 +536,10 @@ export class HomeAssistantClient {
       event_type: eventType,
     };
 
-    this.logger.debug("📤 Sending event subscription message", {
-      messageId: message.id,
-      eventType,
-      messageType: message.type,
-    });
-
     await this.sendMessage(message);
     this.subscriptions.add(eventType);
 
-    this.logger.info("✅ Successfully subscribed to events", {
-      eventType,
-      totalSubscriptions: this.subscriptions.size,
-      messageId: message.id,
-    });
+    this.logger.info("✅ Successfully subscribed to events", { eventType });
   }
 
   /**
@@ -387,22 +549,12 @@ export class HomeAssistantClient {
     eventType: string,
     handler: (event: HassEventImpl) => void,
   ): void {
-    this.logger.debug("📝 Adding event handler", {
-      eventType,
-      existingHandlers: this.eventHandlers.get(eventType)?.size || 0,
-    });
-
     if (!this.eventHandlers.has(eventType)) {
       this.eventHandlers.set(eventType, new Set());
     }
 
     this.eventHandlers.get(eventType)!.add(handler);
-
-    this.logger.info("✅ Event handler registered", {
-      eventType,
-      totalHandlers: this.eventHandlers.get(eventType)!.size,
-      totalEventTypes: this.eventHandlers.size,
-    });
+    this.logger.info("✅ Event handler registered", { eventType });
   }
 
   /**
@@ -441,514 +593,83 @@ export class HomeAssistantClient {
     });
   }
 
-  /**
-   * Wait for WebSocket to be truly ready (no buffered data)
-   */
-  private waitForWebSocketReady(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (!this.ws) {
-        reject(new ConnectionError("WebSocket not initialized"));
-        return;
-      }
-
-      if (this.ws.readyState !== WebSocket.OPEN) {
-        reject(new ConnectionError("WebSocket not in OPEN state"));
-        return;
-      }
-
-      // If buffer is already empty, we're ready
-      if (this.ws.bufferedAmount === 0) {
-        this.logger.debug("WebSocket buffer empty, ready to send");
-        resolve();
-        return;
-      }
-
-      this.logger.debug("Waiting for WebSocket buffer to clear", {
-        bufferedAmount: this.ws.bufferedAmount
-      });
-
-      let attempts = 0;
-      const maxAttempts = 100; // 1 second max wait (10ms intervals)
-      
-      const checkBuffer = () => {
-        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-          reject(new ConnectionError("WebSocket closed while waiting"));
-          return;
-        }
-
-        if (this.ws.bufferedAmount === 0) {
-          this.logger.debug("WebSocket buffer cleared, ready to send");
-          resolve();
-        } else if (attempts >= maxAttempts) {
-          reject(new ConnectionError("WebSocket buffer did not clear within timeout"));
-        } else {
-          attempts++;
-          setTimeout(checkBuffer, 10);
-        }
-      };
-
-      checkBuffer();
-    });
-  }
-
-  /**
-   * Establish WebSocket connection
-   */
-  private establishConnection(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      try {
-        this.logger.debug("Creating WebSocket connection...", {
-          url: this.config.wsUrl,
-          currentTime: new Date().toISOString(),
-        });
-
-        this.ws = this.webSocketFactory
-          ? this.webSocketFactory(this.config.wsUrl)
-          : new WebSocket(this.config.wsUrl);
-
-        this.logger.debug("WebSocket object created", {
-          readyState: this.ws.readyState,
-          readyStateString: this.getReadyStateString(this.ws.readyState),
-          url: this.ws.url,
-        });
-
-        this.ws.onopen = () => {
-          this.logger.info("WebSocket connection established");
-          this.logger.debug("WebSocket opened successfully", {
-            readyState: this.ws?.readyState,
-            readyStateString: this.ws
-              ? this.getReadyStateString(this.ws.readyState)
-              : "undefined",
-            protocol: this.ws?.protocol,
-            extensions: this.ws?.extensions,
-          });
-          resolve();
-        };
-
-        this.ws.onmessage = async (event) => {
-          this.logger.debug("WebSocket message received", {
-            dataType: typeof event.data,
-            dataLength: event.data?.length,
-            timestamp: new Date().toISOString(),
-          });
-
-          if (typeof event.data === "string") {
-            await this.handleMessage(JSON.parse(event.data));
-          }
-        };
-
-        this.ws.onerror = (event: Event | ErrorEvent) => {
-          const error = (event as ErrorEvent).error || event;
-          this.logger.error("WebSocket error", {
-            error,
-            readyState: this.ws?.readyState,
-            readyStateString: this.ws
-              ? this.getReadyStateString(this.ws.readyState)
-              : "undefined",
-            url: this.config.wsUrl,
-            timestamp: new Date().toISOString(),
-          });
-          reject(
-            new ConnectionError(
-              `WebSocket connection error: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-              this.config.wsUrl,
-            ),
-          );
-        };
-
-        this.ws.onclose = (event) => {
-          this.logger.warning("🔌 WebSocket connection closed", {
-            code: event.code,
-            reason: event.reason || "No reason provided",
-            wasClean: event.wasClean,
-            timestamp: new Date().toISOString(),
-            connectionState: this.connectionState,
-            codeDescription: this.getCloseCodeDescription(event.code)
-          });
-
-          if (
-            event.code !== 1000 &&
-            this.connectionState === WebSocketState.CONNECTING
-          ) {
-            reject(
-              new ConnectionError(
-                `WebSocket closed unexpectedly: ${event.code} - ${event.reason}`,
-                this.config.wsUrl,
-              ),
-            );
-          }
-        };
-      } catch (error) {
-        this.logger.error("Failed to create WebSocket", {
-          error,
-          url: this.config.wsUrl,
-          timestamp: new Date().toISOString(),
-        });
-        reject(
-          new ConnectionError(
-            `WebSocket connection failed: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            this.config.wsUrl,
-          ),
-        );
-      }
-    });
-  }
-
-  /**
-   * Authenticate with Home Assistant
-   */
-  private authenticate(): Promise<void> {
-    this.connectionState = WebSocketState.AUTHENTICATING;
-    this.logger.debug("Starting Home Assistant authentication");
-
-    return new Promise((resolve, reject) => {
-      let authTimeout: NodeJS.Timeout | undefined = undefined;
-      let authRequiredReceived = false;
-
-      const cleanup = () => {
-        if (authTimeout) {
-          clearTimeout(authTimeout);
-        }
-      };
-
-      const sendAuthMessage = async () => {
-        if (authRequiredReceived) return; // Prevent duplicate sends
-        authRequiredReceived = true;
-
-        try {
-          this.logger.info("📤 Sending authentication token to Home Assistant");
-          
-          // Check WebSocket state before sending auth
-          if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-            throw new ConnectionError("WebSocket not in OPEN state during authentication");
-          }
-          
-          // Wait for WebSocket buffer to be empty to ensure it's truly ready
-          await this.waitForWebSocketReady();
-          
-          const authMessage: HagWebSocketMessage = {
-            type: HassCommandType.AUTH,
-            access_token: this.config.token,
-          };
-          
-          await this.sendMessage(authMessage);
-          this.logger.debug("✅ Authentication token sent successfully");
-        } catch (error) {
-          cleanup();
-          this.handleMessage = originalHandleMessage;
-          reject(error);
-        }
-      };
-
-      // Set timeout for authentication
-      const authTimeoutMs = 20000; // Increased to 20 seconds for Bun runtime
-      this.logger.debug("Setting authentication timeout", { timeoutMs: authTimeoutMs });
-      authTimeout = setTimeout(() => {
-        // Check if we're still trying to authenticate
-        if (this.connectionState !== WebSocketState.CONNECTED) {
-          this.logger.warning("Authentication timeout reached", { 
-            timeoutMs: authTimeoutMs,
-            connectionState: this.connectionState,
-            wsReadyState: this.ws?.readyState,
-            authRequiredReceived
-          });
-          cleanup();
-          reject(
-            new ConnectionError(
-              `Authentication timeout - ${authRequiredReceived ? 'no auth_ok received' : 'no auth_required received'} after ${authTimeoutMs}ms`,
-            ),
-          );
-        }
-      }, authTimeoutMs);
-
-      // Handle auth_required and auth responses
-      const originalHandleMessage = this.handleMessage.bind(this);
-      this.handleMessage = async (data: HagWebSocketMessage) => {
-        try {
-          
-          if (data.type === "auth_required") {
-            this.logger.info("✅ Received auth_required message", { 
-              haVersion: data.ha_version,
-              authRequiredReceived
-            });
-            
-            // Send authentication message immediately
-            await sendAuthMessage();
-          } else if (data.type === "auth_ok") {
-            this.logger.info("Authentication successful");
-            this.connectionState = WebSocketState.CONNECTED;
-            cleanup();
-            this.handleMessage = originalHandleMessage;
-            resolve();
-          } else if (data.type === "auth_invalid") {
-            cleanup();
-            this.handleMessage = originalHandleMessage;
-            reject(
-              new ConnectionError("Authentication failed - invalid token"),
-            );
-          } else {
-            // Pass other messages to original handler
-            await originalHandleMessage(data);
-          }
-        } catch (error) {
-          cleanup();
-          this.handleMessage = originalHandleMessage;
-          reject(error);
-        }
-      };
-
-      // Handle the case where auth_required was already received by original handler
-      // We need to send auth message immediately if connection is ready
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        this.logger.debug("WebSocket already open, checking if auth_required was already processed");
-        setTimeout(async () => {
-          if (!authRequiredReceived && this.connectionState === WebSocketState.AUTHENTICATING) {
-            this.logger.info("Sending auth message proactively (auth_required may have been processed by original handler)");
-            await sendAuthMessage();
-          }
-        }, 100); // Small delay to allow any pending auth_required to be processed
-      }
-    });
-  }
-
-  /**
-   * Subscribe to initial events
-   */
-  private async subscribeToEvents(): Promise<void> {
-    // Subscribe to state_changed events by default
-    await this.subscribeEvents("state_changed");
-  }
-
-  /**
-   * Handle incoming WebSocket messages
-   */
   private async handleMessage(data: HagWebSocketMessage): Promise<void> {
     try {
-      this.stats.totalMessages++;
-
-      this.logger.debug("📨 Processing WebSocket message", {
-        messageType: data.type,
-        messageId: data.id,
-        totalMessages: this.stats.totalMessages,
-        timestamp: new Date().toISOString(),
-      });
+      const snapshot = this.actor?.getSnapshot();
+      if (snapshot) {
+        const newStats = {
+          ...snapshot.context.stats,
+          totalMessages: snapshot.context.stats.totalMessages + 1
+        };
+        // Update stats in machine context
+        this.actor?.send({ type: 'UPDATE_STATS', stats: newStats });
+      }
 
       switch (data.type) {
-        case "event":
-          await this.handleEvent(data);
-          break;
-
-        case "result":
-          if (data.success) {
-            this.logger.debug("✅ Command result: success", {
-              messageId: data.id,
-              result: data.result,
-            });
-          } else {
-            this.logger.error("❌ Command result: failed", {
-              messageId: data.id,
-              error: data.error,
-              errorCode: data.error?.code,
-              errorMessage: data.error?.message,
-            });
+        case 'event':
+          const event = HassEventImpl.fromWebSocketEvent(data);
+          const handlers = this.eventHandlers.get(event.eventType);
+          if (handlers) {
+            for (const handler of handlers) {
+              try {
+                handler(event);
+              } catch (error) {
+                this.logger.error('Event handler failed', error);
+              }
+            }
           }
           break;
 
-        case "pong":
-          this.logger.debug("🏓 Pong received - connection alive", {
-            messageId: data.id,
-            timestamp: new Date().toISOString(),
-          });
+        case 'result':
+          if (data.success) {
+            this.logger.debug('Command result: success', { messageId: data.id });
+          } else {
+            this.logger.error('Command result: failed', toError(data.error), { messageId: data.id });
+          }
           break;
 
-        case "auth_required":
-          this.logger.debug("🔐 Authentication required", {
-            haVersion: data.ha_version,
-            timestamp: new Date().toISOString(),
-          });
-          break;
-
-        case "auth_ok":
-          this.logger.info("✅ Authentication successful");
-          break;
-
-        case "auth_invalid":
-          this.logger.error("❌ Authentication failed - invalid token");
+        case 'pong':
+          this.logger.debug('Pong received - connection alive');
           break;
 
         default:
-          this.logger.debug("❓ Unhandled message type", {
-            type: data.type,
-            messageId: data.id,
-            fullMessage: data,
-          });
+          this.logger.debug('Unhandled message type', { type: data.type });
       }
     } catch (error) {
-      this.logger.error("❌ Error handling WebSocket message", error, {
-        messageType: data.type,
-        messageId: data.id,
-        totalMessages: this.stats.totalMessages,
-      });
-      this.stats.totalErrors++;
+      this.logger.error('Error handling WebSocket message', error);
     }
   }
 
-  /**
-   * Handle event messages
-   */
-  private handleEvent(data: HagWebSocketMessage): Promise<void> {
-    try {
-      const event = HassEventImpl.fromWebSocketEvent(data);
-
-      this.logger.debug("📨 Received Home Assistant event", {
-        eventType: event.eventType,
-        entityId: event.data?.entity_id,
-        eventTime: event.timeFired,
-        origin: event.origin,
-        hasData: !!event.data,
-      });
-
-      // Log specific event details for important event types
-      if (event.eventType === "state_changed") {
-        const stateChangeData = event.getStateChangeData();
-        const entityId = stateChangeData?.entityId;
-        const oldState = stateChangeData?.oldState?.state;
-        const newState = stateChangeData?.newState?.state;
-
-        this.logger.debug("🔄 Entity state changed", {
-          entityId,
-          oldState,
-          newState,
-          stateChanged: oldState !== newState,
-          timeFired: event.timeFired,
-          attributes: stateChangeData?.newState?.attributes,
-        });
-      } else if (event.eventType === "service_executed") {
-        this.logger.debug("⚙️ Service execution event", {
-          domain: event.data?.domain,
-          service: event.data?.service,
-          serviceData: event.data?.service_data,
-          timeFired: event.timeFired,
-        });
-      } else {
-        this.logger.debug("📋 Other event received", {
-          eventType: event.eventType,
-          data: event.data,
-          timeFired: event.timeFired,
-        });
-      }
-
-      // Dispatch to event handlers
-      const handlers = this.eventHandlers.get(event.eventType);
-      if (handlers && handlers.size > 0) {
-        this.logger.debug("📤 Dispatching event to handlers", {
-          eventType: event.eventType,
-          handlerCount: handlers.size,
-        });
-
-        for (const handler of handlers) {
-          try {
-            handler(event);
-          } catch (error) {
-            this.logger.error("❌ Event handler failed", error, {
-              eventType: event.eventType,
-              entityId: event.data?.entity_id,
-            });
-          }
-        }
-      } else {
-        this.logger.debug("No handlers registered for event type", {
-          eventType: event.eventType,
-          availableHandlers: Array.from(this.eventHandlers.keys()),
-        });
-      }
-    } catch (error) {
-      this.logger.error("❌ Failed to process event", error, {
-        messageType: data.type,
-        messageId: data.id,
-      });
-    }
-    return Promise.resolve();
-  }
-
-  /**
-   * Send message to WebSocket
-   */
   private sendMessage(message: HagWebSocketMessage): Promise<void> {
-    this.logger.debug("Attempting to send WebSocket message", {
-      messageType: message.type,
-      messageId: message.id,
-      hasWebSocket: !!this.ws,
-      readyState: this.ws?.readyState,
-      readyStateString: this.ws
-        ? this.getReadyStateString(this.ws.readyState)
-        : "undefined",
-      timestamp: new Date().toISOString(),
-    });
-
-    if (!this.ws) {
-      this.logger.error("Cannot send message: WebSocket not initialized");
+    const ws = this.actor?.getSnapshot().context.ws;
+    if (!ws || (ws as WebSocket).readyState !== WebSocket.OPEN) {
       throw new ConnectionError("WebSocket not connected");
     }
 
-    if (this.ws.readyState !== WebSocket.OPEN) {
-      this.logger.error("Cannot send message: WebSocket not in OPEN state", {
-        currentState: this.ws.readyState,
-        currentStateString: this.getReadyStateString(this.ws.readyState),
-        expectedState: WebSocket.OPEN,
-        expectedStateString: "OPEN",
-        url: this.config.wsUrl,
-      });
-      throw new ConnectionError(
-        `Failed to send message: WebSocket readyState is ${this.getReadyStateString(
-          this.ws.readyState,
-        )} (${this.ws.readyState}), expected OPEN (${WebSocket.OPEN})`,
-      );
-    }
-
     try {
-      const messageString = JSON.stringify(message);
-      this.logger.debug("Sending WebSocket message", {
-        messageLength: messageString.length,
-        messagePreview: messageString.substring(0, 100),
-      });
-
-      this.ws.send(messageString);
-
+      (ws as WebSocket).send(JSON.stringify(message));
       this.logger.debug("WebSocket message sent successfully", {
         messageType: message.type,
         messageId: message.id,
       });
     } catch (error) {
-      this.logger.error("Failed to send WebSocket message", {
-        error,
-        messageType: message.type,
-        readyState: this.ws.readyState,
-        readyStateString: this.getReadyStateString(this.ws.readyState),
-      });
       throw new ConnectionError(
-        `Failed to send message: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Failed to send message: ${getErrorMessage(error)}`,
       );
     }
     return Promise.resolve();
   }
 
-  /**
-   * Get next message ID
-   */
   private getNextMessageId(): number {
-    return this.messageId++;
+    const snapshot = this.actor?.getSnapshot();
+    if (snapshot) {
+      const nextId = snapshot.context.messageId + 1;
+      // Update messageId in context
+      return nextId;
+    }
+    return 1;
   }
 
-  /**
-   * Start ping timer to keep connection alive
-   */
   private startPingTimer(): void {
     this.pingTimer = setInterval(() => {
       if (this.connected) {
@@ -957,98 +678,21 @@ export class HomeAssistantClient {
           type: HassCommandType.PING,
         };
 
-        this.sendMessage(pingMessage).catch((error) => {
-          this.logger.error("Ping failed", error);
-          this.handleConnectionLoss();
-        });
+        try {
+          this.sendMessage(pingMessage);
+        } catch (error) {
+          this.logger.error('Ping failed', error);
+          this.actor?.send({ type: 'CONNECTION_LOST' });
+        }
       }
-    }, 30000); // Ping every 30 seconds
+    }, 30000);
   }
 
-  /**
-   * Clear all timers
-   */
-  private clearTimers(): void {
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = undefined;
-    }
-
-    if (this.pingTimer) {
-      clearInterval(this.pingTimer);
-      this.pingTimer = undefined;
-    }
-  }
-
-  /**
-   * Handle connection loss and attempt reconnection
-   */
-  private handleConnectionLoss(): void {
-    if (this.connectionState === WebSocketState.CONNECTED) {
-      this.logger.warning("⚠️ Connection lost, attempting to reconnect", {
-        currentState: this.connectionState,
-        totalReconnections: this.stats.totalReconnections,
-        retryDelayMs: this.config.retryDelayMs,
-        stats: this.getStats(),
-      });
-
-      this.connectionState = WebSocketState.RECONNECTING;
-      this.stats.totalReconnections++;
-
-      this.reconnectTimer = setTimeout(() => {
-        this.logger.info("🔄 Starting automatic reconnection", {
-          totalReconnections: this.stats.totalReconnections,
-        });
-
-        this.connect().catch((error) => {
-          this.logger.error("❌ Automatic reconnection failed", error, {
-            totalReconnections: this.stats.totalReconnections,
-            stats: this.getStats(),
-          });
-          this.connectionState = WebSocketState.ERROR;
-        });
-      }, this.config.retryDelayMs);
-    } else {
-      this.logger.debug("Connection loss detected but not in CONNECTED state", {
-        currentState: this.connectionState,
-      });
-    }
-  }
-
-  /**
-   * Convert WebSocket readyState number to human-readable string
-   */
-  private getReadyStateString(readyState: number): string {
-    switch (readyState) {
-      case WebSocket.CONNECTING:
-        return "CONNECTING";
-      case WebSocket.OPEN:
-        return "OPEN";
-      case WebSocket.CLOSING:
-        return "CLOSING";
-      case WebSocket.CLOSED:
-        return "CLOSED";
-      default:
-        return `UNKNOWN(${readyState})`;
-    }
-  }
-
-  /**
-   * Convert WebSocket close code to human-readable description
-   */
-  private getCloseCodeDescription(code: number): string {
-    switch (code) {
-      case 1000: return 'Normal closure';
-      case 1001: return 'Going away';
-      case 1002: return 'Protocol error';
-      case 1003: return 'Unsupported data';
-      case 1006: return 'Abnormal closure (no close frame)';
-      case 1007: return 'Invalid frame payload data';
-      case 1008: return 'Policy violation';
-      case 1009: return 'Message too big';
-      case 1011: return 'Internal server error';
-      case 1015: return 'TLS handshake failure';
-      default: return `Unknown code (${code})`;
+  private async subscribeToInitialEvents(): Promise<void> {
+    try {
+      await this.subscribeEvents('state_changed');
+    } catch (error) {
+      this.logger.error('Failed to subscribe to initial events', error);
     }
   }
 }

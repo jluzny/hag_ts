@@ -11,7 +11,7 @@ import { readFile, stat } from 'fs/promises';
 import { statSync } from 'fs';
 import { homedir, platform, arch } from 'os';
 import { Settings, SettingsSchema } from './config.ts';
-import { ConfigurationError } from '../core/exceptions.ts';
+import { ConfigurationError, toError, getErrorMessage } from '../core/exceptions.ts';
 import { LoggerService } from '../core/logging.ts';
 
 const logger = new LoggerService('ConfigLoader');
@@ -89,11 +89,9 @@ export class ConfigLoader {
     } catch (error) {
       const loadTime = Date.now() - loadStart;
 
-      logger.error('❌ Configuration loading failed', {
-        error,
+      logger.error('❌ Configuration loading failed', toError(error), {
         configPath,
         loadTimeMs: loadTime,
-        errorType: error instanceof Error ? error.name : 'Unknown',
       });
 
       if (error instanceof ConfigurationError) {
@@ -238,10 +236,9 @@ export class ConfigLoader {
       const readTime = Date.now() - readStart;
 
       if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
-        logger.error('❌ Configuration file not found', {
+        logger.error('❌ Configuration file not found', toError(error, 'File not found'), {
           path: configPath,
           readTimeMs: readTime,
-          errorType: 'file_not_found',
         });
 
         throw new ConfigurationError(
@@ -251,17 +248,13 @@ export class ConfigLoader {
         );
       }
 
-      logger.error('❌ Failed to read/parse configuration file', {
+      logger.error('❌ Failed to read/parse configuration file', toError(error), {
         path: configPath,
         readTimeMs: readTime,
-        error,
-        errorType: error instanceof Error ? error.name : 'Unknown',
       });
 
       throw new ConfigurationError(
-        `Failed to read configuration file: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Failed to read configuration file: ${getErrorMessage(error)}`,
         'config_file',
         configPath,
       );
@@ -459,13 +452,10 @@ export class ConfigLoader {
           `${detail.path}: ${detail.message}`
         ).join(', ');
 
-        logger.error('❌ Configuration validation failed with schema errors', {
+        logger.error('❌ Configuration validation failed with schema errors', new Error(`Validation failed: ${errorMessages}`), {
           validationTimeMs: validationTime,
           errorCount: issues.length,
           errors: errorDetails,
-          configKeys: config && typeof config === 'object'
-            ? Object.keys(config as Record<string, unknown>)
-            : [],
         });
 
         throw new ConfigurationError(
@@ -475,17 +465,13 @@ export class ConfigLoader {
         );
       }
 
-      logger.error('❌ Configuration validation failed with unknown error', {
+      logger.error('❌ Configuration validation failed with unknown error', toError(error), {
         validationTimeMs: validationTime,
-        error,
-        errorType: error instanceof Error ? error.name : 'Unknown',
         configType: typeof config,
       });
 
       throw new ConfigurationError(
-        `Configuration validation failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Configuration validation failed: ${getErrorMessage(error)}`,
         'validation',
         config,
       );
@@ -523,15 +509,11 @@ export class ConfigLoader {
       return { valid: true, config };
     } catch (error) {
       const validationTime = Date.now() - validationStart;
-      const errorMessage = error instanceof Error
-        ? error.message
-        : String(error);
+      const errorMessage = getErrorMessage(error);
 
-      logger.error('❌ Configuration file validation failed', {
+      logger.error('❌ Configuration file validation failed', toError(error), {
         configPath,
         validationTimeMs: validationTime,
-        error,
-        errorType: error instanceof Error ? error.name : 'Unknown',
       });
 
       return {
