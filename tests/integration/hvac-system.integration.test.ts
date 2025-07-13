@@ -309,7 +309,7 @@ test("HVAC Integration - Setup and basic functionality", async () => {
 
   // Handle error conditions gracefully
   try {
-    controller.manualOverride("invalid_action", {});
+    controller.manualOverride("invalid_action" as any, {});
   } catch (error) {
     expect(error).toBeInstanceOf(Error);
   }

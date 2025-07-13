@@ -141,5 +141,24 @@ export function getErrorMessage(error: unknown): string {
 export function toError(error: unknown, fallbackMessage = 'Unknown error'): Error {
   if (error instanceof Error) return error;
   if (typeof error === 'string') return new Error(error);
+  
+  // Handle objects with error information
+  if (error && typeof error === 'object') {
+    if ('message' in error && typeof error.message === 'string') {
+      return new Error(error.message);
+    }
+    if ('error' in error && typeof error.error === 'string') {
+      return new Error(error.error);
+    }
+    // Try to get meaningful info from the object
+    try {
+      const serialized = JSON.stringify(error);
+      return new Error(`${fallbackMessage}: ${serialized}`);
+    } catch {
+      // Fallback to object inspection
+      return new Error(`${fallbackMessage}: ${Object.prototype.toString.call(error)}`);
+    }
+  }
+  
   return new Error(`${fallbackMessage}: ${String(error)}`);
 }

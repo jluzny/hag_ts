@@ -624,7 +624,10 @@ export class HomeAssistantClient {
           if (data.success) {
             this.logger.debug('Command result: success', { messageId: data.id });
           } else {
-            this.logger.error('Command result: failed', toError(data.error), { messageId: data.id });
+            this.logger.error('Command result: failed', toError(data.error, 'Home Assistant command failed'), { 
+              messageId: data.id,
+              errorData: data.error 
+            });
           }
           break;
 
