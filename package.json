@@ -1,7 +1,7 @@
 {
-  "name": "hag-hvac-bun",
+  "name": "hag-hvac",
   "version": "1.0.0",
-  "description": "Home Assistant aGentic HVAC Automation - Bun Runtime",
+  "description": "Home Assistant aGentic HVAC Automation - TypeScript/Bun Runtime",
   "main": "src/main.ts",
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
     "prod": "bun run src/main.ts --config config/hvac_config_prod.yaml --log-level info",
     "prod:build": "bun build src/main.ts --outdir target --target bun --minify && mkdir -p target && cp config/hvac_config_prod.yaml target/hvac_config_prod.yaml",
     "prod:start": "bun run src/main.ts --config config/hvac_config_prod.yaml --log-level info",
-    "test": "bun test tests/ --ignore=tests/performance",
+    "test": "bun test tests/unit tests/integration",
     "test:unit": "bun test tests/unit/",
     "test:integration": "bun test tests/integration/",
     "test:performance": "bun test tests/performance/",

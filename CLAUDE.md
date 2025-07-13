@@ -1,28 +1,23 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # HAG Project - Claude Development Notes
 
 ## Project Overview
 
 HAG (Home Assistant aGentic HVAC Automation) is a TypeScript/Bun application that provides intelligent HVAC control through Home Assistant integration with optional AI-powered decision making.
 
-## Runtime Migration: Deno → Bun
-
-The project has been migrated from Deno to Bun runtime for improved performance and Node.js ecosystem compatibility.
-
-### Key Changes in Migration
-
-- **Runtime**: Deno → Bun v1.2.18
-- **Package Management**: `deno.json` → `package.json` with npm dependencies
-- **Build System**: Deno compile → Bun build
-- **Test Runner**: Deno test → Bun test
-- **Module Resolution**: JSR imports → npm packages with `npm:@jsr/` prefix
+This is the main HAG implementation using TypeScript with Bun runtime for optimal performance. A Deno variant is available at hag_ts_deno for comparison and experimentation.
 
 ## Current Architecture
 
-- **Language**: TypeScript with Bun runtime
+- **Runtime**: Bun v1.2.18
+- **Language**: TypeScript with experimental decorators
 - **Dependency Injection**: @needle-di/core for type-safe DI
 - **State Management**: XState v5 for HVAC state machine
 - **AI Integration**: LangChain v0.3 with OpenAI for intelligent decisions
-- **CLI Framework**: @std/cli (via npm:@jsr/std\_\_cli)
+- **CLI Framework**: @std/cli (via npm:@jsr/std__cli)
 - **Configuration**: Zod schemas with YAML/environment variable support
 
 ## Development Commands
@@ -62,27 +57,27 @@ bun run ci                  # Full CI pipeline
 ### Core Dependencies
 
 - `xstate`: ^5.20.1 (state machine)
-- `@langchain/core`: ^0.3.61 (AI framework)
-- `@langchain/openai`: ^0.5.16 (OpenAI integration)
+- `@langchain/core`: ^0.3.62 (AI framework)
+- `@langchain/openai`: ^0.5.18 (OpenAI integration)
 - `langchain`: ^0.3.29 (main library)
 - `@needle-di/core`: ^1.0.0 (dependency injection)
-- `zod`: ^3.25.76 (schema validation)
-- `yaml`: ^2.4.1 (configuration parsing)
+- `zod`: ^4.0.4 (schema validation)
+- `yaml`: ^2.8.0 (configuration parsing)
 
 ### Bun-Specific Dependencies
 
-- `@std/cli`: npm:@jsr/std\_\_cli@^1.0.20 (CLI framework)
-- `@std/assert`: npm:@jsr/std\_\_assert@^1.0.13 (assertions)
-- `@std/log`: npm:@jsr/std\_\_log@^0.224.14 (logging)
-- `dotenv`: ^16.4.5 (environment variables)
+- `@std/cli`: npm:@jsr/std__cli@^1.0.20 (CLI framework)
+- `@std/assert`: npm:@jsr/std__assert@^1.0.13 (assertions)
+- `@std/log`: npm:@jsr/std__log@^0.224.14 (logging)
+- `dotenv`: ^17.2.0 (environment variables)
 - `minimist`: ^1.2.8 (argument parsing)
 
 ### Development Dependencies
 
 - `@types/bun`: latest (Bun type definitions)
-- `typescript`: ^5.4.2 (TypeScript compiler)
-- `eslint`: ^8.57.0 (linting)
-- `prettier`: ^3.2.5 (formatting)
+- `typescript`: ^5.8.3 (TypeScript compiler)
+- `eslint`: ^9.30.1 (linting)
+- `prettier`: ^3.6.2 (formatting)
 - `vitest`: ^3.2.4 (additional testing utilities)
 
 ## Configuration Structure
@@ -133,6 +128,7 @@ src/
 │   ├── module-registry.ts # Module registration
 │   └── types.ts           # Core types
 ├── home-assistant/        # Home Assistant integration
+│   ├── client-xs.ts       # HA WebSocket/REST client (XState)
 │   ├── client.ts          # HA WebSocket/REST client
 │   └── models.ts          # HA data models
 ├── hvac/                  # HVAC control logic
@@ -161,14 +157,6 @@ tests/
 └── performance/          # Performance benchmarks
     └── state-machine.perf.test.ts
 ```
-
-## Commit Message Guidelines
-
-- **Do not mention Claude or AI assistance in commit messages**
-- Keep commit messages focused on the technical changes
-- Use conventional commit format: `type: description`
-- Focus on business value and technical implementation
-- Example: `feat: migrate from Deno to Bun runtime`
 
 ## Development Guidelines
 
@@ -222,7 +210,7 @@ constructor(
 
 ### Bun Runtime Benefits
 
-- Fast startup time compared to Node.js/Deno
+- Fast startup time compared to Node.js
 - Built-in bundler and transpiler
 - Optimized package installation and resolution
 - Native TypeScript support
@@ -249,19 +237,3 @@ bun run prod:start         # Start production server
 - Secure token management via environment variables
 - Logging configuration for production monitoring
 - Health check endpoints for system monitoring
-
-## Architecture Notes
-
-### Migration Benefits
-
-1. **Performance**: Bun's faster runtime and built-in optimizations
-2. **Ecosystem**: Better Node.js package compatibility
-3. **Development**: Faster test execution and hot reloading
-4. **Deployment**: Simplified build process and smaller bundle sizes
-
-### Future Considerations
-
-- Monitor Bun ecosystem maturity and stability
-- Consider migration to native Bun APIs where beneficial
-- Evaluate Bun's built-in features vs external dependencies
-- Plan for potential runtime-specific optimizations

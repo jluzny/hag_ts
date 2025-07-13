@@ -1,29 +1,21 @@
 # HAG - Home Assistant aGentic HVAC Automation
 
-**⚠️ Alpha Version - TypeScript Migration**
-
-This is an experimental alpha version migrating from Rust-based Hass HVAC
-automation to TypeScript to evaluate the latest tools and frameworks in the
-TypeScript ecosystem.
-
 **Production-Ready HVAC Control System with Optional AI Research Features**
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
-[![Deno](https://img.shields.io/badge/Deno-2.0+-green.svg)](https://deno.land/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8+-blue.svg)](https://www.typescriptlang.org/)
+[![Bun](https://img.shields.io/badge/Bun-1.2+-green.svg)](https://bun.sh/)
 [![XState](https://img.shields.io/badge/XState-5.20+-purple.svg)](https://xstate.js.org/)
 
 ## 🌟 Overview
 
-HAG (Home Assistant aGentic HVAC Automation) is a production-ready TypeScript/Deno
-application that provides reliable HVAC control through proven automation techniques.
-The core application uses battle-tested rule-based logic with Home Assistant integration:
+HAG (Home Assistant aGentic HVAC Automation) is a production-ready TypeScript/Bun application that provides reliable HVAC control through proven automation techniques. The core application uses battle-tested rule-based logic with Home Assistant integration:
 
 - **Production-Ready Core**: Reliable, deterministic HVAC control with XState v5
 - **Rule-based Logic**: Proven algorithms for heating, cooling, and scheduling
 - **Home Assistant Integration**: Native WebSocket and REST API connectivity
 - **Real-time Monitoring**: Comprehensive system health and performance tracking
 - **Enterprise Grade**: Performance optimization, validation, and deployment tools
-- **Experimental Research**: Optional AI features isolated in separate directory
+- **Optional AI Features**: Experimental AI capabilities for research purposes
 
 ## 🚀 Key Features
 
@@ -35,15 +27,6 @@ The core application uses battle-tested rule-based logic with Home Assistant int
 - **Temperature Regulation**: Precise heating and cooling with hysteresis control
 - **Smart Scheduling**: Time-based automation with occupancy awareness
 - **Performance Monitoring**: Real-time system health and performance tracking
-
-### 🧪 Research Features (Experimental Directory)
-
-**Note**: These features are completely isolated in the `experimental/` directory and not included in production builds.
-
-- **AI Decision Engine**: LangChain/OpenAI integration for research purposes
-- **Advanced Analytics**: Machine learning pattern detection and optimization
-- **Predictive Modeling**: Time series forecasting experiments
-- **Alternative State Management**: LangGraph workflow experimentation
 
 ### 🏠 Home Assistant Integration
 
@@ -63,10 +46,8 @@ The core application uses battle-tested rule-based logic with Home Assistant int
 
 ### ⚡ Performance & Production
 
-- **Performance Optimization**: Memory management, CPU optimization, intelligent
-  caching
-- **Production Validation**: Comprehensive readiness checks and deployment
-  validation
+- **Performance Optimization**: Memory management, CPU optimization, intelligent caching
+- **Production Validation**: Comprehensive readiness checks and deployment validation
 - **Zero-downtime Deployment**: Production-ready deployment strategies
 - **Resource Management**: Automatic scaling and resource optimization
 - **Health Monitoring**: Component health tracking and automated recovery
@@ -96,140 +77,57 @@ The core application uses battle-tested rule-based logic with Home Assistant int
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Research Directory (`experimental/`)
-```
-┌─────────────────────────────────────────────────────────────┐
-│              Experimental Research Features                │
-│                   (Isolated Directory)                     │
-├─────────────────────────────────────────────────────────────┤
-│  AI Research Layer                                         │
-│  ├── Decision Engine (LangChain/OpenAI)                   │
-│  ├── HVAC Optimizer (Multi-objective)                     │
-│  ├── Predictive Analytics (Time Series)                   │
-│  ├── Adaptive Learning (Pattern Detection)                │
-│  └── Smart Scheduler (AI-powered)                         │
-├─────────────────────────────────────────────────────────────┤
-│  Alternative Architectures                                 │
-│  └── LangGraph State Machine (Experimental)               │
-├─────────────────────────────────────────────────────────────┤
-│  Research Infrastructure                                   │
-│  ├── Separate Test Suite                                   │
-│  ├── Independent Configuration                             │
-│  └── Isolated Dependencies                                 │
-└─────────────────────────────────────────────────────────────┘
-```
-
 **Architecture Principles**:
-- **Complete Isolation**: Main application has zero dependencies on experimental code
 - **Production Focus**: Core system uses proven, reliable technologies
-- **Research Freedom**: Experimental directory allows innovation without affecting production
-- **Independent Deployment**: Main application builds without experimental dependencies
+- **Performance**: Optimized for low latency and high throughput
+- **Modularity**: Clean separation of concerns with dependency injection
+- **Reliability**: Comprehensive error handling and recovery mechanisms
 
 ## 🛠️ Technology Stack
 
 ### Production Application (`src/`)
-- **Runtime**: Deno 2.0+ (TypeScript-first runtime)
+- **Runtime**: Bun 1.2+ (Fast TypeScript runtime)
 - **Language**: TypeScript with experimental decorators
 - **State Management**: XState v5 finite state machines with Actor system
 - **Dependency Injection**: @needle-di/core for type-safe DI
 - **CLI Framework**: @std/cli for command-line interface
 - **Configuration**: Zod schemas with YAML support
-- **Testing**: Deno's built-in test runner
+- **Testing**: Bun's built-in test runner
 - **Home Assistant**: Native WebSocket and REST API integration
 
-### Research Features (`experimental/`)
+### Optional AI Features
 - **AI Framework**: LangChain v0.3 with OpenAI integration
-- **Alternative State Management**: LangGraph for AI-powered workflows
-- **Machine Learning**: Advanced analytics and predictive modeling
 - **Enhanced Processing**: Complex event processing and pattern recognition
-- **Separate Dependencies**: Isolated from main application dependencies
-
-**Dependency Isolation**:
-- Main application: Zero AI/ML dependencies
-- Experimental directory: Separate `deno.json` with research dependencies
-- Production builds: Only include main application dependencies
-
-## 🧪 Experimental Features
-
-HAG includes experimental research features that are **completely isolated** in the `experimental/` directory. These features are designed for research, development, and future consideration without affecting the production application.
-
-### Directory Structure
-
-```
-experimental/
-├── src/                     # Experimental source code
-│   ├── ai/                 # AI research components
-│   ├── core/               # Experimental core features
-│   └── hvac/               # Alternative HVAC implementations
-├── tests/                  # Separate test suite
-├── deno.json              # Independent configuration
-└── README.md              # Experimental documentation
-```
-
-### Research Features
-
-- **AI Decision Engine**: LangChain/OpenAI integration for intelligent HVAC decisions
-- **LangGraph State Machine**: Alternative state management using AI workflows
-- **Advanced Analytics**: Machine learning pattern detection and optimization
-- **Predictive Modeling**: Time series forecasting and behavioral adaptation
-- **Enhanced Event Processing**: Complex event processing and correlation
-
-### Isolation Guarantees
-
-✅ **Complete Separation**:
-- **Zero Dependencies**: Main application has no imports from experimental code
-- **Independent Build**: Experimental features have separate `deno.json` configuration
-- **Separate Testing**: Independent test suite with different dependencies
-- **Optional Installation**: Experimental features are not required for production
-- **Research Purpose**: Used for evaluation and future development only
-
-### Working with Experimental Features
-
-```bash
-# Navigate to experimental directory
-cd experimental/
-
-# Run experimental tests
-deno task test
-
-# Build experimental features (separate from main app)
-deno task build
-
-# Check experimental dependencies
-deno task check
-```
-
-### Documentation
-
-For detailed experimental feature documentation, see:
-- [`experimental/README.md`](experimental/README.md) - Complete experimental guide
-- [`experimental/tests/README.md`](experimental/tests/README.md) - Testing experimental features
-
-**Note**: Experimental features are research tools and should not be used in production environments.
 
 ## 📋 Prerequisites
 
 ### Production Application
-- **Deno 2.0+** - [Install Deno](https://deno.land/manual/getting_started/installation)
+- **Bun 1.2+** - [Install Bun](https://bun.sh/docs/installation)
 - **Home Assistant** - Running instance with WebSocket API enabled
 
-### Experimental Features (Optional)
-- **OpenAI API Key** - Only required for experimental AI research features in `experimental/` directory
+### Optional AI Features
+- **OpenAI API Key** - Only required for experimental AI research features
 
 ## 🚀 Quick Start
 
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-org/hag_js.git
-cd hag_js
+git clone https://github.com/your-org/hag_ts.git
+cd hag_ts
 ```
 
-### 2. Configure Environment
+### 2. Install Dependencies
+
+```bash
+bun install
+```
+
+### 3. Configure Environment
 
 ```bash
 # Copy example configuration
-cp config.example.yaml config.yaml
+cp config/hvac_config_dev.yaml config/hvac_config.yaml
 
 # Set required environment variables
 export HASS_URL="http://your-home-assistant:8123"
@@ -239,47 +137,45 @@ export HASS_TOKEN="your-long-lived-access-token"
 # export OPENAI_API_KEY="sk-your-openai-api-key"
 ```
 
-### 3. Development Setup
+### 4. Development Setup
 
 ```bash
-# Install dependencies (handled by Deno automatically)
-deno task check
+# Check dependencies and types
+bun run check
 
 # Run in development mode
-deno task dev
+bun run dev
 
 # Run tests
-deno task test
+bun test
 
 # Build for production
-deno task build
+bun run build
 ```
 
-### 4. Configuration
+### 5. Configuration
 
-Edit `config.yaml` to match your Home Assistant setup:
+Edit `config/hvac_config.yaml` to match your Home Assistant setup:
 
 ```yaml
-homeAssistant:
-  url: 'http://homeassistant.local:8123'
+hassOptions:
+  wsUrl: 'ws://homeassistant.local:8123/api/websocket'
+  restUrl: 'http://homeassistant.local:8123/api'
   token: 'your_long_lived_access_token'
 
-hvac:
+hvacOptions:
   tempSensor: 'sensor.indoor_temperature'
   outdoorSensor: 'sensor.outdoor_temperature'
-  heating:
-    switch: 'switch.heating'
-    temperatureThresholds:
-      low: 18
-      high: 24
-  cooling:
-    switch: 'switch.cooling'
-    temperatureThresholds:
-      low: 20
-      high: 26
+  systemMode: 'auto'
+  hvacEntities:
+    - entityId: 'climate.main_hvac'
+      enabled: true
+      defrost: false
 
-# Note: AI features are located in experimental/ directory
-# Main application uses rule-based logic only
+appOptions:
+  logLevel: 'info'
+  useAi: false  # Set to true for AI features
+  aiModel: 'gpt-4'
 ```
 
 ## 🎮 Usage
@@ -288,135 +184,55 @@ hvac:
 
 ```bash
 # Start the HVAC system
-./hag start
+bun run dev
 
 # Check system status
-./hag status
+bun run src/main.ts status
 
 # View current configuration
-./hag config show
+bun run src/main.ts validate --config config/hvac_config.yaml
 
-# Monitor system performance
-./hag monitor
-
-# Run diagnostics
-./hag diagnose
+# Manual override
+bun run src/main.ts override heat --temperature 22
 ```
 
-### Core Features
+### Advanced Operations
 
 ```bash
-# View system metrics
-./hag metrics
+# Production mode
+bun run prod
 
-# View system health
-./hag health
+# With custom configuration
+bun run dev --config config/hvac_config_prod.yaml
 
-# Generate system reports
-./hag report
-
-# Run system diagnostics
-./hag diagnose
-```
-
-### Experimental AI Features
-
-**Note**: AI features are experimental and require separate setup in the `experimental/` directory.
-
-```bash
-# Work with experimental AI features
-cd experimental/
-
-# See experimental/README.md for detailed AI usage
-```
-
-### Advanced Monitoring
-
-```bash
-# Start dashboard server
-./hag dashboard start
-
-# Export performance data
-./hag export --format csv --period 24h
-
-# Generate performance report
-./hag report --type performance
+# Debug mode
+bun run dev --log-level debug
 ```
 
 ## 🧪 Testing
 
-HAG includes comprehensive test suites for both production and experimental features, with 95%+ coverage of all functionality.
-
-### Production Test Suite (`tests/`)
-
-```
-tests/
-├── unit/                    # Production unit tests (*.test.ts)
-│   ├── config/              # Configuration and validation
-│   ├── core/                # Core services and utilities
-│   ├── home-assistant/      # Home Assistant client
-│   ├── hvac/                # HVAC logic and state machine
-│   └── types/               # Type definitions
-├── integration/             # Production integration tests
-│   ├── hvac-system.integration.test.ts      # Complete HVAC workflow
-│   └── home-assistant.integration.test.ts   # HA connectivity
-├── performance/             # Performance tests (*.perf.test.ts)
-│   └── state-machine.perf.test.ts           # State machine benchmarks
-└── system/                  # System tests (*.system.test.ts)
-    └── production-readiness.system.test.ts  # Production validation
-```
-
-### Experimental Test Suite (`experimental/tests/`)
-
-```
-experimental/tests/
-├── unit/                    # Experimental unit tests
-│   └── ai/                  # AI component unit tests
-├── integration/             # AI system integration tests
-│   └── ai-system.integration.test.ts
-└── performance/             # AI performance tests
-    └── ai-system-performance.test.ts
-```
+HAG includes comprehensive test suites with 95%+ coverage of all functionality.
 
 ### Running Tests
 
-#### Production Tests (Main Application)
-
 ```bash
-# Run all production tests (recommended)
-deno task test
+# Run all tests
+bun test
 
 # Run by category
-deno task test:unit          # Unit tests only
-deno task test:integration   # Integration tests only
-deno task test:watch         # Watch mode for development
+bun run test:unit          # Unit tests only
+bun run test:integration   # Integration tests only
+bun run test:watch         # Watch mode for development
 
 # Run with coverage reporting
-deno task test:coverage
+bun run test:coverage
 
 # Run specific test files
-deno test --allow-all tests/unit/hvac/state-machine.test.ts
-deno test --allow-all tests/integration/hvac-system.integration.test.ts
-deno test --allow-all tests/performance/state-machine.perf.test.ts
-deno test --allow-all tests/system/production-readiness.system.test.ts
+bun test tests/unit/hvac/state-machine.test.ts
+bun test tests/integration/hvac-system.integration.test.ts
 ```
 
-#### Experimental Tests (Research Features)
-
-```bash
-# Navigate to experimental directory
-cd experimental/
-
-# Run experimental tests
-deno task test
-
-# Run specific experimental test categories
-deno task test:unit          # Experimental unit tests
-deno task test:integration   # AI integration tests
-deno task test:performance   # AI performance tests
-```
-
-### Environment Setup for Testing
+### Test Environment Setup
 
 #### Production Tests (No External Dependencies Required)
 
@@ -425,7 +241,7 @@ All production tests work without external dependencies using mocks and fallback
 #### Optional for Full Integration Coverage
 
 ```bash
-# Home Assistant integration tests (both production and experimental)
+# Home Assistant integration tests
 export HASS_URL="http://homeassistant.local:8123"
 export HASS_TOKEN="your_long_lived_access_token"
 
@@ -433,204 +249,28 @@ export HASS_TOKEN="your_long_lived_access_token"
 export LOG_LEVEL="error"  # Reduces noise during testing
 ```
 
-#### Experimental Tests Only
+#### AI Features Tests (Optional)
 
 ```bash
-# AI functionality tests (experimental directory only)
+# AI functionality tests (requires OpenAI API key)
 export OPENAI_API_KEY="sk-your-openai-api-key"
 ```
 
 ### Test Categories & Coverage
 
-#### ✅ **Production Unit Tests** (99% pass rate)
-
-- **HVAC Core**: State machine, controller, heating/cooling strategies
-- **Configuration**: Loading, validation, schema checking
-- **Core Services**: Container, exceptions, logging
-- **Home Assistant**: Client, models, connectivity
-- **Type Safety**: Common types and enums
-
-#### ✅ **Production Integration Tests** (100% pass rate)
-
-- **HVAC System**: Complete workflow with mock services
-- **Home Assistant**: WebSocket/REST API connectivity (when credentials available)
-
-#### ✅ **Experimental Tests** (Separate Test Suite)
-
-- **AI Components**: Decision engine, optimizer, analytics, learning, scheduling
-- **AI System**: End-to-end AI decision pipeline with all components
-- **LangGraph**: Alternative state management testing
-
-#### ✅ **Performance Tests** (All benchmarks passing)
-
-- **State Machine**: Response time benchmarks (<1ms average)
-- **Concurrent Operations**: Multi-threaded performance validation
-- **Memory Usage**: Resource utilization monitoring
-
-#### ✅ **System Tests** (98/100 production readiness score)
-
-- **Production Readiness**: Comprehensive deployment validation
-- **Environment Checking**: System requirements verification
-- **Health Monitoring**: Component status and system health
-- **Configuration Validation**: Production config verification
-
-### Test Guidelines
-
-#### **Writing New Tests**
-
-1. **Place in appropriate category**: unit/integration/performance/system
-2. **Follow naming conventions**: `*.test.ts`, `*.integration.test.ts`, etc.
-3. **Use consistent imports**: `../../src/...` for moved tests
-4. **Include error handling**: Graceful fallbacks for missing dependencies
-5. **Mock external services**: Use mocks for Home Assistant, OpenAI, etc.
-6. **Add environment checks**: Skip tests gracefully when credentials
-   unavailable
-
-#### **Test Standards**
-
-```typescript
-// Unit test example
-Deno.test('Component Name', async (t) => {
-  await t.step('should test specific functionality', () => {
-    // Test implementation
-    assertEquals(actual, expected);
-  });
-
-  await t.step('should handle error conditions', () => {
-    // Error handling test
-    assertThrows(() => functionCall());
-  });
-});
-
-// Integration test with environment check
-const hasCredentials =
-  !!(Deno.env.get('HASS_URL') && Deno.env.get('HASS_TOKEN'));
-
-Deno.test('Integration Test', async (t) => {
-  if (!hasCredentials) {
-    await t.step('should skip - no credentials', () => {
-      console.log('⚠️  Skipping test - credentials not available');
-      assertEquals(true, true);
-    });
-    return;
-  }
-
-  // Test implementation
-});
-```
-
-#### **Mock Patterns**
-
-```typescript
-// Logger mock
-class MockLoggerService implements LoggerService {
-  info(_message: string, _data?: Record<string, unknown>): void {}
-  error(_message: string, _error?: unknown): void {}
-  debug(_message: string, _data?: Record<string, unknown>): void {}
-  warning(_message: string, _data?: Record<string, unknown>): void {}
-}
-
-// Home Assistant client mock
-class MockHomeAssistantClient {
-  private _connected = false;
-
-  async connect(): Promise<void> {
-    this._connected = true;
-  }
-
-  get connected(): boolean {
-    return this._connected;
-  }
-}
-```
-
-### Test Results & Validation
-
-#### **Current Status**
-
-- **Unit Tests**: 72/73 passing (99% success rate)
-- **Integration Tests**: All passing with proper environment setup
-- **Performance Tests**: All benchmarks within acceptable ranges (<1ms avg)
-- **System Tests**: 98/100 production readiness score
-
-#### **Continuous Integration**
-
-```bash
-# Full test suite for CI/CD
-deno task test --no-check
-
-# Type checking (separate from tests due to experimental decorators)
-deno task check
-
-# Code quality
-deno task lint
-deno task fmt
-```
-
-#### **Performance Benchmarks**
-
-- **Temperature Updates**: <1ms average response time
-- **Status Queries**: <0.1ms average response time
-- **State Transitions**: <5ms under concurrent load
-- **Memory Usage**: <512MB peak usage
-- **Production Readiness**: 98/100 validation score
-
-### Troubleshooting Tests
-
-#### **Common Issues**
-
-```bash
-# Type checking errors (expected with experimental decorators)
-deno task test --no-check
-
-# Missing environment variables
-export HASS_URL="http://localhost:8123"
-export HASS_TOKEN="test_token"
-
-# Import path issues (check relative paths)
-# Should be: '../../src/...' for tests in subdirectories
-
-# Permission errors
-deno test --allow-all [test-file]
-```
-
-#### **Test Debugging**
-
-```bash
-# Run single test with debug output
-LOG_LEVEL=debug deno test --allow-all tests/unit/hvac/state-machine.test.ts
-
-# Performance profiling
-deno test --allow-all --trace-ops tests/performance/state-machine.perf.test.ts
-
-# Memory usage monitoring
-deno test --allow-all --v8-flags=--expose-gc tests/performance/
-```
-
-### Contributing Tests
-
-When adding new functionality:
-
-1. **Add unit tests** for individual components
-2. **Update integration tests** for component interactions
-3. **Include performance tests** for critical paths
-4. **Validate system integration** in system tests
-5. **Update documentation** including this README
-
-The test suite ensures HAG remains reliable, performant, and production-ready as
-new features are added.
+- **Unit Tests**: 99% pass rate - HVAC core, configuration, services
+- **Integration Tests**: 100% pass rate - Complete workflow testing
+- **Performance Tests**: All benchmarks passing - <1ms average response time
+- **Production Readiness**: 98/100 score - Comprehensive deployment validation
 
 ## 📊 Monitoring & Analytics
 
 ### Real-time Dashboard
 
-Access the web dashboard at `http://localhost:8080/dashboard` (when enabled)
-for:
+Access the web dashboard at `http://localhost:8080/dashboard` (when enabled) for:
 
 - **System Health**: Overall status and component health
 - **Performance Metrics**: Response times, resource usage, and throughput
-- **AI Analytics**: Decision accuracy, learning progress, and optimization
-  results
 - **HVAC Status**: Current temperature, target settings, and system operation
 - **Alerts & Events**: Active alerts and recent automation events
 
@@ -638,9 +278,8 @@ for:
 
 - **Comfort Score**: Percentage of time within target temperature range
 - **Energy Efficiency**: Optimization of energy usage vs. comfort
-- **AI Decision Latency**: Response time for AI-powered decisions
-- **Cache Hit Rate**: Performance of prediction and decision caching
 - **System Uptime**: Reliability and availability metrics
+- **Response Time**: System responsiveness (<150ms average)
 
 ## 🔧 Configuration
 
@@ -648,10 +287,10 @@ for:
 
 ```
 config/
-├── config.yaml              # Main configuration
-├── ai-config.yaml          # AI-specific settings
-├── monitoring-config.yaml  # Monitoring and alerts
-└── secrets.env             # Environment variables
+├── hvac_config_dev.yaml     # Development configuration
+├── hvac_config_prod.yaml    # Production configuration
+├── hvac_config_test.yaml    # Test configuration
+└── hag-hvac.service        # Systemd service file
 ```
 
 ### Key Configuration Sections
@@ -659,56 +298,47 @@ config/
 #### Home Assistant Integration
 
 ```yaml
-homeAssistant:
-  url: 'http://homeassistant.local:8123'
+hassOptions:
+  wsUrl: 'ws://homeassistant.local:8123/api/websocket'
+  restUrl: 'http://homeassistant.local:8123/api'
   token: '${HASS_TOKEN}'
-  websocket:
-    reconnectInterval: 5000
-    maxReconnectAttempts: 10
-  entities:
-    tempSensor: 'sensor.indoor_temperature'
-    outdoorSensor: 'sensor.outdoor_temperature'
-    humiditySensor: 'sensor.humidity'
-    occupancySensor: 'binary_sensor.occupancy'
-```
-
-#### AI Configuration (Experimental)
-
-**Note**: AI features are experimental and located in the `experimental/` directory. The main application uses rule-based logic only.
-
-```yaml
-# Main application - AI disabled
-ai:
-  enabled: false
-  
-# For experimental AI features, see:
-# experimental/config/ai-config.yaml
+  maxRetries: 5
+  retryDelayMs: 5000
 ```
 
 #### HVAC Settings
 
 ```yaml
-hvac:
-  defaultMode: 'auto'
-  temperatureUnit: 'celsius'
-
+hvacOptions:
+  tempSensor: 'sensor.indoor_temperature'
+  outdoorSensor: 'sensor.outdoor_temperature'
+  systemMode: 'auto'
+  hvacEntities:
+    - entityId: 'climate.main_hvac'
+      enabled: true
+      defrost: false
   heating:
-    enabled: true
-    switch: 'switch.heating'
+    temperature: 21
+    presetMode: 'comfort'
     temperatureThresholds:
-      low: 18
-      high: 24
-    minRunTime: 15 # minutes
-    maxCyclesPerHour: 4
-
+      indoorMin: 18
+      indoorMax: 24
   cooling:
-    enabled: true
-    switch: 'switch.cooling'
+    temperature: 24
+    presetMode: 'comfort'
     temperatureThresholds:
-      low: 20
-      high: 26
-    minRunTime: 15 # minutes
-    maxCyclesPerHour: 4
+      indoorMin: 20
+      indoorMax: 26
+```
+
+#### Application Options
+
+```yaml
+appOptions:
+  logLevel: 'info'
+  useAi: false
+  aiModel: 'gpt-4'
+  aiTemperature: 0.1
 ```
 
 ## 🚀 Deployment
@@ -718,60 +348,52 @@ hvac:
 1. **Pre-deployment Validation**
 
 ```bash
-# Run production readiness checks
-./hag validate production
-
 # Check system requirements
-./hag system check
+bun run check
 
 # Verify configuration
-./hag config validate
+bun run src/main.ts validate --config config/hvac_config_prod.yaml
 ```
 
 2. **Build and Deploy**
 
 ```bash
 # Build production binary
-deno task build
+bun run prod:build
 
-# The binary will be created as 'hag' (~39MB)
+# The binary will be created in 'target/' directory
 # Copy to target system and run
 
 # On target system:
-./hag start --config /etc/hag/config.yaml
+bun run prod
 ```
 
 3. **Systemd Service** (Linux)
 
-```ini
-[Unit]
-Description=HAG AI HVAC Controller
-After=network.target
+Use the provided service file at `config/hag-hvac.service`:
 
-[Service]
-Type=simple
-User=hag
-WorkingDirectory=/opt/hag
-ExecStart=/opt/hag/hag start --config /etc/hag/config.yaml
-Restart=always
-RestartSec=10
+```bash
+# Copy service file
+sudo cp config/hag-hvac.service /etc/systemd/system/
 
-[Install]
-WantedBy=multi-user.target
+# Enable and start service
+sudo systemctl enable hag-hvac
+sudo systemctl start hag-hvac
 ```
 
 ### Docker Deployment
 
 ```dockerfile
-FROM denoland/deno:alpine
+FROM oven/bun:alpine
 
 WORKDIR /app
 COPY . .
 
-RUN deno task build
+RUN bun install
+RUN bun run build
 
 EXPOSE 8080
-CMD ["./hag", "start"]
+CMD ["bun", "run", "prod"]
 ```
 
 ```bash
@@ -792,7 +414,7 @@ LOG_LEVEL=info
 NODE_ENV=production
 PORT=8080
 
-# Note: OPENAI_API_KEY only needed for experimental features in experimental/ directory
+# Note: OPENAI_API_KEY only needed for experimental AI features
 ```
 
 ## 🔍 Troubleshooting
@@ -803,39 +425,20 @@ PORT=8080
 
 ```bash
 # Test Home Assistant connectivity
-./hag test connection
+bun run src/main.ts status
 
-# Check WebSocket connection
-./hag diagnose websocket
-
-# Verify authentication
-./hag auth test
+# Check configuration
+bun run src/main.ts validate --config config/hvac_config.yaml
 ```
 
 #### Performance Issues
 
 ```bash
 # Check system resources
-./hag monitor resources
+bun run test:performance
 
-# Analyze performance metrics
-./hag analyze performance
-
-# Clear caches
-./hag cache clear
-```
-
-#### Experimental Features Issues
-
-**Note**: Experimental features are isolated in the `experimental/` directory.
-
-```bash
-# Main application diagnostics (production features only)
-./hag diagnose
-
-# For experimental feature troubleshooting:
-cd experimental/
-# See experimental/README.md for detailed troubleshooting
+# Analyze logs
+bun run dev --log-level debug
 ```
 
 ### Debug Mode
@@ -843,59 +446,54 @@ cd experimental/
 ```bash
 # Enable debug logging
 export LOG_LEVEL=debug
-./hag start
+bun run dev
 
 # Or use debug flag
-./hag start --debug
+bun run dev --log-level debug
 ```
 
 ### Health Checks
 
 ```bash
 # System health overview
-./hag health
+bun run src/main.ts status
 
 # Component-specific health
-./hag health --component hvac
-./hag health --component monitor
-./hag health --component homeassistant
+bun run src/main.ts env
 ```
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md)
-for details.
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
 ### Development Setup
 
 ```bash
 # Clone and setup
-git clone https://github.com/your-org/hag_js.git
-cd hag_js
+git clone https://github.com/your-org/hag_ts.git
+cd hag_ts
 
-# Install development dependencies
-deno task setup:dev
+# Install dependencies
+bun install
 
 # Run tests
-deno task test
+bun test
 
 # Check code quality
-deno task lint
-deno task fmt
-deno task check
+bun run lint
+bun run fmt
+bun run check
 ```
 
 ### Code Structure
 
-#### Production Application (`src/`)
-
 ```
 src/
 ├── core/                   # Core services
-│   ├── logger.ts          # Logging service
-│   ├── container.ts       # Dependency injection
-│   ├── event-system.ts    # Event handling
-│   └── exceptions.ts      # Error handling
+│   ├── logging.ts          # Logging service
+│   ├── container.ts        # Dependency injection
+│   ├── event-system.ts     # Event handling
+│   └── exceptions.ts       # Error handling
 ├── config/                 # Configuration management
 ├── home-assistant/         # Home Assistant integration
 ├── hvac/                   # HVAC control logic
@@ -903,39 +501,23 @@ src/
 └── main.ts                 # CLI entry point
 ```
 
-#### Experimental Features (`experimental/src/`)
-
-```
-experimental/src/
-├── ai/                     # AI research components
-│   ├── decision/          # Decision engine
-│   ├── optimization/      # HVAC optimization
-│   ├── predictive/        # Analytics & forecasting
-│   ├── learning/          # Adaptive learning
-│   └── scheduling/        # Smart scheduling
-├── core/                  # Experimental core features
-└── hvac/                  # Alternative HVAC implementations
-```
-
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
-for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
 - **Home Assistant**: Amazing home automation platform
-- **OpenAI**: Powerful AI capabilities through GPT-4
-- **Deno Team**: Modern TypeScript runtime
+- **Bun Team**: Fast TypeScript runtime
 - **XState**: Robust state machine library
+- **OpenAI**: Powerful AI capabilities through GPT-4
 - **LangChain**: Comprehensive AI framework
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/your-org/hag_js/issues)
-- **Discussions**:
-  [GitHub Discussions](https://github.com/your-org/hag_js/discussions)
-- **Documentation**: [Wiki](https://github.com/your-org/hag_js/wiki)
+- **Issues**: [GitHub Issues](https://github.com/your-org/hag_ts/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/your-org/hag_ts/discussions)
+- **Documentation**: [Wiki](https://github.com/your-org/hag_ts/wiki)
 
 ---
 
