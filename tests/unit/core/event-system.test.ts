@@ -39,7 +39,7 @@ describe("Event System - EventBus", () => {
     eventBus.publish(testEvent);
 
     // Give a moment for async processing
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     // Verify event was received
     expect(receivedEvent).toBeDefined();
@@ -72,7 +72,7 @@ describe("Event System - EventBus", () => {
     eventBus.publish(testEvent);
 
     // Give a moment for async processing
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     // Verify both handlers received the event
     expect(receivedEvents.length).toBe(2);
@@ -105,7 +105,7 @@ describe("Event System - EventBus", () => {
     eventBus.publish(testEvent);
 
     // Give a moment for async processing
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     // Verify successful handler was still called despite error in other handler
     expect(successfulHandlerCalled).toBe(true);
@@ -134,7 +134,7 @@ describe("Event System - EventBus", () => {
     eventBus.publish(testEvent);
 
     // Give a moment for async processing
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     // Verify no event was received after clearing
     expect(eventReceived).toBe(false);
@@ -182,7 +182,7 @@ describe("Event System - HassEventImpl Integration", () => {
     eventBus.publish(tempEvent);
 
     // Give a moment for async processing
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     // Verify temperature was processed
     expect(processedTemp).not.toBeNull();
@@ -231,7 +231,7 @@ describe("Event System - HassEventImpl Integration", () => {
     eventBus.publish(otherEvent);
 
     // Give a moment for async processing
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     // Verify only target entity was processed
     expect(processedEntities.length).toBe(1);

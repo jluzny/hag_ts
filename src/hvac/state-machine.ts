@@ -93,24 +93,47 @@ export class HVACStrategy {
     const evaluationTime = Date.now() - evaluationStart;
 
     let reason = 'no_action_needed';
-    if (needsDefrost) reason = 'defrost_required';
-    else if (shouldHeat) reason = 'heating_required';
-    else if (shouldCool) reason = 'cooling_required';
+    let humanReason = 'All conditions satisfied - no HVAC action required';
+    
+    if (needsDefrost) {
+      reason = 'defrost_required';
+      humanReason = `Defrost cycle needed - outdoor temperature ${data.weatherTemp}°F is below threshold`;
+    } else if (shouldHeat) {
+      reason = 'heating_required';
+      const tempDiff = this.hvacOptions.heating.temperatureThresholds.indoorMin - data.currentTemp;
+      humanReason = `Heating required - indoor ${data.currentTemp}°F is ${tempDiff.toFixed(1)}°F below minimum ${this.hvacOptions.heating.temperatureThresholds.indoorMin}°F`;
+    } else if (shouldCool) {
+      reason = 'cooling_required';
+      const tempDiff = data.currentTemp - this.hvacOptions.cooling.temperatureThresholds.indoorMin;
+      humanReason = `Cooling required - indoor ${data.currentTemp}°F is ${tempDiff.toFixed(1)}°F above maximum ${this.hvacOptions.cooling.temperatureThresholds.indoorMin}°F`;
+    }
 
-    // Only log when action is needed (reduce noise)
+    // Enhanced human-readable logging
     if (shouldHeat || shouldCool || needsDefrost) {
-      this.logger.info('🔍 HVAC conditions evaluated', {
-        shouldHeat,
-        shouldCool,
-        needsDefrost,
-        reason,
+      this.logger.info('🔍 HVAC Decision Made', {
+        decision: humanReason,
+        mode: needsDefrost ? 'DEFROST' : shouldHeat ? 'HEAT' : 'COOL',
+        currentConditions: {
+          indoorTemp: `${data.currentTemp}°F`,
+          outdoorTemp: `${data.weatherTemp}°F`,
+          timeOfDay: `${data.hour}:00 ${data.isWeekday ? 'weekday' : 'weekend'}`,
+        },
+        thresholds: shouldHeat ? {
+          minIndoor: `${this.hvacOptions.heating.temperatureThresholds.indoorMin}°F`,
+          outdoorRange: `${this.hvacOptions.heating.temperatureThresholds.outdoorMin}°F - ${this.hvacOptions.heating.temperatureThresholds.outdoorMax}°F`,
+        } : shouldCool ? {
+          maxIndoor: `${this.hvacOptions.cooling.temperatureThresholds.indoorMin}°F`,
+          outdoorRange: `${this.hvacOptions.cooling.temperatureThresholds.outdoorMin}°F - ${this.hvacOptions.cooling.temperatureThresholds.outdoorMax}°F`,
+        } : undefined,
         evaluationTimeMs: evaluationTime,
-        indoorTemp: data.currentTemp,
-        outdoorTemp: data.weatherTemp,
       });
     } else {
-      this.logger.debug('🔍 HVAC conditions evaluated - no action needed', {
-        reason,
+      this.logger.debug('🔍 HVAC Evaluation Complete', {
+        decision: humanReason,
+        currentConditions: {
+          indoorTemp: `${data.currentTemp}°F`,
+          outdoorTemp: `${data.weatherTemp}°F`,
+        },
         evaluationTimeMs: evaluationTime,
       });
     }
@@ -130,21 +153,48 @@ export class HVACStrategy {
 
     // Check temperature conditions
     if (data.currentTemp >= thresholds.indoorMax) {
+      this.logger.info('❌ Heating blocked - indoor temp at/above maximum', {
+        currentTemp: `${data.currentTemp}°F`,
+        maxThreshold: `${thresholds.indoorMax}°F`,
+        reason: 'Indoor temperature is already at or above maximum heating threshold'
+      });
       return false;
     }
 
     // Check if conditions are valid for heating
     if (!this.isValidCondition(data, thresholds)) {
+      const timeReason = !this.isActiveHour(data.hour, data.isWeekday) 
+        ? `outside active hours (current: ${data.hour}:00)` 
+        : 'within active hours';
+      const tempReason = !this.isWithinTemperatureRange(data, thresholds)
+        ? `outdoor temp ${data.weatherTemp}°F outside range ${thresholds.outdoorMin}°F-${thresholds.outdoorMax}°F`
+        : 'outdoor temp within range';
+      
+      this.logger.info('❌ Heating blocked - invalid conditions', {
+        currentTemp: `${data.currentTemp}°F`,
+        outdoorTemp: `${data.weatherTemp}°F`,
+        timeCheck: timeReason,
+        temperatureCheck: tempReason,
+        reason: 'Operating conditions not suitable for heating'
+      });
       return false;
     }
 
     const shouldHeat = data.currentTemp < thresholds.indoorMin;
 
     if (shouldHeat) {
-      this.logger.debug('✅ Heating approved', {
-        currentTemp: data.currentTemp,
-        indoorMin: thresholds.indoorMin,
-        tempDifference: thresholds.indoorMin - data.currentTemp,
+      this.logger.info('✅ Heating conditions met', {
+        currentTemp: `${data.currentTemp}°F`,
+        minThreshold: `${thresholds.indoorMin}°F`,
+        tempDeficit: `${(thresholds.indoorMin - data.currentTemp).toFixed(1)}°F below minimum`,
+        outdoorTemp: `${data.weatherTemp}°F (within ${thresholds.outdoorMin}°F-${thresholds.outdoorMax}°F range)`,
+        timeOfDay: `${data.hour}:00 ${data.isWeekday ? 'weekday' : 'weekend'}`,
+      });
+    } else {
+      this.logger.info('ℹ️ Heating not needed', {
+        currentTemp: `${data.currentTemp}°F`,
+        minThreshold: `${thresholds.indoorMin}°F`,
+        tempAboveMin: `${(data.currentTemp - thresholds.indoorMin).toFixed(1)}°F above minimum`,
       });
     }
 
@@ -157,21 +207,48 @@ export class HVACStrategy {
 
     // Check temperature conditions
     if (data.currentTemp <= thresholds.indoorMin) {
+      this.logger.info('❌ Cooling blocked - indoor temp at/below minimum', {
+        currentTemp: `${data.currentTemp}°F`,
+        minThreshold: `${thresholds.indoorMin}°F`,
+        reason: 'Indoor temperature is already at or below minimum cooling threshold'
+      });
       return false;
     }
 
     // Check if conditions are valid for cooling
     if (!this.isValidCondition(data, thresholds)) {
+      const timeReason = !this.isActiveHour(data.hour, data.isWeekday) 
+        ? `outside active hours (current: ${data.hour}:00)` 
+        : 'within active hours';
+      const tempReason = !this.isWithinTemperatureRange(data, thresholds)
+        ? `outdoor temp ${data.weatherTemp}°F outside range ${thresholds.outdoorMin}°F-${thresholds.outdoorMax}°F`
+        : 'outdoor temp within range';
+      
+      this.logger.info('❌ Cooling blocked - invalid conditions', {
+        currentTemp: `${data.currentTemp}°F`,
+        outdoorTemp: `${data.weatherTemp}°F`,
+        timeCheck: timeReason,
+        temperatureCheck: tempReason,
+        reason: 'Operating conditions not suitable for cooling'
+      });
       return false;
     }
 
     const shouldCool = data.currentTemp > thresholds.indoorMin;
 
     if (shouldCool) {
-      this.logger.debug('✅ Cooling approved', {
-        currentTemp: data.currentTemp,
-        indoorMin: thresholds.indoorMin,
-        tempDifference: data.currentTemp - thresholds.indoorMin,
+      this.logger.info('✅ Cooling conditions met', {
+        currentTemp: `${data.currentTemp}°F`,
+        maxThreshold: `${thresholds.indoorMin}°F`,
+        tempExcess: `${(data.currentTemp - thresholds.indoorMin).toFixed(1)}°F above maximum`,
+        outdoorTemp: `${data.weatherTemp}°F (within ${thresholds.outdoorMin}°F-${thresholds.outdoorMax}°F range)`,
+        timeOfDay: `${data.hour}:00 ${data.isWeekday ? 'weekday' : 'weekend'}`,
+      });
+    } else {
+      this.logger.info('ℹ️ Cooling not needed', {
+        currentTemp: `${data.currentTemp}°F`,
+        maxThreshold: `${thresholds.indoorMin}°F`,
+        tempBelowMax: `${(thresholds.indoorMin - data.currentTemp).toFixed(1)}°F below maximum`,
       });
     }
 
@@ -742,9 +819,11 @@ export function createHVACMachine(
           isWeekday: context.isWeekday,
         });
 
-        logger.debug('🔍 Heat evaluation', {
-          result: evaluation.shouldHeat,
-          reason: evaluation.reason,
+        logger.debug('🔍 Heat guard evaluation', {
+          allowed: evaluation.shouldHeat,
+          systemMode: context.systemMode,
+          hasTemperatureData: !!(context.indoorTemp && context.outdoorTemp),
+          reason: evaluation.shouldHeat ? 'Heating conditions satisfied' : 'Heating conditions not met',
         });
         return evaluation.shouldHeat;
       },
@@ -769,9 +848,11 @@ export function createHVACMachine(
           isWeekday: context.isWeekday,
         });
 
-        logger.debug('🔍 Cool evaluation', {
-          result: evaluation.shouldCool,
-          reason: evaluation.reason,
+        logger.debug('🔍 Cool guard evaluation', {
+          allowed: evaluation.shouldCool,
+          systemMode: context.systemMode,
+          hasTemperatureData: !!(context.indoorTemp && context.outdoorTemp),
+          reason: evaluation.shouldCool ? 'Cooling conditions satisfied' : 'Cooling conditions not met',
         });
         return evaluation.shouldCool;
       },
@@ -793,9 +874,11 @@ export function createHVACMachine(
           isWeekday: context.isWeekday,
         });
 
-        logger.debug('🔍 Auto heat evaluation', {
-          result: evaluation.shouldHeat,
-          reason: evaluation.reason,
+        logger.debug('🔍 Auto heat guard evaluation', {
+          allowed: evaluation.shouldHeat,
+          systemMode: context.systemMode,
+          autoModeActive: context.systemMode === SystemMode.AUTO,
+          reason: evaluation.shouldHeat ? 'Auto heating approved' : 'Auto heating denied',
         });
         return evaluation.shouldHeat;
       },
@@ -817,9 +900,11 @@ export function createHVACMachine(
           isWeekday: context.isWeekday,
         });
 
-        logger.debug('🔍 Auto cool evaluation', {
-          result: evaluation.shouldCool,
-          reason: evaluation.reason,
+        logger.debug('🔍 Auto cool guard evaluation', {
+          allowed: evaluation.shouldCool,
+          systemMode: context.systemMode,
+          autoModeActive: context.systemMode === SystemMode.AUTO,
+          reason: evaluation.shouldCool ? 'Auto cooling approved' : 'Auto cooling denied',
         });
         return evaluation.shouldCool;
       },
@@ -836,9 +921,10 @@ export function createHVACMachine(
           isWeekday: context.isWeekday,
         });
 
-        logger.debug('🔍 Defrost evaluation', {
-          result: evaluation.needsDefrost,
-          reason: evaluation.reason,
+        logger.debug('🔍 Defrost guard evaluation', {
+          required: evaluation.needsDefrost,
+          hasTemperatureData: !!(context.indoorTemp && context.outdoorTemp),
+          reason: evaluation.needsDefrost ? 'Defrost cycle required' : 'Defrost not needed',
         });
         return evaluation.needsDefrost;
       },

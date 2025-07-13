@@ -33,7 +33,7 @@ hassOptions:
   token: test_token
   maxRetries: 3
   retryDelayMs: 1000
-  stateCheckInterval: 300000
+  stateCheckInterval: 1000
 
 hvacOptions:
   tempSensor: sensor.indoor_temp

@@ -32,7 +32,7 @@ export function createTestConfig(): Settings {
       token: "test_token",
       maxRetries: 1,
       retryDelayMs: 100,
-      stateCheckInterval: 300000,
+      stateCheckInterval: 1000,
     } as HassOptions,
     hvacOptions: {
       tempSensor: "sensor.indoor_temp",
@@ -95,7 +95,7 @@ export function createMockWebSocketFactory(): (url: string) => WebSocket {
       if (mockWs.onerror) {
         mockWs.onerror(new Event('error'));
       }
-    }, 10);
+    }, 0);
     
     return mockWs;
   };

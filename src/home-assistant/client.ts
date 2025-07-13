@@ -614,6 +614,13 @@ export class HomeAssistantClient {
       switch (data.type) {
         case 'event':
           const event = HassEventImpl.fromWebSocketEvent(data);
+          this.logger.debug('📨 Received Home Assistant event', {
+            eventType: event.eventType,
+            hasHandlers: this.eventHandlers.has(event.eventType),
+            handlerCount: this.eventHandlers.get(event.eventType)?.size || 0,
+            eventData: event.data
+          });
+          
           const handlers = this.eventHandlers.get(event.eventType);
           if (handlers) {
             for (const handler of handlers) {
@@ -623,6 +630,8 @@ export class HomeAssistantClient {
                 this.logger.error('Event handler failed', error);
               }
             }
+          } else {
+            this.logger.debug('No handlers registered for event type', { eventType: event.eventType });
           }
           break;
 

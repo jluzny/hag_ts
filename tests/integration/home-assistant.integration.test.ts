@@ -49,7 +49,7 @@ test("Home Assistant Integration - REST API connectivity", async () => {
         Authorization: `Bearer ${hassToken}`,
         "Content-Type": "application/json",
       },
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(1000),
     });
 
     expect(response.ok).toBe(true);
@@ -91,7 +91,7 @@ test("Home Assistant Integration - Temperature sensor discovery", async () => {
         Authorization: `Bearer ${hassToken}`,
         "Content-Type": "application/json",
       },
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(1000),
     });
 
     expect(response.ok).toBe(true);
@@ -277,7 +277,7 @@ test("Home Assistant Integration - Error handling", async () => {
     token: "invalid-token",
     maxRetries: 1,
     retryDelayMs: 100,
-    stateCheckInterval: 30000,
+    stateCheckInterval: 1000,
   };
 
   const mockLogger = new LoggerService("test");
@@ -288,7 +288,7 @@ test("Home Assistant Integration - Error handling", async () => {
     // This should fail quickly
     const connectPromise = invalidClient.connect();
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Connection timeout")), 500), // Reduced from 2000ms
+      setTimeout(() => reject(new Error("Connection timeout")), 100), // Fast timeout
     );
 
     await Promise.race([connectPromise, timeoutPromise]);
@@ -298,7 +298,7 @@ test("Home Assistant Integration - Error handling", async () => {
     expect(error).toBeInstanceOf(Error);
     console.log("✅ Error handling working correctly");
   }
-}, 1000); // Reduced timeout from 3000ms to 1000ms
+}, 1000); // 1 second timeout
 
 test("Home Assistant Integration - Configuration integration", async () => {
   console.log("⚙️ Testing configuration integration...");

@@ -20,7 +20,7 @@ describe("HassOptionsSchema", () => {
       token: "long_lived_access_token",
       maxRetries: 3,
       retryDelayMs: 1000,
-      stateCheckInterval: 300000,
+      stateCheckInterval: 1000,
     };
 
     const result = HassOptionsSchema.parse(validConfig);
@@ -38,13 +38,13 @@ describe("HassOptionsSchema", () => {
       token: "token",
       maxRetries: 5,
       retryDelayMs: 1000,
-      stateCheckInterval: 300000,
+      stateCheckInterval: 1000,
     };
 
     const result = HassOptionsSchema.parse(completeConfig);
     expect(result.maxRetries).toBe(5);
     expect(result.retryDelayMs).toBe(1000);
-    expect(result.stateCheckInterval).toBe(300000);
+    expect(result.stateCheckInterval).toBe(1000);
   });
 
   test("should reject invalid URLs", () => {

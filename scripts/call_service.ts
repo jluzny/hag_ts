@@ -6,6 +6,20 @@
  * Calls a Home Assistant service using the REST API.
  */
 
+import { readFileSync } from 'fs';
+import { parse } from 'yaml';
+
+// Load configuration
+const configPath = process.env.CONFIG_PATH || 'config/hvac_config_dev.yaml';
+let config: any;
+try {
+  const configFile = readFileSync(configPath, 'utf8');
+  config = parse(configFile);
+} catch (error) {
+  console.error(`Failed to load config from ${configPath}:`, error);
+  process.exit(1);
+}
+
 // Get arguments
 const [service, ...args] = process.argv.slice(2);
 
@@ -41,9 +55,9 @@ for (let i = 0; i < args.length; i++) {
   }
 }
 
-// Home Assistant details
+// Home Assistant details from config
 const token = process.env.HASS_HassOptions__Token;
-const restUrl = 'http://192.168.0.204:8123/api';
+const restUrl = config.hassOptions.restUrl;
 
 try {
   console.log(

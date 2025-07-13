@@ -31,6 +31,33 @@ bun run prod                 # Production mode
 bun run prod:build           # Build for production
 ```
 
+### HVAC Testing Scripts
+
+The `scripts/` directory contains testing utilities that automatically load configuration from `config/hvac_config_dev.yaml`. All scripts use the correct Home Assistant URLs and authentication tokens from the config.
+
+```bash
+# Service calls - control HVAC entities directly
+bun run scripts/call_service.ts <domain>.<service> [--entity_id <entity>] [--key value]
+bun run scripts/call_service.ts climate.turn_off --entity_id climate.living_room_ac
+bun run scripts/call_service.ts climate.set_hvac_mode --entity_id climate.living_room_ac --hvac_mode cool
+
+# Status checking - validate current system state
+bun run scripts/check_hvac_status.ts              # Check all configured HVAC entities
+bun run scripts/list_entities.ts climate          # Discover available climate entities
+bun run scripts/discover_sensors.ts               # Find temperature/outdoor sensors
+
+# Testing prompts - see scripts/hvac_prompts.md for test sequences
+# Scripts support timeout commands and can be chained for complex test scenarios
+```
+
+### Testing Methodology
+
+For testing HVAC automation behavior:
+1. Use service calls to set initial HVAC states
+2. Run the app with timeout to observe decision-making
+3. Validate final states match expected behavior
+4. Check logs for human-readable decision explanations
+
 ### Testing
 
 ```bash
