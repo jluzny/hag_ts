@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-all
+#!/usr/bin/env bun
 /**
  * Interactive System Validator
  *
@@ -92,8 +92,8 @@ class InteractiveValidator {
         'Note: This requires HASS_URL and HASS_TOKEN environment variables',
       );
 
-      const hassUrl = Deno.env.get('HASS_URL');
-      const hassToken = Deno.env.get('HASS_TOKEN');
+      const hassUrl = process.env.HASS_URL;
+      const hassToken = process.env.HASS_TOKEN;
 
       if (hassUrl && hassToken) {
         try {
@@ -131,7 +131,7 @@ class InteractiveValidator {
     ) {
       console.log('🤖 Testing AI components...');
 
-      const openaiKey = Deno.env.get('OPENAI_API_KEY');
+      const openaiKey = process.env.OPENAI_API_KEY;
       const aiResults = [];
 
       if (openaiKey) {
@@ -161,7 +161,8 @@ class InteractiveValidator {
 
       // Check AI module availability
       try {
-        const aiModuleExists = await Deno.stat('./src/ai/decision-engine.ts');
+        const fs = await import('fs');
+        const aiModuleExists = await fs.promises.stat('./src/ai/agent.ts');
         aiResults.push({
           name: 'AI Decision Engine Module',
           status: aiModuleExists.isFile,
@@ -184,7 +185,8 @@ class InteractiveValidator {
       console.log('⚙️  Testing compiled binary...');
 
       try {
-        const binaryStat = await Deno.stat('./target/hag');
+        const fs = await import('fs');
+        const binaryStat = await fs.promises.stat('./target/hag');
         const binaryResults = [{
           name: 'Binary Exists',
           status: binaryStat.isFile,
@@ -194,21 +196,17 @@ class InteractiveValidator {
         if (binaryStat.isFile) {
           // Test binary execution
           try {
-            const process = new Deno.Command('./target/hag', {
-              args: ['--version'],
-              stdout: 'piped',
-              stderr: 'piped',
-            });
-
-            const { code, stdout } = await process.output();
-            const output = new TextDecoder().decode(stdout);
+            const { spawn } = await import('child_process');
+            const { promisify } = await import('util');
+            const execFile = promisify((await import('child_process')).execFile);
+            
+            const { stdout, stderr } = await execFile('./target/hag', ['--version']);
+            const output = stdout;
 
             binaryResults.push({
               name: 'Binary Execution',
-              status: code === 0,
-              details: code === 0
-                ? `Version: ${output.trim()}`
-                : 'Execution failed',
+              status: true,
+              details: `Version: ${output.trim()}`,
             });
           } catch (error) {
             binaryResults.push({

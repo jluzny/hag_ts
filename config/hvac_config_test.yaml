@@ -2,44 +2,46 @@
 # Direct port from Python configuration with TypeScript-specific enhancements
 
 appOptions:
-  logLevel: 'debug' # debug, info, warn, error, critical
+  logLevel: "debug" # debug, info, warn, error, critical
   useAi: false # Enable AI agent for intelligent decisions
-  aiModel: 'gpt-3.5-turbo' # AI model to use
+  aiModel: "gpt-3.5-turbo" # AI model to use
   aiTemperature: 0.1 # AI model temperature
 
 hassOptions:
-  wsUrl: 'ws://192.168.0.204:8123/api/websocket'
-  restUrl: 'http://192.168.0.204:8123/api'
-  token: '${HASS_HassOptions__Token}' # Environment variable for security
+  # wsUrl: "ws://192.168.0.204:8123/api/websocket"
+  wsUrl: wss://94mzt2ecyq0sud43fdto7supfzisp1y8.ui.nabu.casa/api/websocket
+  # restUrl: "http://192.168.0.204:8123/api"
+  restUrl: https://94mzt2ecyq0sud43fdto7supfzisp1y8.ui.nabu.casa/api
+  token: "${HASS_HassOptions__Token}" # Environment variable for security
   maxRetries: 5
   retryDelayMs: 2000
   stateCheckInterval: 300000
 
 hvacOptions:
-  tempSensor: 'sensor.1st_floor_hall_multisensor_temperature'
-  outdoorSensor: 'sensor.openweathermap_temperature'
-  systemMode: 'auto' # auto, heat_only, cool_only, off
+  tempSensor: "sensor.1st_floor_hall_multisensor_temperature"
+  outdoorSensor: "sensor.openweathermap_temperature"
+  systemMode: "auto" # auto, heat_only, cool_only, off
 
   hvacEntities:
-    - entityId: 'climate.living_room_ac'
+    - entityId: "climate.living_room_ac"
       enabled: true
       defrost: true
-    - entityId: 'climate.bedroom_ac'
+    - entityId: "climate.bedroom_ac"
       enabled: false
       defrost: false
-    - entityId: 'climate.matej_ac'
+    - entityId: "climate.matej_ac"
       enabled: false
       defrost: false
-    - entityId: 'climate.anicka_ac'
+    - entityId: "climate.anicka_ac"
       enabled: false
       defrost: false
-    - entityId: 'climate.radek_ac'
+    - entityId: "climate.radek_ac"
       enabled: false
       defrost: false
 
   heating:
     temperature: 21.0
-    presetMode: 'windFreeSleep'
+    presetMode: "windFreeSleep"
     temperatureThresholds:
       indoorMin: 19.7
       indoorMax: 20.2
@@ -52,7 +54,7 @@ hvacOptions:
 
   cooling:
     temperature: 24.0
-    presetMode: 'windFree'
+    presetMode: "windFree"
     temperatureThresholds:
       indoorMin: 23.0
       indoorMax: 23.5

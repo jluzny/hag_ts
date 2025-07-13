@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-all
+#!/usr/bin/env bun
 /**
  * Validation Helper Utilities
  *
@@ -25,10 +25,18 @@ export class ValidationHelper {
     console.log(`\n🔍 ${message}`);
     console.log('Enter "y" to confirm, any other key to skip:');
 
-    const buf = new Uint8Array(1024);
-    const n = await Deno.stdin.read(buf);
-    const input = new TextDecoder().decode(buf.subarray(0, n || 0)).trim()
-      .toLowerCase();
+    const readline = await import('readline');
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+    
+    const input = await new Promise<string>((resolve) => {
+      rl.question('', (answer) => {
+        rl.close();
+        resolve(answer.trim().toLowerCase());
+      });
+    });
 
     return input === 'y' || input === 'yes';
   }
@@ -71,7 +79,18 @@ export class ValidationHelper {
    */
   async waitForContinue(message: string = 'Press Enter to continue...') {
     console.log(`\n⏸️  ${message}`);
-    await Deno.stdin.read(new Uint8Array(1));
+    const readline = await import('readline');
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+    
+    await new Promise<void>((resolve) => {
+      rl.question('', () => {
+        rl.close();
+        resolve();
+      });
+    });
   }
 }
 
@@ -93,17 +112,17 @@ export class HealthChecker {
   > {
     const results = [];
 
-    // Check Deno version
+    // Check Bun version
     try {
-      const denoVersion = Deno.version.deno;
+      const bunVersion = Bun.version;
       results.push({
-        name: 'Deno Runtime',
+        name: 'Bun Runtime',
         status: true,
-        details: `Version: ${denoVersion}`,
+        details: `Version: ${bunVersion}`,
       });
     } catch (error) {
       results.push({
-        name: 'Deno Runtime',
+        name: 'Bun Runtime',
         status: false,
         details: `Failed to check version: ${error}`,
       });
@@ -112,7 +131,7 @@ export class HealthChecker {
     // Check environment variables
     const requiredEnvVars = ['HOME', 'PATH'];
     for (const envVar of requiredEnvVars) {
-      const value = Deno.env.get(envVar);
+      const value = process.env[envVar];
       results.push({
         name: `Environment Variable: ${envVar}`,
         status: !!value,
@@ -122,9 +141,13 @@ export class HealthChecker {
 
     // Check file system permissions
     try {
-      const tempFile = await Deno.makeTempFile();
-      await Deno.writeTextFile(tempFile, 'test');
-      await Deno.remove(tempFile);
+      const fs = await import('fs');
+      const path = await import('path');
+      const os = await import('os');
+      
+      const tempFile = path.join(os.tmpdir(), 'test-file-' + Date.now());
+      await fs.promises.writeFile(tempFile, 'test');
+      await fs.promises.unlink(tempFile);
       results.push({
         name: 'File System Access',
         status: true,
@@ -206,7 +229,8 @@ export class ConfigValidator {
     const results = [];
 
     try {
-      const configStat = await Deno.stat(configPath);
+      const fs = await import('fs');
+      const configStat = await fs.promises.stat(configPath);
       results.push({
         name: 'Configuration File Exists',
         status: configStat.isFile,
@@ -214,7 +238,7 @@ export class ConfigValidator {
       });
 
       if (configStat.isFile) {
-        const configContent = await Deno.readTextFile(configPath);
+        const configContent = await fs.promises.readFile(configPath, 'utf8');
         results.push({
           name: 'Configuration File Readable',
           status: configContent.length > 0,

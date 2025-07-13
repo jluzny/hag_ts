@@ -23,7 +23,7 @@ import {
   StateChangeData,
   SystemMode,
 } from '../types/common.ts';
-import { StateError, toError } from '../core/exceptions.ts';
+import { StateError } from '../core/exceptions.ts';
 import { LoggerService } from '../core/logging.ts';
 import { HomeAssistantClient } from '../home-assistant/client.ts';
 

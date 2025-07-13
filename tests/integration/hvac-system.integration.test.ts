@@ -163,7 +163,7 @@ test("HVAC Integration - Setup and basic functionality", async () => {
   const controller = new HVACController(
     mockSettings.hvacOptions,
     mockSettings.appOptions,
-    mockHaClient as unknown as import("../../src/home-assistant/client-xs.ts").HomeAssistantClient,
+    mockHaClient as unknown as import("../../src/home-assistant/client.ts").HomeAssistantClient,
     stateMachine,
     eventBus,
   );
@@ -286,7 +286,7 @@ test("HVAC Integration - Setup and basic functionality", async () => {
   controller.getStatus();
 
   // Trigger a manual override that should change state
-  controller.manualOverride("heat", { temperature: 22.0 });
+  controller.manualOverride("heat", { mode: "heat", temperature: 22.0 });
 
   // Get status after override
   const newStatus = controller.getStatus();
@@ -309,7 +309,7 @@ test("HVAC Integration - Setup and basic functionality", async () => {
 
   // Handle error conditions gracefully
   try {
-    controller.manualOverride("invalid_action");
+    controller.manualOverride("invalid_action", {});
   } catch (error) {
     expect(error).toBeInstanceOf(Error);
   }

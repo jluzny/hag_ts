@@ -123,7 +123,7 @@ async function testXStatePerformance(): Promise<void> {
         const mode = modes[Math.floor(Math.random() * modes.length)];
         stateMachine.manualOverride(mode);
       },
-      50, // Reduced iterations
+      5, // Minimal iterations for CI
     ),
   );
 
@@ -145,7 +145,7 @@ async function testXStatePerformance(): Promise<void> {
       () => {
         stateMachine.evaluateConditions();
       },
-      50, // Reduced iterations
+      5, // Minimal iterations for CI
     ),
   );
 

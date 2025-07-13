@@ -8,7 +8,7 @@ import { BaseModule } from "../core/module-registry.ts";
 import { HVACController } from "./controller.ts";
 import { HVACStateMachine } from "./state-machine.ts";
 import type { HvacOptions, ApplicationOptions } from "../config/config.ts";
-import { HomeAssistantClient } from "../home-assistant/client-xs.ts";
+import { HomeAssistantClient } from "../home-assistant/client.ts";
 import { EventBus } from "../core/event-system.ts";
 import { LoggerService } from "../core/logging.ts";
 
@@ -35,7 +35,6 @@ export class HvacModule extends BaseModule {
 
     // Initialize logger for this module
     this.logger = new LoggerService(`HAG.module.${this.domain}`);
-    this.logger.debug("📍 HvacModule.constructor() ENTRY");
 
     // Validate required dependencies
     if (!hvacOptions || !appOptions || !haClient || !eventBus) {
@@ -54,7 +53,6 @@ export class HvacModule extends BaseModule {
       eventBus,
     );
 
-    this.logger.debug("📍 HvacModule.constructor() EXIT");
   }
 
   /**

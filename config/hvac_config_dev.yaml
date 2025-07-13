@@ -8,8 +8,10 @@ appOptions:
   aiTemperature: 0.1 # AI model temperature
 
 hassOptions:
-  wsUrl: "ws://192.168.0.204:8123/api/websocket"
-  restUrl: "http://192.168.0.204:8123/api"
+  # wsUrl: "ws://192.168.0.204:8123/api/websocket"
+  wsUrl: wss://94mzt2ecyq0sud43fdto7supfzisp1y8.ui.nabu.casa/api/websocket
+  # restUrl: "http://192.168.0.204:8123/api"
+  restUrl: https://94mzt2ecyq0sud43fdto7supfzisp1y8.ui.nabu.casa/api
   token: "${HASS_HassOptions__Token}" # Environment variable for security
   maxRetries: 5
   retryDelayMs: 1000

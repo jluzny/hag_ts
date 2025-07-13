@@ -8,7 +8,7 @@
 
 import { createContainer } from '../src/core/container.ts';
 import { TYPES } from '../src/core/types.ts';
-import { HomeAssistantClient } from '../src/home-assistant/client-xs.ts';
+import { HomeAssistantClient } from '../src/home-assistant/client.ts';
 
 const container = await createContainer('config/hvac_config_dev.yaml');
 const client = container.get<HomeAssistantClient>(TYPES.HomeAssistantClient);

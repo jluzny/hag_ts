@@ -40,14 +40,12 @@ let moduleRegistry: ModuleRegistry | undefined;
  * Cleanup handler
  */
 async function cleanup(): Promise<void> {
-  logger?.debug("📍 cleanup() ENTRY");
   if (moduleRegistry) {
     await moduleRegistry.disposeAll();
   }
   if (container) {
     await disposeContainer();
   }
-  logger?.debug("📍 cleanup() EXIT");
 }
 
 /**
@@ -88,7 +86,6 @@ async function runApplication(
   configPath?: string,
   logLevel?: string,
 ): Promise<void> {
-  logger?.debug("📍 runApplication() ENTRY");
   try {
     // Load configuration first to get log level before creating container
     const config = await ConfigLoader.loadSettings(configPath);
@@ -128,7 +125,6 @@ async function runApplication(
     logger.info("🔧 Getting module registry...");
     moduleRegistry = container.get<ModuleRegistry>(TYPES.ModuleRegistry);
     logger.info("✅ Module registry retrieved");
-    logger.debug("📍 Retrieved module registry from container");
 
     // Get HVAC module from registry
     logger.info("🔧 Getting HVAC module...");
@@ -139,19 +135,16 @@ async function runApplication(
         throw new Error("HVAC module not found in registry");
       }
       logger.info("✅ HVAC module retrieved");
-      logger.debug("📍 Retrieved HVAC module from registry", { moduleName: hvacModule.name });
 
       // Get controller from module
       logger.info("🔧 Getting HVAC controller...");
       const controller = hvacModule.getHVACController();
       logger.info("✅ HVAC controller retrieved");
-      logger.debug("📍 Retrieved HVAC controller from module");
 
       // Start the controller
       logger.info("🔧 Starting HVAC controller...");
       await controller.start();
       logger.info("✅ HVAC controller started");
-      logger.debug("📍 HVAC controller started successfully");
     } catch (hvacError) {
       logger.error("❌ HVAC initialization failed:", hvacError);
       throw hvacError;
@@ -169,8 +162,6 @@ async function runApplication(
     const details = extractErrorDetails(error);
     logger.error("❌ Application failed:", error, { message: details.message });
     throw error;
-  } finally {
-    logger?.debug("📍 runApplication() EXIT");
   }
 }
 
@@ -206,7 +197,6 @@ async function validateConfig(configPath: string): Promise<void> {
  * Get system status
  */
 async function getStatus(configPath?: string): Promise<void> {
-  logger?.debug("📍 getStatus() ENTRY");
   try {
     container = await createContainer(configPath);
 
@@ -249,8 +239,6 @@ async function getStatus(configPath?: string): Promise<void> {
   } catch (error) {
     logger.error("❌ Failed to get status:", error);
     process.exit(1);
-  } finally {
-    logger?.debug("📍 getStatus() EXIT");
   }
 }
 
@@ -262,7 +250,6 @@ async function manualOverride(
   configPath?: string,
   temperature?: number,
 ): Promise<void> {
-  logger?.debug("📍 manualOverride() ENTRY");
   try {
     container = await createContainer(configPath);
 
@@ -303,8 +290,6 @@ async function manualOverride(
   } catch (error) {
     logger.error("❌ Manual override error:", error);
     process.exit(1);
-  } finally {
-    logger?.debug("📍 manualOverride() EXIT");
   }
 }
 

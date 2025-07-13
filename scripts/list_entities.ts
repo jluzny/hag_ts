@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-net --allow-read --allow-env --allow-write
+#!/usr/bin/env bun
 
 /**
  * List Home Assistant Entities Script
@@ -8,7 +8,7 @@
 
 import { createContainer } from '../src/core/container.ts';
 import { TYPES } from '../src/core/types.ts';
-import { HomeAssistantClient } from '../src/home-assistant/client-xs.ts';
+import { HomeAssistantClient } from '../src/home-assistant/client.ts';
 
 const container = await createContainer('config/hvac_config.yaml');
 const client = container.get<HomeAssistantClient>(TYPES.HomeAssistantClient);
@@ -24,7 +24,7 @@ try {
     try {
       const response = await fetch(`http://192.168.0.204:8123/api/states`, {
         headers: {
-          'Authorization': `Bearer ${Deno.env.get('HASS_HassOptions__Token')}`,
+          'Authorization': `Bearer ${process.env.HASS_HassOptions__Token}`,
           'Content-Type': 'application/json',
         },
       });

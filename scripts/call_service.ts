@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-net --allow-env
+#!/usr/bin/env bun
 
 /**
  * Call Home Assistant Service Script
@@ -7,20 +7,20 @@
  */
 
 // Get arguments
-const [service, ...args] = Deno.args;
+const [service, ...args] = process.argv.slice(2);
 
 if (!service) {
   console.error(
     'Usage: ./call_service.ts <domain>.<service> [--entity_id <entity_id>] [key=value ...]',
   );
-  Deno.exit(1);
+  process.exit(1);
 }
 
 const [domain, serviceName] = service.split('.');
 
 if (!domain || !serviceName) {
   console.error('Invalid service format. Use <domain>.<service>');
-  Deno.exit(1);
+  process.exit(1);
 }
 
 // Parse service data
@@ -42,7 +42,7 @@ for (let i = 0; i < args.length; i++) {
 }
 
 // Home Assistant details
-const token = Deno.env.get('HASS_HassOptions__Token');
+const token = process.env.HASS_HassOptions__Token;
 const restUrl = 'http://192.168.0.204:8123/api';
 
 try {

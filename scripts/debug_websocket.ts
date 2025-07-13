@@ -9,7 +9,7 @@
 
 import { createContainer } from '../src/core/container.ts';
 import { TYPES } from '../src/core/types.ts';
-import { HomeAssistantClient } from '../src/home-assistant/client-xs.ts';
+import { HomeAssistantClient } from '../src/home-assistant/client.ts';
 
 console.log('🔌 WebSocket Connection Debug\n');
 

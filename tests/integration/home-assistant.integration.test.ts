@@ -8,7 +8,7 @@
 import { test, expect } from "bun:test";
 import { createContainer } from "../../src/core/container.ts";
 import { TYPES } from "../../src/core/types.ts";
-import { HomeAssistantClient } from "../../src/home-assistant/client-xs.ts";
+import { HomeAssistantClient } from "../../src/home-assistant/client.ts";
 import { HassOptions, Settings } from "../../src/config/config.ts";
 import { LoggerService } from "../../src/core/logging.ts";
 import { ConfigLoader } from "../../src/config/loader.ts";
@@ -20,7 +20,7 @@ let testConfig: Settings;
 try {
   // Try to load test configuration
   testConfig = await ConfigLoader.loadSettings(configPath);
-} catch (_error) {
+} catch {
   console.log(`❌ Integration test config not found: ${configPath}`);
   throw new Error(`Integration test requires config file: ${configPath}`);
 }
@@ -171,7 +171,7 @@ test("Home Assistant Integration - WebSocket connection", async () => {
       const state = await client.getState(testEntity);
       expect(state).toBeDefined();
       console.log(`📊 Retrieved test entity state: ${testEntity}`);
-    } catch (_error) {
+    } catch {
       console.log("⚠️ No test entity available, but connection works");
     }
 
@@ -214,7 +214,7 @@ test("Home Assistant Integration - Service calls", async () => {
       // Note: We won't actually call a service that could affect the system
       console.log("📋 Service call method is available");
       expect(typeof client.callService).toBe("function");
-    } catch (_error) {
+    } catch {
       console.log("⚠️ Service call testing skipped");
     }
 
@@ -288,7 +288,7 @@ test("Home Assistant Integration - Error handling", async () => {
     // This should fail quickly
     const connectPromise = invalidClient.connect();
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Connection timeout")), 2000),
+      setTimeout(() => reject(new Error("Connection timeout")), 500), // Reduced from 2000ms
     );
 
     await Promise.race([connectPromise, timeoutPromise]);
@@ -298,7 +298,7 @@ test("Home Assistant Integration - Error handling", async () => {
     expect(error).toBeInstanceOf(Error);
     console.log("✅ Error handling working correctly");
   }
-}, 3000);
+}, 1000); // Reduced timeout from 3000ms to 1000ms
 
 test("Home Assistant Integration - Configuration integration", async () => {
   console.log("⚙️ Testing configuration integration...");

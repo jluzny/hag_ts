@@ -35,9 +35,7 @@ export abstract class BaseModule implements Module {
   initialize(config: unknown): Promise<void> {
     this.config = config;
     this.logger = new LoggerService(`HAG.module.${this.domain}`);
-    this.logger.debug(`📍 Module ${this.domain}.initialize() ENTRY`);
     // Default initialization logic
-    this.logger.debug(`📍 Module ${this.domain}.initialize() EXIT`);
     return Promise.resolve();
   }
 
@@ -69,10 +67,8 @@ export class ModuleRegistry {
 
   constructor(container: Container, logger?: LoggerService) {
     this.logger = logger || new LoggerService('HAG.module-registry');
-    this.logger.debug('📍 ModuleRegistry.constructor() ENTRY');
     // Register self in container for other modules to access if needed
     container.bind({ provide: Symbol.for('ModuleRegistry'), useValue: this });
-    this.logger.debug('📍 ModuleRegistry.constructor() EXIT');
   }
 
   /**
@@ -86,7 +82,6 @@ export class ModuleRegistry {
    * Register a module with the registry.
    */
   async registerModule(module: Module, config: unknown): Promise<void> {
-    this.logger.debug('📍 ModuleRegistry.registerModule() ENTRY');
     if (this.modules.has(module.domain)) {
       this.logger.warning(`⚠️ Module ${module.domain} already registered.`);
       return;
@@ -102,7 +97,6 @@ export class ModuleRegistry {
 
 
     this.logger.info(`✅ Module registered: ${module.name} (${module.version})`);
-    this.logger.debug('📍 ModuleRegistry.registerModule() EXIT');
   }
 
 
@@ -110,9 +104,7 @@ export class ModuleRegistry {
    * Get a registered module by its domain.
    */
   getModule(domain: string): Module | undefined {
-    this.logger.debug('📍 ModuleRegistry.getModule() ENTRY');
     const result = this.modules.get(domain);
-    this.logger.debug('📍 ModuleRegistry.getModule() EXIT');
     return result;
   }
 
@@ -122,7 +114,6 @@ export class ModuleRegistry {
    * Dispose all registered modules.
    */
   async disposeAll(): Promise<void> {
-    this.logger.debug('📍 ModuleRegistry.disposeAll() ENTRY');
     for (const module of this.modules.values()) {
       try {
         await module.dispose();
@@ -132,6 +123,5 @@ export class ModuleRegistry {
     }
     this.modules.clear();
     this.logger.info('🗑️ All modules disposed.');
-    this.logger.debug('📍 ModuleRegistry.disposeAll() EXIT');
   }
 }

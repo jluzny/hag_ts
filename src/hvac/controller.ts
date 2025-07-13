@@ -8,7 +8,7 @@
 import { injectable } from '@needle-di/core';
 import { LoggerService } from '../core/logging.ts';
 import type { ApplicationOptions, HvacOptions } from '../config/config.ts';
-import { HomeAssistantClient } from '../home-assistant/client-xs.ts';
+import { HomeAssistantClient } from '../home-assistant/client.ts';
 import { HVACMode, HVACStatus, OperationResult } from '../types/common.ts';
 import { HVACOperationError, StateError } from '../core/exceptions.ts';
 import { AppEvent, EventBus } from '../core/event-system.ts';
@@ -46,23 +46,19 @@ export class HVACController {
     eventBus?: EventBus,
   ) {
     this.logger = new LoggerService('HAG.hvac.controller-v3');
-    this.logger.debug('📍 HVACController.constructor() ENTRY');
     this.hvacOptions = hvacOptions!;
     this.appOptions = appOptions!;
     this.haClient = haClient!;
     this.stateMachine = stateMachine!;
     this.eventBus = eventBus!;
-    this.logger.debug('📍 HVACController.constructor() EXIT');
   }
 
   /**
    * Start the HVAC controller using state machine directly
    */
   async start(): Promise<void> {
-    this.logger.debug('📍 HVACController.start() ENTRY');
     if (this.running) {
       this.logger.warning('🔄 HVAC controller already running');
-      this.logger.debug('📍 HVACController.start() EXIT');
       return;
     }
 
@@ -104,17 +100,14 @@ export class HVACController {
       await this.stop();
       throw error;
     }
-    this.logger.debug('📍 HVACController.start() EXIT');
   }
 
   /**
    * Stop the HVAC controller
    */
   async stop(): Promise<void> {
-    this.logger.debug('📍 HVACController.stop() ENTRY');
     if (!this.running) {
       this.logger.warning('⚠️ HVAC controller not running');
-      this.logger.debug('📍 HVACController.stop() EXIT');
       return;
     }
 
@@ -149,14 +142,12 @@ export class HVACController {
     this.running = false;
 
     this.logger.info('✅ HVAC controller stopped successfully');
-    this.logger.debug('📍 HVACController.stop() EXIT');
   }
 
   /**
    * Get current status
    */
   getStatus(): HVACStatus {
-    this.logger.debug('📍 HVACController.getStatus() ENTRY');
     try {
       const haConnected = this.haClient.connected;
       const currentState = this.stateMachine.getCurrentState();
@@ -177,11 +168,9 @@ export class HVACController {
         timestamp: new Date().toISOString(),
       };
 
-      this.logger.debug('📍 HVACController.getStatus() EXIT');
       return status;
     } catch (error) {
       this.logger.error('❌ Failed to get status', error);
-      this.logger.debug('📍 HVACController.getStatus() EXIT');
       throw new StateError('Failed to get HVAC status');
     }
   }
@@ -219,7 +208,6 @@ export class HVACController {
     action: string,
     options: Record<string, unknown> = {},
   ): OperationResult {
-    this.logger.debug('📍 HVACController.manualOverride() ENTRY');
     try {
       this.logger.info('🎛️ Processing manual override via events', {
         action,
@@ -249,7 +237,6 @@ export class HVACController {
         data: { action, mode, temperature, eventPublished: true },
         timestamp: new Date().toISOString(),
       };
-      this.logger.debug('📍 HVACController.manualOverride() EXIT');
       return result;
     } catch (error) {
       this.logger.error('❌ Manual override failed', error, {
@@ -262,7 +249,6 @@ export class HVACController {
         error: error instanceof Error ? error.message : String(error),
         timestamp: new Date().toISOString(),
       };
-      this.logger.debug('📍 HVACController.manualOverride() EXIT');
       return result;
     }
   }
@@ -271,7 +257,6 @@ export class HVACController {
    * Setup event-driven temperature monitoring
    */
   private async setupEventDrivenMonitoring(): Promise<void> {
-    this.logger.debug('📍 HVACController.setupEventDrivenMonitoring() ENTRY');
     // Get all sensors for HVAC system
     const sensors = this.getSensors();
     
@@ -288,7 +273,6 @@ export class HVACController {
     
     // Get initial sensor readings once at startup
     await this.getInitialSensorReadings();
-    this.logger.debug('📍 HVACController.setupEventDrivenMonitoring() EXIT');
   }
 
   /**
@@ -313,12 +297,10 @@ export class HVACController {
    * Get all sensors for HVAC system
    */
   private getSensors(): string[] {
-    this.logger.debug('📍 HVACController.getSensors() ENTRY');
     const sensors = [
       this.hvacOptions.tempSensor,
       this.hvacOptions.outdoorSensor,
     ];
-    this.logger.debug('📍 HVACController.getSensors() EXIT');
     return sensors;
   }
 
@@ -326,7 +308,6 @@ export class HVACController {
    * Setup event handling for sensors
    */
   private setupSensorsEventHandling(sensors: string[]): void {
-    this.logger.debug('📍 HVACController.setupSensorsEventHandling() ENTRY');
     this.logger.info('📡 Setting up event handlers for sensors', {
       sensors,
       totalSensors: sensors.length,
@@ -351,7 +332,6 @@ export class HVACController {
       sensors,
       totalSensors: sensors.length,
     });
-    this.logger.debug('📍 HVACController.setupSensorsEventHandling() EXIT');
   }
 
   /**
@@ -436,7 +416,6 @@ export class HVACController {
    * Get current HVAC mode from actor
    */
   private getCurrentHVACMode(): HVACMode {
-    this.logger.debug('📍 HVACController.getCurrentHVACMode() ENTRY');
     
     try {
       const currentState = this.stateMachine.getCurrentState();
@@ -444,21 +423,17 @@ export class HVACController {
       // Map state machine states to HVAC modes
       switch (currentState) {
         case 'heating':
-          this.logger.debug('📍 HVACController.getCurrentHVACMode() EXIT');
           return HVACMode.HEAT;
         case 'cooling':
-          this.logger.debug('📍 HVACController.getCurrentHVACMode() EXIT');
           return HVACMode.COOL;
         case 'idle':
         case 'evaluating':
         case 'defrosting':
         default:
-          this.logger.debug('📍 HVACController.getCurrentHVACMode() EXIT');
           return HVACMode.OFF;
       }
     } catch (error) {
       this.logger.warning('⚠️ Error getting current HVAC mode', error instanceof Error ? { error: error.message } : { error: String(error) });
-      this.logger.debug('📍 HVACController.getCurrentHVACMode() EXIT');
       return HVACMode.OFF;
     }
   }
@@ -467,8 +442,6 @@ export class HVACController {
    * Check if controller is running
    */
   isRunning(): boolean {
-    this.logger.debug('📍 HVACController.isRunning() ENTRY');
-    this.logger.debug('📍 HVACController.isRunning() EXIT');
     return this.running;
   }
 
@@ -477,7 +450,6 @@ export class HVACController {
    * Handle mode change requests
    */
   private handleModeChangeRequest(event: AppEvent): void {
-    this.logger.debug('📍 HVACController.handleModeChangeRequest() ENTRY');
     const payload = event.payload as { mode: string; temperature?: number };
     
     this.logger.info('🎛️ Processing mode change request via state machine', {
@@ -492,21 +464,18 @@ export class HVACController {
       temperature: payload.temperature,
     });
     
-    this.logger.debug('📍 HVACController.handleModeChangeRequest() EXIT');
   }
 
   /**
    * Handle condition evaluation requests
    */
   private handleEvaluateConditions(): void {
-    this.logger.debug('📍 HVACController.handleEvaluateConditions() ENTRY');
     
     this.logger.info('🔍 Processing condition evaluation request via state machine');
 
     // Send AUTO_EVALUATE event to state machine (event-driven approach)
     this.stateMachine.send({ type: 'AUTO_EVALUATE' });
     
-    this.logger.debug('📍 HVACController.handleEvaluateConditions() EXIT');
   }
 
 }

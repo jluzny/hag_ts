@@ -134,6 +134,11 @@ export interface HVACContext {
   isWeekday: boolean;
   lastDefrost?: Date;
   systemMode: SystemMode;
+  manualOverride?: {
+    mode: HVACMode;
+    temperature?: number;
+    timestamp: Date;
+  };
 }
 
 /**

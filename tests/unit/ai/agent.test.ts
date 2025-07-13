@@ -7,7 +7,7 @@
 import { expect, test, describe } from "bun:test";
 import { HVACAgent } from "../../../src/ai/agent.ts";
 import { HVACStateMachine } from "../../../src/hvac/state-machine.ts";
-import { HomeAssistantClient } from "../../../src/home-assistant/client-xs.ts";
+import { HomeAssistantClient } from "../../../src/home-assistant/client.ts";
 import { ApplicationOptions, HvacOptions } from "../../../src/config/config.ts";
 import { HVACMode, LogLevel, SystemMode } from "../../../src/types/common.ts";
 import { LoggerService } from "../../../src/core/logging.ts";

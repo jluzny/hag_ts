@@ -4,7 +4,7 @@
  * Tests container initialization, service registration, and dependency resolution.
  */
 
-import { expect, test, describe, beforeEach, afterEach } from "bun:test";
+import { expect, test, describe, beforeEach, afterEach, beforeAll, afterAll } from "bun:test";
 import {
   ApplicationContainer,
   createContainer,
@@ -15,6 +15,7 @@ import { TYPES } from "../../../src/core/types.ts";
 import { HvacOptions, Settings } from "../../../src/config/config.ts";
 import { LoggerService } from "../../../src/core/logging.ts";
 import { LogLevel, SystemMode } from "../../../src/types/common.ts";
+import { setupTestLogging } from "../../test-helpers.ts";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -63,17 +64,25 @@ hvacOptions:
 const testConfigPath = path.join(process.cwd(), "test-config.yaml");
 
 describe("Application Container - Basic Operations", () => {
-  beforeEach(() => {
-    // Create test config file
+  let sharedContainer: ApplicationContainer;
+
+  beforeAll(async () => {
+    // Setup test logging to reduce noise
+    setupTestLogging();
+    // Create test config file once
     fs.writeFileSync(testConfigPath, mockConfigYaml);
+    // Initialize shared container once
+    sharedContainer = new ApplicationContainer();
+    await sharedContainer.initialize(testConfigPath);
   });
 
-  afterEach(async () => {
+  afterAll(async () => {
     // Clean up test config file
     if (fs.existsSync(testConfigPath)) {
       fs.unlinkSync(testConfigPath);
     }
-    // Dispose any global container
+    // Dispose shared container
+    await sharedContainer?.dispose();
     await disposeContainer();
   });
 
@@ -82,11 +91,8 @@ describe("Application Container - Basic Operations", () => {
     expect(container).toBeDefined();
   });
 
-  test("should initialize with configuration", async () => {
-    const container = new ApplicationContainer();
-    await container.initialize(testConfigPath);
-
-    const settings = container.getSettings();
+  test("should initialize with configuration", () => {
+    const settings = sharedContainer.getSettings();
     expect(settings).toBeDefined();
     expect(settings.appOptions.logLevel).toBe(LogLevel.ERROR);
     expect(settings.hassOptions.wsUrl).toBe(
@@ -94,30 +100,24 @@ describe("Application Container - Basic Operations", () => {
     );
   });
 
-  test("should check service binding", async () => {
-    const container = new ApplicationContainer();
-    await container.initialize(testConfigPath);
-
+  test("should check service binding", () => {
     // Configuration services should be bound
-    expect(container.isBound(TYPES.Settings)).toBe(true);
-    expect(container.isBound(TYPES.HvacOptions)).toBe(true);
-    expect(container.isBound(TYPES.HassOptions)).toBe(true);
-    expect(container.isBound(TYPES.ApplicationOptions)).toBe(true);
-    expect(container.isBound(TYPES.Logger)).toBe(true);
+    expect(sharedContainer.isBound(TYPES.Settings)).toBe(true);
+    expect(sharedContainer.isBound(TYPES.HvacOptions)).toBe(true);
+    expect(sharedContainer.isBound(TYPES.HassOptions)).toBe(true);
+    expect(sharedContainer.isBound(TYPES.ApplicationOptions)).toBe(true);
+    expect(sharedContainer.isBound(TYPES.Logger)).toBe(true);
   });
 
-  test("should retrieve services", async () => {
-    const container = new ApplicationContainer();
-    await container.initialize(testConfigPath);
-
-    const settings = container.get(TYPES.Settings);
+  test("should retrieve services", () => {
+    const settings = sharedContainer.get(TYPES.Settings);
     expect(settings).toBeDefined();
 
-    const hvacOptions = container.get(TYPES.HvacOptions) as HvacOptions;
+    const hvacOptions = sharedContainer.get(TYPES.HvacOptions) as HvacOptions;
     expect(hvacOptions).toBeDefined();
     expect(hvacOptions.tempSensor).toBe("sensor.indoor_temp");
 
-    const logger = container.get(TYPES.Logger);
+    const logger = sharedContainer.get(TYPES.Logger);
     expect(logger).toBeDefined();
   });
 
@@ -197,6 +197,7 @@ describe("Application Container - Service Registration", () => {
 
 describe("Application Container - Global Container Functions", () => {
   beforeEach(() => {
+    setupTestLogging();
     fs.writeFileSync(testConfigPath, mockConfigYaml);
   });
 
