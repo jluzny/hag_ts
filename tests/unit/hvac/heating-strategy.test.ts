@@ -51,6 +51,7 @@ const baseHvacOptions: HvacOptions = {
     startWeekday: 7,
     end: 22,
   },
+  evaluationCacheMs: 0,
 };
 
 // Helper function to create test data

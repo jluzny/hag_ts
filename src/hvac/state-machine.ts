@@ -95,10 +95,10 @@ export class HVACStrategy {
     const inputKey = JSON.stringify(data);
     const now = Date.now();
     
-    // Check if we have a recent evaluation for the same input (within 100ms)
+    // Check if we have a recent evaluation for the same input
     if (this.evaluationCache && 
         this.evaluationCache.input === inputKey && 
-        (now - this.evaluationCache.timestamp) < 100) {
+        (now - this.evaluationCache.timestamp) < this.hvacOptions.evaluationCacheMs) {
       return this.evaluationCache.result;
     }
 
@@ -307,6 +307,8 @@ export class HVACStrategy {
 
   startDefrost(): void {
     this.lastDefrost = new Date();
+    // Clear evaluation cache since internal state changed
+    this.evaluationCache = undefined;
 
     this.logger.info('❄️ Defrost cycle started', {
       startTime: this.lastDefrost.toISOString(),

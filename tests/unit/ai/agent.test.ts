@@ -162,6 +162,7 @@ const mockHvacOptions: HvacOptions = {
       outdoorMax: 45.0,
     },
   },
+  evaluationCacheMs: 0,
 };
 
 const mockAppOptions: ApplicationOptions = {

@@ -100,11 +100,7 @@ async function testXStatePerformance(): Promise<void> {
     await benchmarkOperation(
       "Temperature Update",
       () => {
-        mockStateMachine.send({
-          type: "UPDATE_TEMPERATURES",
-          indoor: 20 + Math.random() * 10,
-          outdoor: 15 + Math.random() * 20,
-        });
+        mockStateMachine.send();
       },
       3, // Fast iterations
     ),
@@ -116,8 +112,7 @@ async function testXStatePerformance(): Promise<void> {
     await benchmarkOperation(
       "Manual Override",
       () => {
-        const mode = modes[Math.floor(Math.random() * modes.length)];
-        mockStateMachine.manualOverride(mode);
+        mockStateMachine.manualOverride();
       },
       2, // Fast iterations
     ),
@@ -212,11 +207,7 @@ async function testConcurrentOperations(): Promise<void> {
   for (let i = 0; i < concurrentOps; i++) {
     promises.push(
       Promise.all([
-        mockStateMachine.send({
-          type: "UPDATE_TEMPERATURES",
-          indoor: 20 + Math.random() * 5,
-          outdoor: 15 + Math.random() * 10,
-        }),
+        mockStateMachine.send(),
         Promise.resolve(mockStateMachine.getStatus()),
         Promise.resolve(mockStateMachine.evaluateConditions()),
       ]),

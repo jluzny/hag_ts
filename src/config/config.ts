@@ -132,6 +132,9 @@ export const HvacOptionsSchema = z.object({
   activeHours: ActiveHoursSchema.optional().describe(
     'Active hours configuration',
   ),
+  evaluationCacheMs: z.number().int().min(0).max(5000).default(100).describe(
+    'Cache duration for HVAC condition evaluations in milliseconds',
+  ),
 });
 
 /**

@@ -67,3 +67,5 @@ hvacOptions:
     startWeekday: 6 # Weekday start
     end: 23 # End at 11 PM
 
+  evaluationCacheMs: 100 # Cache evaluations for 100ms
+

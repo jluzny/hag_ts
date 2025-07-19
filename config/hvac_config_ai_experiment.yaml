@@ -58,3 +58,5 @@ hvacOptions:
     start: 7
     startWeekday: 6
     end: 23
+
+  evaluationCacheMs: 200 # Longer cache for AI experiments

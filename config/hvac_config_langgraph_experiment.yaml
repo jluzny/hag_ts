@@ -66,3 +66,5 @@ hvacOptions:
     start: 8
     startWeekday: 7
     end: 20
+
+  evaluationCacheMs: 150 # Medium cache for LangGraph experiments

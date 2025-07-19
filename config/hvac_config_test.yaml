@@ -65,3 +65,5 @@ hvacOptions:
     start: 5
     startWeekday: 5
     end: 23
+
+  evaluationCacheMs: 50 # Faster cache for testing

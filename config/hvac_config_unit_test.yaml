@@ -42,3 +42,5 @@ hvacOptions:
       indoorMax: 26.0
       outdoorMin: 10.0
       outdoorMax: 45.0
+
+  evaluationCacheMs: 0 # No cache for unit tests

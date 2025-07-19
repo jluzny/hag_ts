@@ -55,6 +55,7 @@ const mockHvacOptions: HvacOptions = {
     startWeekday: 7,
     end: 22,
   },
+  evaluationCacheMs: 0,
 };
 
 test("HVAC State Machine - Initialize correctly", () => {
@@ -411,6 +412,7 @@ test("HVAC State Machine Creation - Handle minimal configuration", () => {
         outdoorMax: 40.0,
       },
     },
+    evaluationCacheMs: 0,
   };
 
   const machine = createHVACMachine(

@@ -63,6 +63,7 @@ const mockSettings: Settings = {
         outdoorMax: 45.0,
       },
     },
+    evaluationCacheMs: 0,
   },
 };
 
