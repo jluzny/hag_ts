@@ -77,6 +77,11 @@ export interface HVACEvaluation {
 export class HVACStrategy {
   private lastDefrost?: Date;
   private logger = new LoggerService('HAG.hvac.strategy');
+  private evaluationCache?: {
+    input: string;
+    result: HVACEvaluation;
+    timestamp: number;
+  };
 
   constructor(private hvacOptions: HvacOptions) {}
 
@@ -85,6 +90,17 @@ export class HVACStrategy {
    */
   evaluateConditions(data: StateChangeData): HVACEvaluation {
     const evaluationStart = Date.now();
+    
+    // Create a cache key from the input data
+    const inputKey = JSON.stringify(data);
+    const now = Date.now();
+    
+    // Check if we have a recent evaluation for the same input (within 100ms)
+    if (this.evaluationCache && 
+        this.evaluationCache.input === inputKey && 
+        (now - this.evaluationCache.timestamp) < 100) {
+      return this.evaluationCache.result;
+    }
 
     const shouldHeat = this.shouldHeat(data);
     const shouldCool = this.shouldCool(data);
@@ -97,15 +113,15 @@ export class HVACStrategy {
     
     if (needsDefrost) {
       reason = 'defrost_required';
-      humanReason = `Defrost cycle needed - outdoor temperature ${data.weatherTemp}°F is below threshold`;
+      humanReason = `Defrost cycle needed - outdoor temperature ${data.weatherTemp}°C is below threshold`;
     } else if (shouldHeat) {
       reason = 'heating_required';
       const tempDiff = this.hvacOptions.heating.temperatureThresholds.indoorMin - data.currentTemp;
-      humanReason = `Heating required - indoor ${data.currentTemp}°F is ${tempDiff.toFixed(1)}°F below minimum ${this.hvacOptions.heating.temperatureThresholds.indoorMin}°F`;
+      humanReason = `Heating required - indoor ${data.currentTemp}°C is ${tempDiff.toFixed(1)}°C below minimum ${this.hvacOptions.heating.temperatureThresholds.indoorMin}°C`;
     } else if (shouldCool) {
       reason = 'cooling_required';
       const tempDiff = data.currentTemp - this.hvacOptions.cooling.temperatureThresholds.indoorMin;
-      humanReason = `Cooling required - indoor ${data.currentTemp}°F is ${tempDiff.toFixed(1)}°F above maximum ${this.hvacOptions.cooling.temperatureThresholds.indoorMin}°F`;
+      humanReason = `Cooling required - indoor ${data.currentTemp}°C is ${tempDiff.toFixed(1)}°C above maximum ${this.hvacOptions.cooling.temperatureThresholds.indoorMin}°C`;
     }
 
     // Enhanced human-readable logging
@@ -114,16 +130,16 @@ export class HVACStrategy {
         decision: humanReason,
         mode: needsDefrost ? 'DEFROST' : shouldHeat ? 'HEAT' : 'COOL',
         currentConditions: {
-          indoorTemp: `${data.currentTemp}°F`,
-          outdoorTemp: `${data.weatherTemp}°F`,
+          indoorTemp: `${data.currentTemp}°C`,
+          outdoorTemp: `${data.weatherTemp}°C`,
           timeOfDay: `${data.hour}:00 ${data.isWeekday ? 'weekday' : 'weekend'}`,
         },
         thresholds: shouldHeat ? {
-          minIndoor: `${this.hvacOptions.heating.temperatureThresholds.indoorMin}°F`,
-          outdoorRange: `${this.hvacOptions.heating.temperatureThresholds.outdoorMin}°F - ${this.hvacOptions.heating.temperatureThresholds.outdoorMax}°F`,
+          minIndoor: `${this.hvacOptions.heating.temperatureThresholds.indoorMin}°C`,
+          outdoorRange: `${this.hvacOptions.heating.temperatureThresholds.outdoorMin}°C - ${this.hvacOptions.heating.temperatureThresholds.outdoorMax}°C`,
         } : shouldCool ? {
-          maxIndoor: `${this.hvacOptions.cooling.temperatureThresholds.indoorMin}°F`,
-          outdoorRange: `${this.hvacOptions.cooling.temperatureThresholds.outdoorMin}°F - ${this.hvacOptions.cooling.temperatureThresholds.outdoorMax}°F`,
+          maxIndoor: `${this.hvacOptions.cooling.temperatureThresholds.indoorMin}°C`,
+          outdoorRange: `${this.hvacOptions.cooling.temperatureThresholds.outdoorMin}°C - ${this.hvacOptions.cooling.temperatureThresholds.outdoorMax}°C`,
         } : undefined,
         evaluationTimeMs: evaluationTime,
       });
@@ -131,20 +147,29 @@ export class HVACStrategy {
       this.logger.debug('🔍 HVAC Evaluation Complete', {
         decision: humanReason,
         currentConditions: {
-          indoorTemp: `${data.currentTemp}°F`,
-          outdoorTemp: `${data.weatherTemp}°F`,
+          indoorTemp: `${data.currentTemp}°C`,
+          outdoorTemp: `${data.weatherTemp}°C`,
         },
         evaluationTimeMs: evaluationTime,
       });
     }
 
-    return {
+    const result = {
       shouldHeat,
       shouldCool,
       needsDefrost,
       reason,
       evaluationTimeMs: evaluationTime,
     };
+
+    // Cache the result for subsequent calls with the same input
+    this.evaluationCache = {
+      input: inputKey,
+      result,
+      timestamp: now,
+    };
+
+    return result;
   }
 
   private shouldHeat(data: StateChangeData): boolean {
@@ -154,8 +179,8 @@ export class HVACStrategy {
     // Check temperature conditions
     if (data.currentTemp >= thresholds.indoorMax) {
       this.logger.info('❌ Heating blocked - indoor temp at/above maximum', {
-        currentTemp: `${data.currentTemp}°F`,
-        maxThreshold: `${thresholds.indoorMax}°F`,
+        currentTemp: `${data.currentTemp}°C`,
+        maxThreshold: `${thresholds.indoorMax}°C`,
         reason: 'Indoor temperature is already at or above maximum heating threshold'
       });
       return false;
@@ -167,12 +192,12 @@ export class HVACStrategy {
         ? `outside active hours (current: ${data.hour}:00)` 
         : 'within active hours';
       const tempReason = !this.isWithinTemperatureRange(data, thresholds)
-        ? `outdoor temp ${data.weatherTemp}°F outside range ${thresholds.outdoorMin}°F-${thresholds.outdoorMax}°F`
+        ? `outdoor temp ${data.weatherTemp}°C outside range ${thresholds.outdoorMin}°C-${thresholds.outdoorMax}°C`
         : 'outdoor temp within range';
       
       this.logger.info('❌ Heating blocked - invalid conditions', {
-        currentTemp: `${data.currentTemp}°F`,
-        outdoorTemp: `${data.weatherTemp}°F`,
+        currentTemp: `${data.currentTemp}°C`,
+        outdoorTemp: `${data.weatherTemp}°C`,
         timeCheck: timeReason,
         temperatureCheck: tempReason,
         reason: 'Operating conditions not suitable for heating'
@@ -184,17 +209,17 @@ export class HVACStrategy {
 
     if (shouldHeat) {
       this.logger.info('✅ Heating conditions met', {
-        currentTemp: `${data.currentTemp}°F`,
-        minThreshold: `${thresholds.indoorMin}°F`,
-        tempDeficit: `${(thresholds.indoorMin - data.currentTemp).toFixed(1)}°F below minimum`,
-        outdoorTemp: `${data.weatherTemp}°F (within ${thresholds.outdoorMin}°F-${thresholds.outdoorMax}°F range)`,
+        currentTemp: `${data.currentTemp}°C`,
+        minThreshold: `${thresholds.indoorMin}°C`,
+        tempDeficit: `${(thresholds.indoorMin - data.currentTemp).toFixed(1)}°C below minimum`,
+        outdoorTemp: `${data.weatherTemp}°C (within ${thresholds.outdoorMin}°C-${thresholds.outdoorMax}°C range)`,
         timeOfDay: `${data.hour}:00 ${data.isWeekday ? 'weekday' : 'weekend'}`,
       });
     } else {
       this.logger.info('ℹ️ Heating not needed', {
-        currentTemp: `${data.currentTemp}°F`,
-        minThreshold: `${thresholds.indoorMin}°F`,
-        tempAboveMin: `${(data.currentTemp - thresholds.indoorMin).toFixed(1)}°F above minimum`,
+        currentTemp: `${data.currentTemp}°C`,
+        minThreshold: `${thresholds.indoorMin}°C`,
+        tempAboveMin: `${(data.currentTemp - thresholds.indoorMin).toFixed(1)}°C above minimum`,
       });
     }
 
@@ -208,8 +233,8 @@ export class HVACStrategy {
     // Check temperature conditions
     if (data.currentTemp <= thresholds.indoorMin) {
       this.logger.info('❌ Cooling blocked - indoor temp at/below minimum', {
-        currentTemp: `${data.currentTemp}°F`,
-        minThreshold: `${thresholds.indoorMin}°F`,
+        currentTemp: `${data.currentTemp}°C`,
+        minThreshold: `${thresholds.indoorMin}°C`,
         reason: 'Indoor temperature is already at or below minimum cooling threshold'
       });
       return false;
@@ -221,12 +246,12 @@ export class HVACStrategy {
         ? `outside active hours (current: ${data.hour}:00)` 
         : 'within active hours';
       const tempReason = !this.isWithinTemperatureRange(data, thresholds)
-        ? `outdoor temp ${data.weatherTemp}°F outside range ${thresholds.outdoorMin}°F-${thresholds.outdoorMax}°F`
+        ? `outdoor temp ${data.weatherTemp}°C outside range ${thresholds.outdoorMin}°C-${thresholds.outdoorMax}°C`
         : 'outdoor temp within range';
       
       this.logger.info('❌ Cooling blocked - invalid conditions', {
-        currentTemp: `${data.currentTemp}°F`,
-        outdoorTemp: `${data.weatherTemp}°F`,
+        currentTemp: `${data.currentTemp}°C`,
+        outdoorTemp: `${data.weatherTemp}°C`,
         timeCheck: timeReason,
         temperatureCheck: tempReason,
         reason: 'Operating conditions not suitable for cooling'
@@ -238,17 +263,17 @@ export class HVACStrategy {
 
     if (shouldCool) {
       this.logger.info('✅ Cooling conditions met', {
-        currentTemp: `${data.currentTemp}°F`,
-        maxThreshold: `${thresholds.indoorMin}°F`,
-        tempExcess: `${(data.currentTemp - thresholds.indoorMin).toFixed(1)}°F above maximum`,
-        outdoorTemp: `${data.weatherTemp}°F (within ${thresholds.outdoorMin}°F-${thresholds.outdoorMax}°F range)`,
+        currentTemp: `${data.currentTemp}°C`,
+        maxThreshold: `${thresholds.indoorMin}°C`,
+        tempExcess: `${(data.currentTemp - thresholds.indoorMin).toFixed(1)}°C above maximum`,
+        outdoorTemp: `${data.weatherTemp}°C (within ${thresholds.outdoorMin}°C-${thresholds.outdoorMax}°C range)`,
         timeOfDay: `${data.hour}:00 ${data.isWeekday ? 'weekday' : 'weekend'}`,
       });
     } else {
       this.logger.info('ℹ️ Cooling not needed', {
-        currentTemp: `${data.currentTemp}°F`,
-        maxThreshold: `${thresholds.indoorMin}°F`,
-        tempBelowMax: `${(thresholds.indoorMin - data.currentTemp).toFixed(1)}°F below maximum`,
+        currentTemp: `${data.currentTemp}°C`,
+        maxThreshold: `${thresholds.indoorMin}°C`,
+        tempBelowMax: `${(thresholds.indoorMin - data.currentTemp).toFixed(1)}°C below maximum`,
       });
     }
 

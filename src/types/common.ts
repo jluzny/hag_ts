@@ -139,6 +139,13 @@ export interface HVACContext {
     temperature?: number;
     timestamp: Date;
   };
+  currentEvaluation?: {
+    shouldHeat: boolean;
+    shouldCool: boolean;
+    needsDefrost: boolean;
+    reason: string;
+    evaluationTimeMs: number;
+  };
 }
 
 /**
