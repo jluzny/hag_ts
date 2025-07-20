@@ -270,13 +270,13 @@ test("Home Assistant Integration - Entity filtering", async () => {
 test("Home Assistant Integration - Error handling", async () => {
   console.log("🚨 Testing error handling...");
 
-  // Test with invalid URL
+  // Test with invalid URL that should fail immediately
   const invalidOptions: HassOptions = {
-    wsUrl: "ws://invalid-host:8123/api/websocket",
-    restUrl: "http://invalid-host:8123/api",
+    wsUrl: "ws://127.0.0.1:1/api/websocket", // Use localhost with invalid port for faster failure
+    restUrl: "http://127.0.0.1:1/api",
     token: "invalid-token",
     maxRetries: 1,
-    retryDelayMs: 100,
+    retryDelayMs: 50,
     stateCheckInterval: 1000,
   };
 
@@ -285,10 +285,10 @@ test("Home Assistant Integration - Error handling", async () => {
   const invalidClient = new HomeAssistantClient(invalidOptions, mockLogger);
 
   try {
-    // This should fail quickly
+    // This should fail quickly - localhost connection refused happens immediately
     const connectPromise = invalidClient.connect();
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Connection timeout")), 100), // Fast timeout
+      setTimeout(() => reject(new Error("Connection timeout")), 200), // Short timeout since localhost should fail fast
     );
 
     await Promise.race([connectPromise, timeoutPromise]);
@@ -298,7 +298,7 @@ test("Home Assistant Integration - Error handling", async () => {
     expect(error).toBeInstanceOf(Error);
     console.log("✅ Error handling working correctly");
   }
-}, 1000); // 1 second timeout
+}, 1000); // Back to 1 second timeout since localhost should fail quickly
 
 test("Home Assistant Integration - Configuration integration", async () => {
   console.log("⚙️ Testing configuration integration...");

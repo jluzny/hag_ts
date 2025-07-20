@@ -171,8 +171,6 @@ describe("XState Home Assistant Client - Connection Management", () => {
   }, 1000); // 1 second timeout
 
   test("should handle authentication failure", async () => {
-    const client = clientFactory({ ...mockHassOptions, maxRetries: 1, retryDelayMs: 0 });
-    
     // Simple mock test - just verify the error type
     expect(() => {
       throw new ConnectionError("Authentication failed");

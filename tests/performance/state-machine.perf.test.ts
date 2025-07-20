@@ -6,9 +6,6 @@
  */
 
 import { test, expect } from "bun:test";
-import { createContainer } from "../../src/core/container.ts";
-import { HVACStateMachine } from "../../src/hvac/state-machine.ts";
-import { HVACMode } from "../../src/types/common.ts";
 
 interface BenchmarkResult {
   operation: string;
@@ -107,7 +104,6 @@ async function testXStatePerformance(): Promise<void> {
   );
 
   // Test 3: Manual Override
-  const modes = ['heat', 'cool', 'off', 'auto'] as const;
   results.push(
     await benchmarkOperation(
       "Manual Override",

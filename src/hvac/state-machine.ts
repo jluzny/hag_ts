@@ -9,7 +9,6 @@ import {
   assign,
   createActor,
   createMachine,
-  raise,
 } from 'xstate';
 import { injectable } from '@needle-di/core';
 import {
@@ -639,17 +638,16 @@ export function createHVACMachine(
           isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
         };
       }),
-      triggerAutoEvaluate: ({ context, self }) => {
+      triggerAutoEvaluate: ({ context }) => {
         if (
           context.indoorTemp !== undefined && context.outdoorTemp !== undefined
         ) {
-          logger.debug('🎯 Triggering condition evaluation', {
+          logger.debug('🎯 Conditions ready for evaluation', {
             indoorTemp: context.indoorTemp,
             outdoorTemp: context.outdoorTemp,
             systemMode: context.systemMode,
           });
-          // Send AUTO_EVALUATE event here instead of using raise()
-          self.send({ type: 'AUTO_EVALUATE' });
+          // Note: AUTO_EVALUATE will be triggered by the controller
         }
       },
       handleDefrost: ({ event }) => {
