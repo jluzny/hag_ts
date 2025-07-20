@@ -404,7 +404,7 @@ export class HVACController {
    */
   private async getInitialSensorReadings(): Promise<void> {
     try {
-      this.logger.info('📊 Getting initial sensor readings');
+      this.logger.debug('📊 Getting initial sensor readings');
 
       const sensors = this.getSensors();
       const sensorStates: Record<string, string> = {};
@@ -419,7 +419,7 @@ export class HVACController {
       const indoorTemp = parseFloat(sensorStates[this.hvacOptions.tempSensor]);
       const outdoorTemp = parseFloat(sensorStates[this.hvacOptions.outdoorSensor]);
 
-      this.logger.info('🌡️ Initial conditions readings', {
+      this.logger.info('🌡️ Initial conditions read', {
         indoorTemp,
         outdoorTemp,
         indoorSensor: this.hvacOptions.tempSensor,

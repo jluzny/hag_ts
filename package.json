@@ -8,7 +8,7 @@
     "dev": "bun run src/main.ts --config config/hvac_config_dev.yaml --log-level debug",
     "dev:watch": "bun --watch run src/main.ts --config config/hvac_config_dev.yaml --log-level debug",
     "prod": "bun run src/main.ts --config config/hvac_config_prod.yaml --log-level info",
-    "test": "bun test tests/unit tests/integration --timeout 1000",
+    "test": "bun test --timeout 1000",
     "test:unit": "bun test tests/unit/ --timeout 1000",
     "test:integration": "bun test tests/integration/ --timeout 1000",
     "test:performance": "bun test tests/performance/ --timeout 1000",

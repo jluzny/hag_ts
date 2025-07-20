@@ -346,7 +346,6 @@ test("HVAC State Machine Integration", async () => {
       isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
     }
   }); // Cold indoor, cold outdoor
-  stateMachine.evaluateConditions();
 
   const statusAfterUpdate = stateMachine.getStatus();
   // Should transition to heating or stay idle based on thresholds
@@ -357,10 +356,6 @@ test("HVAC State Machine Integration", async () => {
   const statusAfterOverride = stateMachine.getStatus();
   // The state machine may transition to heating instead of manualOverride
   expect(statusAfterOverride.currentState).toMatch(/heating|manualOverride/);
-
-  // Return to automatic operation
-  // Test manual override clears automatically after some time or conditions
-  stateMachine.evaluateConditions();
 
   const statusAfterEval = stateMachine.getStatus();
   // Should return to automatic operation

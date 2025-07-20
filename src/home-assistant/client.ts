@@ -113,7 +113,7 @@ function createHAClientMachine(
                 ws.onerror = (event: Event | ErrorEvent) => {
                   const errorEvent = event as ErrorEvent;
                   const errorMessage = errorEvent.error?.message || errorEvent.message || 'Connection refused';
-                  
+
                   logger.error('WebSocket connection failed', new Error(errorMessage), { url: config.wsUrl });
                   reject(new Error(`WebSocket connection error: ${errorMessage}`));
                 };
@@ -387,7 +387,7 @@ export class HomeAssistantClient {
       (ws as WebSocket).onerror = (event: Event | ErrorEvent) => {
         const errorEvent = event as ErrorEvent;
         const errorMessage = errorEvent.error?.message || errorEvent.message || 'WebSocket error';
-        
+
         this.logger.error('WebSocket error in connected state', new Error(errorMessage));
         this.actor?.send({ type: 'CONNECTION_LOST' });
       };
@@ -472,7 +472,7 @@ export class HomeAssistantClient {
       const data = await response.json();
       const state = HassStateImpl.fromApiResponse(data);
 
-      this.logger.info("✅ Entity state retrieved", {
+      this.logger.debug("✅ Entity state retrieved", {
         entityId,
         state: state.state,
         friendlyName: state.attributes?.friendly_name,
@@ -496,7 +496,7 @@ export class HomeAssistantClient {
    * Call Home Assistant service
    */
   async callService(serviceCall: HassServiceCallImpl): Promise<void> {
-    this.logger.info("🔧 Calling Home Assistant service", {
+    this.logger.debug("🔧 Calling Home Assistant service", {
       domain: serviceCall.domain,
       service: serviceCall.service,
       serviceData: serviceCall.serviceData,
@@ -622,7 +622,7 @@ export class HomeAssistantClient {
             handlerCount: this.eventHandlers.get(event.eventType)?.size || 0,
             eventData: event.data
           });
-          
+
           const handlers = this.eventHandlers.get(event.eventType);
           if (handlers) {
             for (const handler of handlers) {
@@ -641,9 +641,9 @@ export class HomeAssistantClient {
           if (data.success) {
             this.logger.debug('Command result: success', { messageId: data.id });
           } else {
-            this.logger.error('Command result: failed', toError(data.error, 'Home Assistant command failed'), { 
+            this.logger.error('Command result: failed', toError(data.error, 'Home Assistant command failed'), {
               messageId: data.id,
-              errorData: data.error 
+              errorData: data.error
             });
           }
           break;
