@@ -414,7 +414,6 @@ export function createHVACMachine(
             actions: [
               'updateTemperatures',
               'triggerAutoEvaluate',
-              raise({ type: 'AUTO_EVALUATE' }),
             ],
           },
           MANUAL_OVERRIDE: {
@@ -533,9 +532,10 @@ export function createHVACMachine(
       logStateEntry: ({ context, event }) => {
         const eventType = (event as unknown as { type?: string })?.type;
         // Only log significant state changes to reduce noise
+        // Skip AUTO_EVALUATE events as they're logged by the subscription
         if (
           eventType &&
-          !['UPDATE_TEMPERATURES', 'UPDATE_CONDITIONS', 'UPDATE_DATA'].includes(
+          !['UPDATE_TEMPERATURES', 'UPDATE_CONDITIONS', 'UPDATE_DATA', 'AUTO_EVALUATE'].includes(
             eventType,
           )
         ) {
@@ -639,7 +639,7 @@ export function createHVACMachine(
           isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
         };
       }),
-      triggerAutoEvaluate: ({ context }) => {
+      triggerAutoEvaluate: ({ context, self }) => {
         if (
           context.indoorTemp !== undefined && context.outdoorTemp !== undefined
         ) {
@@ -648,6 +648,8 @@ export function createHVACMachine(
             outdoorTemp: context.outdoorTemp,
             systemMode: context.systemMode,
           });
+          // Send AUTO_EVALUATE event here instead of using raise()
+          self.send({ type: 'AUTO_EVALUATE' });
         }
       },
       handleDefrost: ({ event }) => {
