@@ -57,6 +57,7 @@ export interface HVACEvaluation {
   shouldHeat: boolean;
   shouldCool: boolean;
   needsDefrost: boolean;
+  shouldTurnOff: boolean;
   reason: string;
 }
 
@@ -98,6 +99,7 @@ export class HVACStrategy {
     const shouldHeat = this.shouldHeat(data);
     const shouldCool = this.shouldCool(data);
     const needsDefrost = this.needsDefrost(data);
+    const shouldTurnOff = this.shouldTurnOff(data);
 
     // Unified reason construction
     const reason = ((): HVACReason => {
@@ -108,6 +110,25 @@ export class HVACStrategy {
           timeOfDay: `${data.hour}:00 ${data.isWeekday ? "weekday" : "weekend"}`,
         }
       };
+
+      if (shouldTurnOff) {
+        // Determine specific turn-off reason
+        let turnOffReason = "unknown";
+        if (!this.isActiveHour(data.hour, data.isWeekday)) {
+          turnOffReason = `outside active hours (${data.hour}:00)`;
+        }
+
+        return {
+          code: "turning_off",
+          description: `Turning off required - conditions not met for operation`,
+          getLogData: () => ({
+            ...baseLogData,
+            mode: "OFF",
+            turnOffReason,
+            activeHours: this.hvacOptions.activeHours
+          })
+        };
+      }
 
       if (needsDefrost) return {
         code: "defrost_required",
@@ -167,6 +188,7 @@ export class HVACStrategy {
       shouldHeat,
       shouldCool,
       needsDefrost,
+      shouldTurnOff,
       reason: reason.code,
     };
 
@@ -458,6 +480,13 @@ export class HVACStrategy {
     const start = isWeekday ? activeHours.startWeekday : activeHours.start;
     return hour >= start && hour <= activeHours.end;
   }
+
+  /**
+   * Check if we should turn off all entities
+   */
+  shouldTurnOff(data: StateChangeData): boolean {
+    return !this.isActiveHour(data.hour, data.isWeekday);
+  }
 }
 
 /**
@@ -521,6 +550,11 @@ export function createHVACMachine(
             {
               target: "idle",
               guard: "isManualOff",
+            },
+            {
+              target: "idle",
+              guard: "shouldTurnOff",
+              actions: "turnOff",
             },
             {
               target: "heating",
@@ -775,6 +809,38 @@ export function createHVACMachine(
             }
           }
         },
+
+        turnOff: async () => {
+          if (!haClient) {
+            logger.warning(
+              "⚠️ No Home Assistant client available for turn off control",
+            );
+            return;
+          }
+
+          const enabledEntities = hvacOptions.hvacEntities.filter(
+            (e) => e.enabled,
+          );
+
+          logger.info("🔴 Turning off enabled HVAC entities", {
+            totalEntities: hvacOptions.hvacEntities.length,
+            enabledEntities: enabledEntities.length,
+            reason: "Turning off conditions met",
+          });
+
+          for (const entity of enabledEntities) {
+            try {
+              await controlHVACEntity(haClient, entity.entityId, "off", undefined, undefined, logger);
+              logger.debug("✅ Entity turned off", {
+                entityId: entity.entityId,
+              });
+            } catch (error) {
+              logger.error("❌ Failed to turn off entity", error, {
+                entityId: entity.entityId,
+              });
+            }
+          }
+        },
       },
       guards: {
         /**
@@ -874,46 +940,78 @@ export function createHVACMachine(
           });
           return evaluation.needsDefrost;
         },
+
+        shouldTurnOff: ({ context }) => {
+          if (!context.indoorTemp || !context.outdoorTemp) {
+            return false;
+          }
+
+          const evaluation = hvacStrategy.evaluateConditions({
+            currentTemp: context.indoorTemp,
+            weatherTemp: context.outdoorTemp,
+            hour: context.currentHour,
+            isWeekday: context.isWeekday,
+          });
+
+          logger.debug("🔍 Turn off guard evaluation", {
+            required: evaluation.shouldTurnOff,
+            hasTemperatureData: !!(context.indoorTemp && context.outdoorTemp),
+            reason: evaluation.shouldTurnOff
+              ? "System shutdown required"
+              : "System can continue operating",
+          });
+          return evaluation.shouldTurnOff;
+        },
       },
     },
   );
 }
 
 /**
- * Control individual HVAC entity
+ * Generic HVAC entity control helper
  */
 async function controlHVACEntity(
   haClient: HomeAssistantClient,
   entityId: string,
   mode: string,
-  targetTemp: number,
-  presetMode: string,
-  logger: LoggerService,
+  targetTemp?: number,
+  presetMode?: string,
+  logger?: LoggerService,
 ): Promise<void> {
   if (!haClient) return;
 
   // Import HassServiceCallImpl dynamically to avoid circular dependency
   const { HassServiceCallImpl } = await import("../home-assistant/models.ts");
 
-  // Set HVAC mode
-  const modeCall = HassServiceCallImpl.climate("set_hvac_mode", entityId, {
-    hvac_mode: mode,
-  });
-  await haClient.callService(modeCall);
+  if (mode === "off") {
+    // Turn off entity
+    const offCall = HassServiceCallImpl.climate("turn_off", entityId, {});
+    await haClient.callService(offCall);
+  } else {
+    // Set HVAC mode (heat, cool, etc.)
+    const modeCall = HassServiceCallImpl.climate("set_hvac_mode", entityId, {
+      hvac_mode: mode,
+    });
+    await haClient.callService(modeCall);
 
-  // Set temperature
-  const tempCall = HassServiceCallImpl.climate("set_temperature", entityId, {
-    temperature: targetTemp,
-  });
-  await haClient.callService(tempCall);
+    // Set temperature if provided
+    if (targetTemp !== undefined) {
+      const tempCall = HassServiceCallImpl.climate("set_temperature", entityId, {
+        temperature: targetTemp,
+      });
+      await haClient.callService(tempCall);
+    }
 
-  // Set preset mode
-  const presetCall = HassServiceCallImpl.climate("set_preset_mode", entityId, {
-    preset_mode: presetMode,
-  });
-  await haClient.callService(presetCall);
+    // Set preset mode if provided
+    if (presetMode) {
+      const presetCall = HassServiceCallImpl.climate("set_preset_mode", entityId, {
+        preset_mode: presetMode,
+      });
+      await haClient.callService(presetCall);
+    }
+  }
 
-  logger.debug("🎯 HVAC entity control completed", {
+  logger?.debug("🎯 HVAC entity control completed", {
     entityId,
     mode,
     temperature: targetTemp,

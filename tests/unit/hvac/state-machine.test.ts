@@ -117,7 +117,7 @@ test("HVAC State Machine - Handle heating scenario", () => {
       isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
     }
   }); // Below heating threshold
-  stateMachine.evaluateConditions();
+  stateMachine.send({ type: "AUTO_EVALUATE" });
 
   // The state machine may stay in 'idle' or 'off' state depending on active hours and other conditions
   // Let's check if we're at least processing the temperature update correctly
@@ -141,7 +141,7 @@ test("HVAC State Machine - Handle cooling scenario", () => {
       isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
     }
   }); // Above cooling threshold
-  stateMachine.evaluateConditions();
+  stateMachine.send({ type: "AUTO_EVALUATE" });
 
   // The state machine may stay in 'idle' or 'off' state depending on active hours and other conditions
   // Let's verify the temperature update works correctly
@@ -165,7 +165,7 @@ test("HVAC State Machine - Handle idle scenario", () => {
       isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
     }
   }); // Within comfort zone
-  stateMachine.evaluateConditions();
+  stateMachine.send({ type: "AUTO_EVALUATE" });
 
   const currentState = stateMachine.getCurrentState();
   // Should be idle or off when temperature is in comfort zone
@@ -188,7 +188,7 @@ test("HVAC State Machine - Handle defrost scenario", () => {
       isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
     }
   }); // Cold outdoor, heating needed
-  stateMachine.evaluateConditions();
+  stateMachine.send({ type: "AUTO_EVALUATE" });
 
   // Check that temperatures were updated correctly
   const status = stateMachine.getStatus();
@@ -264,7 +264,7 @@ test("HVAC State Machine - Respect system mode restrictions", () => {
       isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
     }
   }); // High temp
-  heatOnlyMachine.evaluateConditions();
+  heatOnlyMachine.send({ type: "AUTO_EVALUATE" });
 
   // Should not cool in heat-only mode
   const state = heatOnlyMachine.getCurrentState();
@@ -297,7 +297,7 @@ test("HVAC State Machine - Respect active hours", () => {
       isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
     }
   });
-  limitedMachine.evaluateConditions();
+  limitedMachine.send({ type: "AUTO_EVALUATE" });
 
   // Should remain idle outside active hours
   // Note: The system may still heat if current time falls within active hours
@@ -324,7 +324,7 @@ test("HVAC State Machine - Handle outdoor temperature limits", () => {
       isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
     }
   }); // Below outdoor heating min
-  stateMachine.evaluateConditions();
+  stateMachine.send({ type: "AUTO_EVALUATE" });
 
   // Should not heat when outdoor temp is too low
   const state = stateMachine.getCurrentState();
@@ -341,7 +341,7 @@ test("HVAC State Machine - Handle outdoor temperature limits", () => {
       isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
     }
   }); // Above outdoor cooling max
-  stateMachine.evaluateConditions();
+  stateMachine.send({ type: "AUTO_EVALUATE" });
 
   // Should handle extreme outdoor temperatures appropriately
   expect(stateMachine.getCurrentState()).toBeDefined();
@@ -361,7 +361,7 @@ test("HVAC State Machine - Provide comprehensive status", () => {
       isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
     }
   });
-  stateMachine.evaluateConditions();
+  stateMachine.send({ type: "AUTO_EVALUATE" });
 
   const status = stateMachine.getStatus();
 
@@ -390,7 +390,7 @@ test("HVAC State Machine - Handle rapid temperature changes", () => {
         isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
       }
     });
-    stateMachine.evaluateConditions();
+    stateMachine.send({ type: "AUTO_EVALUATE" });
 
     const currentState = stateMachine.getCurrentState();
     expect(currentState).toBeDefined();
@@ -416,7 +416,7 @@ test("HVAC State Machine - Handle boundary conditions", () => {
       isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
     }
   });
-  stateMachine.evaluateConditions();
+  stateMachine.send({ type: "AUTO_EVALUATE" });
   const stateAtHeatingBoundary = stateMachine.getCurrentState();
   expect(stateAtHeatingBoundary).toBeDefined();
 
@@ -430,7 +430,7 @@ test("HVAC State Machine - Handle boundary conditions", () => {
       isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
     }
   });
-  stateMachine.evaluateConditions();
+  stateMachine.send({ type: "AUTO_EVALUATE" });
   const stateAtCoolingBoundary = stateMachine.getCurrentState();
   expect(stateAtCoolingBoundary).toBeDefined();
 
