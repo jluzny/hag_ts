@@ -50,7 +50,7 @@ export type HVACEvent =
   | { type: 'DEFROST_NEEDED' }
   | { type: 'DEFROST_COMPLETE' }
   | { type: 'UPDATE_CONDITIONS'; data: Partial<HVACContext> }
-  | { type: 'UPDATE_TEMPERATURES'; indoor: number; outdoor: number }
+  | { type: 'UPDATE_TEMPERATURES'; indoor: number; outdoor: number; triggerSource?: { type: string; entityId?: string; newValue?: string; [key: string]: any } }
   | { type: 'MANUAL_OVERRIDE'; mode: HVACMode; temperature?: number };
 
 /**
@@ -631,6 +631,19 @@ export function createHVACMachine(
       }),
       updateTemperatures: assign(({ context, event }) => {
         if (event.type !== 'UPDATE_TEMPERATURES') return context;
+        
+        // Log the trigger source generically
+        if (event.triggerSource) {
+          const { type, entityId, newValue, ...extraData } = event.triggerSource;
+          logger.info('📊 External event triggering HVAC evaluation', {
+            triggerType: type,
+            triggerEntity: entityId,
+            triggerValue: newValue,
+            ...extraData,
+            resultingTemps: { indoor: event.indoor, outdoor: event.outdoor }
+          });
+        }
+        
         return {
           ...context,
           indoorTemp: event.indoor,
@@ -643,7 +656,7 @@ export function createHVACMachine(
         if (
           context.indoorTemp !== undefined && context.outdoorTemp !== undefined
         ) {
-          logger.debug('🎯 Conditions ready for evaluation', {
+          logger.info('🎯 Conditions ready - triggering HVAC evaluation', {
             indoorTemp: context.indoorTemp,
             outdoorTemp: context.outdoorTemp,
             systemMode: context.systemMode,

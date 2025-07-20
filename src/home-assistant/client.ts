@@ -499,6 +499,7 @@ export class HomeAssistantClient {
     this.logger.info("🔧 Calling Home Assistant service", {
       domain: serviceCall.domain,
       service: serviceCall.service,
+      serviceData: serviceCall.serviceData,
     });
 
     if (!this.connected) {
@@ -512,6 +513,7 @@ export class HomeAssistantClient {
       this.logger.info("✅ Service called successfully", {
         domain: serviceCall.domain,
         service: serviceCall.service,
+        serviceData: serviceCall.serviceData,
       });
     } catch (error) {
       this.logger.error("❌ Failed to call service", error);

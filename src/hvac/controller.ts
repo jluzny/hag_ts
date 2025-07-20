@@ -363,6 +363,11 @@ export class HVACController {
           type: 'UPDATE_TEMPERATURES',
           indoor: indoorTemp,
           outdoor: outdoorTemp,
+          triggerSource: {
+            type: 'hass_sensor_change',
+            entityId,
+            newValue: newState
+          }
         });
       }
     } catch (error) {
@@ -405,6 +410,11 @@ export class HVACController {
         type: 'UPDATE_TEMPERATURES',
         indoor: indoorTemp,
         outdoor: outdoorTemp,
+        triggerSource: {
+          type: 'initial_readings',
+          indoorSensor: this.hvacOptions.tempSensor,
+          outdoorSensor: this.hvacOptions.outdoorSensor
+        }
       });
 
     } catch (error) {
