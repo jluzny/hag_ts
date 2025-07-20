@@ -63,9 +63,9 @@ hvacOptions:
       outdoorMax: 45.0
 
   activeHours:
-    start: 6 # Start later for production
+    start: 9
     startWeekday: 6 # Weekday start
-    end: 23 # End at 11 PM
+    end: 20
 
   evaluationCacheMs: 100 # Cache evaluations for 100ms
 
