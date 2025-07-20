@@ -336,11 +336,15 @@ test("HVAC State Machine Integration", async () => {
   expect(status.currentState).toBe("idle");
 
   // Transition states based on conditions
-  // Update temperatures to trigger heating
+  // Update conditions to trigger heating
   stateMachine.send({
-    type: "UPDATE_TEMPERATURES",
-    indoor: 18.0,
-    outdoor: 5.0,
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 18.0,
+      outdoorTemp: 5.0,
+      currentHour: new Date().getHours(),
+      isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
+    }
   }); // Cold indoor, cold outdoor
   stateMachine.evaluateConditions();
 

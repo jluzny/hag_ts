@@ -8,30 +8,30 @@
  * System operation modes
  */
 export enum SystemMode {
-  AUTO = 'auto',
-  HEAT_ONLY = 'heat_only',
-  COOL_ONLY = 'cool_only',
-  OFF = 'off',
+  AUTO = "auto",
+  HEAT_ONLY = "heat_only",
+  COOL_ONLY = "cool_only",
+  OFF = "off",
 }
 
 /**
  * HVAC operational modes
  */
 export enum HVACMode {
-  HEAT = 'heat',
-  COOL = 'cool',
-  OFF = 'off',
-  AUTO = 'auto',
+  HEAT = "heat",
+  COOL = "cool",
+  OFF = "off",
+  AUTO = "auto",
 }
 
 /**
  * Log levels for application logging
  */
 export enum LogLevel {
-  DEBUG = 'debug',
-  INFO = 'info',
-  WARNING = 'warning',
-  ERROR = 'error',
+  DEBUG = "debug",
+  INFO = "info",
+  WARNING = "warning",
+  ERROR = "error",
 }
 
 /**
@@ -182,12 +182,12 @@ export interface HVACStatus {
  * WebSocket connection states
  */
 export enum WebSocketState {
-  CONNECTING = 'connecting',
-  CONNECTED = 'connected',
-  DISCONNECTED = 'disconnected',
-  RECONNECTING = 'reconnecting',
-  AUTHENTICATING = 'authenticating',
-  ERROR = 'error',
+  CONNECTING = "connecting",
+  CONNECTED = "connected",
+  DISCONNECTED = "disconnected",
+  RECONNECTING = "reconnecting",
+  AUTHENTICATING = "authenticating",
+  ERROR = "error",
 }
 
 /**
@@ -217,22 +217,22 @@ export interface OperationResult<T = unknown> {
  */
 export const TypeGuards = {
   isSystemMode: (value: unknown): value is SystemMode =>
-    typeof value === 'string' &&
+    typeof value === "string" &&
     Object.values(SystemMode).includes(value as SystemMode),
 
   isHVACMode: (value: unknown): value is HVACMode =>
-    typeof value === 'string' &&
+    typeof value === "string" &&
     Object.values(HVACMode).includes(value as HVACMode),
 
   isLogLevel: (value: unknown): value is LogLevel =>
-    typeof value === 'string' &&
+    typeof value === "string" &&
     Object.values(LogLevel).includes(value as LogLevel),
 
   isNumber: (value: unknown): value is number =>
-    typeof value === 'number' && !isNaN(value),
+    typeof value === "number" && !isNaN(value),
 
-  isString: (value: unknown): value is string => typeof value === 'string',
+  isString: (value: unknown): value is string => typeof value === "string",
 
   isObject: (value: unknown): value is Record<string, unknown> =>
-    typeof value === 'object' && value !== null && !Array.isArray(value),
+    typeof value === "object" && value !== null && !Array.isArray(value),
 } as const;

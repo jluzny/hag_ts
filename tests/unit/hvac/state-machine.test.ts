@@ -81,16 +81,20 @@ test("HVAC State Machine - Start and stop correctly", () => {
   // Should handle stop gracefully
 });
 
-test("HVAC State Machine - Update temperatures", () => {
+test("HVAC State Machine - Update conditions", () => {
   const stateMachine = new HVACStateMachine(mockHvacOptions);
   const indoorTemp = 20.5;
   const outdoorTemp = 5.0;
 
   stateMachine.start();
   stateMachine.send({
-    type: "UPDATE_TEMPERATURES",
-    indoor: indoorTemp,
-    outdoor: outdoorTemp,
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: indoorTemp,
+      outdoorTemp: outdoorTemp,
+      currentHour: new Date().getHours(),
+      isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
+    }
   });
 
   const status = stateMachine.getStatus();
@@ -105,9 +109,13 @@ test("HVAC State Machine - Handle heating scenario", () => {
   // Set conditions that should trigger heating
   stateMachine.start();
   stateMachine.send({
-    type: "UPDATE_TEMPERATURES",
-    indoor: 18.0,
-    outdoor: 5.0,
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 18.0,
+      outdoorTemp: 5.0,
+      currentHour: new Date().getHours(),
+      isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
+    }
   }); // Below heating threshold
   stateMachine.evaluateConditions();
 
@@ -125,9 +133,13 @@ test("HVAC State Machine - Handle cooling scenario", () => {
   // Set conditions that should trigger cooling
   stateMachine.start();
   stateMachine.send({
-    type: "UPDATE_TEMPERATURES",
-    indoor: 27.0,
-    outdoor: 25.0,
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 27.0,
+      outdoorTemp: 25.0,
+      currentHour: new Date().getHours(),
+      isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
+    }
   }); // Above cooling threshold
   stateMachine.evaluateConditions();
 
@@ -145,9 +157,13 @@ test("HVAC State Machine - Handle idle scenario", () => {
   // Set conditions that should keep system idle
   stateMachine.start();
   stateMachine.send({
-    type: "UPDATE_TEMPERATURES",
-    indoor: 21.0,
-    outdoor: 15.0,
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 21.0,
+      outdoorTemp: 15.0,
+      currentHour: new Date().getHours(),
+      isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
+    }
   }); // Within comfort zone
   stateMachine.evaluateConditions();
 
@@ -164,9 +180,13 @@ test("HVAC State Machine - Handle defrost scenario", () => {
   // Set conditions that could trigger defrost
   stateMachine.start();
   stateMachine.send({
-    type: "UPDATE_TEMPERATURES",
-    indoor: 18.0,
-    outdoor: -5.0,
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 18.0,
+      outdoorTemp: -5.0,
+      currentHour: new Date().getHours(),
+      isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
+    }
   }); // Cold outdoor, heating needed
   stateMachine.evaluateConditions();
 
@@ -187,9 +207,13 @@ test("HVAC State Machine - Handle manual override", () => {
 
   // Set conditions that would trigger heating (cold indoor temp)
   stateMachine.send({
-    type: "UPDATE_TEMPERATURES",
-    indoor: 15.0, // Below heating threshold
-    outdoor: 5.0, // Within heating range
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 15.0, // Below heating threshold
+      outdoorTemp: 5.0, // Within heating range
+      currentHour: new Date().getHours(),
+      isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
+    }
   });
 
   // Test heat override - should evaluate and potentially go to heating
@@ -200,9 +224,13 @@ test("HVAC State Machine - Handle manual override", () => {
 
   // Set conditions that would trigger cooling (hot indoor temp)
   stateMachine.send({
-    type: "UPDATE_TEMPERATURES",
-    indoor: 28.0, // Above cooling threshold
-    outdoor: 25.0, // Within cooling range
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 28.0, // Above cooling threshold
+      outdoorTemp: 25.0, // Within cooling range
+      currentHour: new Date().getHours(),
+      isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
+    }
   });
 
   // Test cool override
@@ -228,9 +256,13 @@ test("HVAC State Machine - Respect system mode restrictions", () => {
 
   heatOnlyMachine.start();
   heatOnlyMachine.send({
-    type: "UPDATE_TEMPERATURES",
-    indoor: 27.0,
-    outdoor: 25.0,
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 27.0,
+      outdoorTemp: 25.0,
+      currentHour: new Date().getHours(),
+      isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
+    }
   }); // High temp
   heatOnlyMachine.evaluateConditions();
 
@@ -257,9 +289,13 @@ test("HVAC State Machine - Respect active hours", () => {
   limitedMachine.start();
   // Set temperature that would normally trigger heating
   limitedMachine.send({
-    type: "UPDATE_TEMPERATURES",
-    indoor: 18.0,
-    outdoor: 5.0,
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 18.0,
+      outdoorTemp: 5.0,
+      currentHour: new Date().getHours(),
+      isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
+    }
   });
   limitedMachine.evaluateConditions();
 
@@ -280,9 +316,13 @@ test("HVAC State Machine - Handle outdoor temperature limits", () => {
   // Test heating with outdoor temp too low
   stateMachine.start();
   stateMachine.send({
-    type: "UPDATE_TEMPERATURES",
-    indoor: 18.0,
-    outdoor: -15.0,
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 18.0,
+      outdoorTemp: -15.0,
+      currentHour: new Date().getHours(),
+      isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
+    }
   }); // Below outdoor heating min
   stateMachine.evaluateConditions();
 
@@ -293,9 +333,13 @@ test("HVAC State Machine - Handle outdoor temperature limits", () => {
 
   // Test cooling with outdoor temp too high
   stateMachine.send({
-    type: "UPDATE_TEMPERATURES",
-    indoor: 27.0,
-    outdoor: 50.0,
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 27.0,
+      outdoorTemp: 50.0,
+      currentHour: new Date().getHours(),
+      isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
+    }
   }); // Above outdoor cooling max
   stateMachine.evaluateConditions();
 
@@ -309,9 +353,13 @@ test("HVAC State Machine - Provide comprehensive status", () => {
   const stateMachine = new HVACStateMachine(mockHvacOptions);
   stateMachine.start();
   stateMachine.send({
-    type: "UPDATE_TEMPERATURES",
-    indoor: 20.0,
-    outdoor: 10.0,
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 20.0,
+      outdoorTemp: 10.0,
+      currentHour: new Date().getHours(),
+      isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
+    }
   });
   stateMachine.evaluateConditions();
 
@@ -334,9 +382,13 @@ test("HVAC State Machine - Handle rapid temperature changes", () => {
   stateMachine.start();
   for (const temp of temperatures) {
     stateMachine.send({
-      type: "UPDATE_TEMPERATURES",
-      indoor: temp,
-      outdoor: 15.0,
+      type: "UPDATE_CONDITIONS",
+      data: {
+        indoorTemp: temp,
+        outdoorTemp: 15.0,
+        currentHour: new Date().getHours(),
+        isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
+      }
     });
     stateMachine.evaluateConditions();
 
@@ -356,9 +408,13 @@ test("HVAC State Machine - Handle boundary conditions", () => {
   stateMachine.start();
   // Test heating threshold boundary
   stateMachine.send({
-    type: "UPDATE_TEMPERATURES",
-    indoor: heatingMax,
-    outdoor: 10.0,
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: heatingMax,
+      outdoorTemp: 10.0,
+      currentHour: new Date().getHours(),
+      isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
+    }
   });
   stateMachine.evaluateConditions();
   const stateAtHeatingBoundary = stateMachine.getCurrentState();
@@ -366,9 +422,13 @@ test("HVAC State Machine - Handle boundary conditions", () => {
 
   // Test cooling threshold boundary
   stateMachine.send({
-    type: "UPDATE_TEMPERATURES",
-    indoor: coolingMin,
-    outdoor: 20.0,
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: coolingMin,
+      outdoorTemp: 20.0,
+      currentHour: new Date().getHours(),
+      isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
+    }
   });
   stateMachine.evaluateConditions();
   const stateAtCoolingBoundary = stateMachine.getCurrentState();
@@ -449,17 +509,25 @@ test("HVAC State Machine Error Handling - Handle invalid temperature values", ()
   const testStateMachine = new HVACStateMachine(mockHvacOptions);
   testStateMachine.start();
   testStateMachine.send({
-    type: "UPDATE_TEMPERATURES",
-    indoor: NaN,
-    outdoor: 15.0,
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: NaN,
+      outdoorTemp: 15.0,
+      currentHour: new Date().getHours(),
+      isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
+    }
   });
   const status1 = testStateMachine.getStatus();
   expect(status1).toBeDefined(); // Should handle gracefully
 
   testStateMachine.send({
-    type: "UPDATE_TEMPERATURES",
-    indoor: 20.0,
-    outdoor: Infinity,
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 20.0,
+      outdoorTemp: Infinity,
+      currentHour: new Date().getHours(),
+      isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
+    }
   });
   const status2 = testStateMachine.getStatus();
   expect(status2).toBeDefined(); // Should handle gracefully

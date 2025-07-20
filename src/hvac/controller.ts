@@ -13,6 +13,7 @@ import { HVACMode, HVACStatus, OperationResult } from '../types/common.ts';
 import { HVACOperationError, StateError } from '../core/exceptions.ts';
 import { AppEvent, EventBus } from '../core/event-system.ts';
 import { HVACStateMachine } from './state-machine.ts';
+import { HVACContext } from '../types/common.ts';
 
 
 /**
@@ -184,9 +185,9 @@ export class HVACController {
     }
 
     try {
-      // Manual evaluation trigger - only for explicit user requests
+      // Manual evaluation event - only for explicit user requests
       this.stateMachine.send({ type: 'AUTO_EVALUATE' });
-      
+
       return {
         success: true,
         timestamp: new Date().toISOString(),
@@ -259,7 +260,7 @@ export class HVACController {
   private async setupEventDrivenMonitoring(): Promise<void> {
     // Get all sensors for HVAC system
     const sensors = this.getSensors();
-    
+
     this.logger.info('📡 Setting up event-driven monitoring for sensors', {
       sensors: sensors,
       totalSensors: sensors.length,
@@ -267,10 +268,10 @@ export class HVACController {
 
     // Setup Home Assistant event filtering for temperature sensors
     this.setupSensorsEventHandling(sensors);
-    
+
     // Subscribe HVAC domain actor to event bus
     this.setupEventBusSubscription();
-    
+
     // Get initial sensor readings once at startup
     await this.getInitialSensorReadings();
   }
@@ -323,7 +324,7 @@ export class HVACController {
           timestamp: new Date().toISOString(),
         });
 
-        // Trigger sensor update
+        // Handle sensor update
         this.handleSensorChange(entityId, newState);
       }
     });
@@ -345,28 +346,48 @@ export class HVACController {
         timestamp: new Date().toISOString(),
       });
 
-      // Get current temperatures from state machine context and update only the changed sensor
+      // Get current temperatures from state machine context
       const currentContext = this.stateMachine.getStatus().context;
-      let indoorTemp = currentContext.indoorTemp;
-      let outdoorTemp = currentContext.outdoorTemp;
+      const updatedData: Partial<HVACContext> = {
+        currentHour: new Date().getHours(),
+        isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
+      };
+      let updateType: string;
 
-      // Update only the sensor that changed
+      // Handle each sensor type individually
       if (entityId === this.hvacOptions.tempSensor) {
-        indoorTemp = parseFloat(newState);
+        updatedData.indoorTemp = parseFloat(newState);
+        updateType = 'indoor_temperature_change';
+
+        // Include current outdoor temp to maintain complete context
+        if (currentContext.outdoorTemp !== undefined) {
+          updatedData.outdoorTemp = currentContext.outdoorTemp;
+        }
       } else if (entityId === this.hvacOptions.outdoorSensor) {
-        outdoorTemp = parseFloat(newState);
+        updatedData.outdoorTemp = parseFloat(newState);
+        updateType = 'outdoor_temperature_change';
+
+        // Include current indoor temp to maintain complete context
+        if (currentContext.indoorTemp !== undefined) {
+          updatedData.indoorTemp = currentContext.indoorTemp;
+        }
+      } else {
+        // Not a monitored sensor, skip
+        return;
       }
 
-      // Send temperature update directly to state machine
-      if (indoorTemp !== undefined && outdoorTemp !== undefined) {
+      // Send sensor update to state machine only if we have both temperatures
+      if (updatedData.indoorTemp !== undefined && updatedData.outdoorTemp !== undefined) {
         this.stateMachine.send({
-          type: 'UPDATE_TEMPERATURES',
-          indoor: indoorTemp,
-          outdoor: outdoorTemp,
-          triggerSource: {
-            type: 'hass_sensor_change',
+          type: 'UPDATE_CONDITIONS',
+          data: updatedData,
+          eventSource: {
+            type: updateType,
             entityId,
-            newValue: newState
+            newValue: newState,
+            previousValue: entityId === this.hvacOptions.tempSensor
+              ? currentContext.indoorTemp?.toString()
+              : currentContext.outdoorTemp?.toString()
           }
         });
       }
@@ -398,19 +419,23 @@ export class HVACController {
       const indoorTemp = parseFloat(sensorStates[this.hvacOptions.tempSensor]);
       const outdoorTemp = parseFloat(sensorStates[this.hvacOptions.outdoorSensor]);
 
-      this.logger.info('🌡️ Initial temperature readings', {
+      this.logger.info('🌡️ Initial conditions readings', {
         indoorTemp,
         outdoorTemp,
         indoorSensor: this.hvacOptions.tempSensor,
         outdoorSensor: this.hvacOptions.outdoorSensor,
       });
 
-      // Send initial temperatures directly to state machine
+      // Send initial conditions to state machine
       this.stateMachine.send({
-        type: 'UPDATE_TEMPERATURES',
-        indoor: indoorTemp,
-        outdoor: outdoorTemp,
-        triggerSource: {
+        type: 'UPDATE_CONDITIONS',
+        data: {
+          indoorTemp,
+          outdoorTemp,
+          currentHour: new Date().getHours(),
+          isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
+        },
+        eventSource: {
           type: 'initial_readings',
           indoorSensor: this.hvacOptions.tempSensor,
           outdoorSensor: this.hvacOptions.outdoorSensor
@@ -418,7 +443,7 @@ export class HVACController {
       });
 
     } catch (error) {
-      this.logger.error('❌ Failed to get initial sensor readings', error);
+      this.logger.error('❌ Failed to get initial conditions readings', error);
     }
   }
 
@@ -426,10 +451,10 @@ export class HVACController {
    * Get current HVAC mode from actor
    */
   private getCurrentHVACMode(): HVACMode {
-    
+
     try {
       const currentState = this.stateMachine.getCurrentState();
-      
+
       // Map state machine states to HVAC modes
       switch (currentState) {
         case 'heating':
@@ -461,7 +486,7 @@ export class HVACController {
    */
   private handleModeChangeRequest(event: AppEvent): void {
     const payload = event.payload as { mode: string; temperature?: number };
-    
+
     this.logger.info('🎛️ Processing mode change request via state machine', {
       mode: payload.mode,
       temperature: payload.temperature,
@@ -473,19 +498,14 @@ export class HVACController {
       mode: payload.mode as HVACMode,
       temperature: payload.temperature,
     });
-    
+
   }
 
   /**
    * Handle condition evaluation requests
    */
   private handleEvaluateConditions(): void {
-    
     this.logger.info('🔍 Evaluation will be triggered automatically by state machine when temperatures update');
-
-    // No need to send AUTO_EVALUATE here - the state machine's triggerAutoEvaluate action
-    // handles this automatically when temperature updates occur via UPDATE_TEMPERATURES
-    
   }
 
 }
