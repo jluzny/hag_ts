@@ -184,7 +184,7 @@ export class HVACController {
     }
 
     try {
-      // Send evaluation request directly to state machine
+      // Manual evaluation trigger - only for explicit user requests
       this.stateMachine.send({ type: 'AUTO_EVALUATE' });
       
       return {
@@ -471,10 +471,10 @@ export class HVACController {
    */
   private handleEvaluateConditions(): void {
     
-    this.logger.info('🔍 Processing condition evaluation request via state machine');
+    this.logger.info('🔍 Evaluation will be triggered automatically by state machine when temperatures update');
 
-    // Send AUTO_EVALUATE event to state machine (event-driven approach)
-    this.stateMachine.send({ type: 'AUTO_EVALUATE' });
+    // No need to send AUTO_EVALUATE here - the state machine's triggerAutoEvaluate action
+    // handles this automatically when temperature updates occur via UPDATE_TEMPERATURES
     
   }
 

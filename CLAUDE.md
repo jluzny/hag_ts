@@ -42,9 +42,9 @@ bun run scripts/call_service.ts climate.turn_off --entity_id climate.living_room
 bun run scripts/call_service.ts climate.set_hvac_mode --entity_id climate.living_room_ac --hvac_mode cool
 
 # Status checking - validate current system state
-bun run scripts/check_hvac_status.ts              # Check all configured HVAC entities
-bun run scripts/list_entities.ts climate          # Discover available climate entities
-bun run scripts/discover_sensors.ts               # Find temperature/outdoor sensors
+bun scripts/check_hvac_status.ts                  # Check all configured HVAC entities  
+bun scripts/list_entities.ts climate              # Discover available climate entities
+bun scripts/discover_sensors.ts                   # Find temperature/outdoor sensors
 
 # Testing prompts - see scripts/hvac_prompts.md for test sequences
 # Scripts support timeout commands and can be chained for complex test scenarios

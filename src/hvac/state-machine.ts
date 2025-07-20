@@ -82,22 +82,22 @@ export class HVACStrategy {
     timestamp: number;
   };
 
-  constructor(private hvacOptions: HvacOptions) {}
+  constructor(private hvacOptions: HvacOptions) { }
 
   /**
    * Unified evaluation method that returns all condition checks
    */
   evaluateConditions(data: StateChangeData): HVACEvaluation {
     const evaluationStart = Date.now();
-    
+
     // Create a cache key from the input data
     const inputKey = JSON.stringify(data);
     const now = Date.now();
-    
+
     // Check if we have a recent evaluation for the same input
-    if (this.evaluationCache && 
-        this.evaluationCache.input === inputKey && 
-        (now - this.evaluationCache.timestamp) < this.hvacOptions.evaluationCacheMs) {
+    if (this.evaluationCache &&
+      this.evaluationCache.input === inputKey &&
+      (now - this.evaluationCache.timestamp) < this.hvacOptions.evaluationCacheMs) {
       return this.evaluationCache.result;
     }
 
@@ -109,7 +109,7 @@ export class HVACStrategy {
 
     let reason = 'no_action_needed';
     let humanReason = 'All conditions satisfied - no HVAC action required';
-    
+
     if (needsDefrost) {
       reason = 'defrost_required';
       humanReason = `Defrost cycle needed - outdoor temperature ${data.weatherTemp}°C is below threshold`;
@@ -177,7 +177,7 @@ export class HVACStrategy {
 
     // Check temperature conditions
     if (data.currentTemp >= thresholds.indoorMax) {
-      this.logger.info('❌ Heating blocked - indoor temp at/above maximum', {
+      this.logger.info('❌ Heating not activated - indoor temp at/above maximum', {
         currentTemp: `${data.currentTemp}°C`,
         maxThreshold: `${thresholds.indoorMax}°C`,
         reason: 'Indoor temperature is already at or above maximum heating threshold'
@@ -187,14 +187,14 @@ export class HVACStrategy {
 
     // Check if conditions are valid for heating
     if (!this.isValidCondition(data, thresholds)) {
-      const timeReason = !this.isActiveHour(data.hour, data.isWeekday) 
-        ? `outside active hours (current: ${data.hour}:00)` 
+      const timeReason = !this.isActiveHour(data.hour, data.isWeekday)
+        ? `outside active hours (current: ${data.hour}:00)`
         : 'within active hours';
       const tempReason = !this.isWithinTemperatureRange(data, thresholds)
         ? `outdoor temp ${data.weatherTemp}°C outside range ${thresholds.outdoorMin}°C-${thresholds.outdoorMax}°C`
         : 'outdoor temp within range';
-      
-      this.logger.info('❌ Heating blocked - invalid conditions', {
+
+      this.logger.info('❌ Heating not activated - invalid conditions', {
         currentTemp: `${data.currentTemp}°C`,
         outdoorTemp: `${data.weatherTemp}°C`,
         timeCheck: timeReason,
@@ -228,10 +228,11 @@ export class HVACStrategy {
   private shouldCool(data: StateChangeData): boolean {
     const { cooling } = this.hvacOptions;
     const thresholds = cooling.temperatureThresholds;
+    const targetTemp = cooling.temperature;
 
     // Check temperature conditions
     if (data.currentTemp <= thresholds.indoorMin) {
-      this.logger.info('❌ Cooling blocked - indoor temp at/below minimum', {
+      this.logger.info('❌ Cooling not activated - indoor temp at/below minimum', {
         currentTemp: `${data.currentTemp}°C`,
         minThreshold: `${thresholds.indoorMin}°C`,
         reason: 'Indoor temperature is already at or below minimum cooling threshold'
@@ -241,14 +242,14 @@ export class HVACStrategy {
 
     // Check if conditions are valid for cooling
     if (!this.isValidCondition(data, thresholds)) {
-      const timeReason = !this.isActiveHour(data.hour, data.isWeekday) 
-        ? `outside active hours (current: ${data.hour}:00)` 
+      const timeReason = !this.isActiveHour(data.hour, data.isWeekday)
+        ? `outside active hours (current: ${data.hour}:00)`
         : 'within active hours';
       const tempReason = !this.isWithinTemperatureRange(data, thresholds)
         ? `outdoor temp ${data.weatherTemp}°C outside range ${thresholds.outdoorMin}°C-${thresholds.outdoorMax}°C`
         : 'outdoor temp within range';
-      
-      this.logger.info('❌ Cooling blocked - invalid conditions', {
+
+      this.logger.info('❌ Cooling not activated - invalid conditions', {
         currentTemp: `${data.currentTemp}°C`,
         outdoorTemp: `${data.weatherTemp}°C`,
         timeCheck: timeReason,
@@ -263,16 +264,16 @@ export class HVACStrategy {
     if (shouldCool) {
       this.logger.info('✅ Cooling conditions met', {
         currentTemp: `${data.currentTemp}°C`,
-        maxThreshold: `${thresholds.indoorMin}°C`,
-        tempExcess: `${(data.currentTemp - thresholds.indoorMin).toFixed(1)}°C above maximum`,
+        minThreshold: `${thresholds.indoorMin}°C`,
+        tempExcess: `${(data.currentTemp - thresholds.indoorMin).toFixed(1)}°C above minimum`,
         outdoorTemp: `${data.weatherTemp}°C (within ${thresholds.outdoorMin}°C-${thresholds.outdoorMax}°C range)`,
         timeOfDay: `${data.hour}:00 ${data.isWeekday ? 'weekday' : 'weekend'}`,
       });
     } else {
       this.logger.info('ℹ️ Cooling not needed', {
         currentTemp: `${data.currentTemp}°C`,
-        maxThreshold: `${thresholds.indoorMin}°C`,
-        tempBelowMax: `${(thresholds.indoorMin - data.currentTemp).toFixed(1)}°C below maximum`,
+        minThreshold: `${thresholds.indoorMin}°C`,
+        tempBelowMin: `${(thresholds.indoorMin - data.currentTemp).toFixed(1)}°C below minimum`,
       });
     }
 
@@ -557,8 +558,8 @@ export function createHVACMachine(
         const icon = mode === 'heating'
           ? '🔥'
           : mode === 'cooling'
-          ? '❄️'
-          : '🔍';
+            ? '❄️'
+            : '🔍';
         logger.info(`${icon} [HVAC] Starting ${mode} mode`, {
           indoorTemp: context.indoorTemp,
           outdoorTemp: context.outdoorTemp,
@@ -586,12 +587,12 @@ export function createHVACMachine(
       },
       processManualOverride: assign(({ context, event }) => {
         if (event.type !== 'MANUAL_OVERRIDE') return context;
-        
+
         logger.info(`🎯 [HVAC] Manual override activated`, {
           mode: (event as any).mode,
           temperature: (event as any).temperature,
         });
-        
+
         return {
           ...context,
           manualOverride: {
@@ -638,7 +639,7 @@ export function createHVACMachine(
           isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
         };
       }),
-      triggerAutoEvaluate: ({ context }) => {
+      triggerAutoEvaluate: ({ context, self }) => {
         if (
           context.indoorTemp !== undefined && context.outdoorTemp !== undefined
         ) {
@@ -647,7 +648,8 @@ export function createHVACMachine(
             outdoorTemp: context.outdoorTemp,
             systemMode: context.systemMode,
           });
-          // Note: AUTO_EVALUATE will be triggered by the controller
+          // Trigger evaluation now that conditions are met
+          self.send({ type: 'AUTO_EVALUATE' });
         }
       },
       handleDefrost: ({ event }) => {
@@ -813,11 +815,11 @@ export function createHVACMachine(
       isManualOff: ({ context }) => {
         return (context as any).manualOverride?.mode === HVACMode.OFF;
       },
-      
+
       isManualHeat: ({ context }) => {
         return (context as any).manualOverride?.mode === HVACMode.HEAT;
       },
-      
+
       isManualCool: ({ context }) => {
         return (context as any).manualOverride?.mode === HVACMode.COOL;
       },

@@ -50,9 +50,6 @@ export abstract class BaseModule implements Module {
   }
 
   dispose(): Promise<void> {
-    this.logger?.debug(`📍 Module ${this.domain}.dispose() ENTRY`);
-    // Default dispose logic
-    this.logger?.debug(`📍 Module ${this.domain}.dispose() EXIT`);
     return Promise.resolve();
   }
 }
