@@ -22,24 +22,24 @@ import { HomeAssistantClient } from "../home-assistant/client.ts";
  */
 export type HVACEvent =
   | {
-      type: "MODE_CHANGE";
-      mode: HVACMode;
-      temperature?: number;
-    }
+    type: "MODE_CHANGE";
+    mode: HVACMode;
+    temperature?: number;
+  }
   | { type: "AUTO_EVALUATE" }
   | { type: "DEFROST_NEEDED" }
   | { type: "DEFROST_COMPLETE" }
   | { type: "OFF" }
   | {
-      type: "UPDATE_CONDITIONS";
-      data: Partial<HVACContext>;
-      eventSource?: {
-        type: string;
-        entityId?: string;
-        newValue?: string;
-        [key: string]: any;
-      };
-    }
+    type: "UPDATE_CONDITIONS";
+    data: Partial<HVACContext>;
+    eventSource?: {
+      type: string;
+      entityId?: string;
+      newValue?: string;
+      [key: string]: any;
+    };
+  }
   | { type: "MANUAL_OVERRIDE"; mode: HVACMode; temperature?: number };
 
 /**
@@ -71,7 +71,7 @@ export class HVACStrategy {
     timestamp: number;
   };
 
-  constructor(private hvacOptions: HvacOptions) {}
+  constructor(private hvacOptions: HvacOptions) { }
 
   /**
    * Unified evaluation method that returns all condition checks
@@ -207,7 +207,7 @@ export class HVACStrategy {
 
     // Check temperature conditions
     if (data.currentTemp >= thresholds.indoorMax) {
-      this.logger.info(
+      this.logger.debug(
         "❌ Heating not activated - indoor temp at/above maximum",
         {
           currentTemp: `${data.currentTemp}°C`,
@@ -228,7 +228,7 @@ export class HVACStrategy {
         ? `outdoor temp ${data.weatherTemp}°C outside range ${thresholds.outdoorMin}°C-${thresholds.outdoorMax}°C`
         : "outdoor temp within range";
 
-      this.logger.info("❌ Heating not activated - invalid conditions", {
+      this.logger.debug("❌ Heating not activated - invalid conditions", {
         currentTemp: `${data.currentTemp}°C`,
         outdoorTemp: `${data.weatherTemp}°C`,
         timeCheck: timeReason,
@@ -241,7 +241,7 @@ export class HVACStrategy {
     const shouldHeat = data.currentTemp < thresholds.indoorMin;
 
     if (shouldHeat) {
-      this.logger.info("✅ Heating conditions met", {
+      this.logger.debug("✅ Heating conditions met", {
         currentTemp: `${data.currentTemp}°C`,
         minThreshold: `${thresholds.indoorMin}°C`,
         tempDeficit: `${(thresholds.indoorMin - data.currentTemp).toFixed(1)}°C below minimum`,
@@ -249,7 +249,7 @@ export class HVACStrategy {
         timeOfDay: `${data.hour}:00 ${data.isWeekday ? "weekday" : "weekend"}`,
       });
     } else {
-      this.logger.info("ℹ️ Heating not needed", {
+      this.logger.debug("ℹ️ Heating not needed", {
         currentTemp: `${data.currentTemp}°C`,
         minThreshold: `${thresholds.indoorMin}°C`,
         tempAboveMin: `${(data.currentTemp - thresholds.indoorMin).toFixed(1)}°C above minimum`,
@@ -265,7 +265,7 @@ export class HVACStrategy {
 
     // Check temperature conditions
     if (data.currentTemp <= thresholds.indoorMin) {
-      this.logger.info(
+      this.logger.debug(
         "❌ Cooling not activated - indoor temp at/below minimum",
         {
           currentTemp: `${data.currentTemp}°C`,
@@ -286,7 +286,7 @@ export class HVACStrategy {
         ? `outdoor temp ${data.weatherTemp}°C outside range ${thresholds.outdoorMin}°C-${thresholds.outdoorMax}°C`
         : "outdoor temp within range";
 
-      this.logger.info("❌ Cooling not activated - invalid conditions", {
+      this.logger.debug("❌ Cooling not activated - invalid conditions", {
         currentTemp: `${data.currentTemp}°C`,
         outdoorTemp: `${data.weatherTemp}°C`,
         timeCheck: timeReason,
@@ -299,7 +299,7 @@ export class HVACStrategy {
     const shouldCool = data.currentTemp > thresholds.indoorMin;
 
     if (shouldCool) {
-      this.logger.info("✅ Cooling conditions met", {
+      this.logger.debug("✅ Cooling conditions met", {
         currentTemp: `${data.currentTemp}°C`,
         minThreshold: `${thresholds.indoorMin}°C`,
         tempExcess: `${(data.currentTemp - thresholds.indoorMin).toFixed(1)}°C above minimum`,
@@ -307,7 +307,7 @@ export class HVACStrategy {
         timeOfDay: `${data.hour}:00 ${data.isWeekday ? "weekday" : "weekend"}`,
       });
     } else {
-      this.logger.info("ℹ️ Cooling not needed", {
+      this.logger.debug("ℹ️ Cooling not needed", {
         currentTemp: `${data.currentTemp}°C`,
         minThreshold: `${thresholds.indoorMin}°C`,
         tempBelowMin: `${(thresholds.indoorMin - data.currentTemp).toFixed(1)}°C below minimum`,
@@ -494,7 +494,7 @@ export function createHVACMachine(
               guard: "canDefrost",
             },
             UPDATE_CONDITIONS: {
-              actions: "updateConditions",
+              actions: ["updateConditions", "eventAutoEvaluate"],
             },
             AUTO_EVALUATE: {
               target: "evaluating",
@@ -510,7 +510,7 @@ export function createHVACMachine(
           on: {
             OFF: "idle",
             UPDATE_CONDITIONS: {
-              actions: "updateConditions",
+              actions: ["updateConditions", "eventAutoEvaluate"],
             },
             AUTO_EVALUATE: {
               target: "evaluating",

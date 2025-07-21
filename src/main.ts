@@ -137,23 +137,22 @@ async function runApplication(
         logger.error("❌ HVAC module not found in registry");
         throw new Error("HVAC module not found in registry");
       }
-      logger.info("✅ HVAC module retrieved");
+      logger.debug("✅ HVAC module retrieved");
 
       // Get controller from module
-      logger.info("🔧 Getting HVAC controller...");
+      logger.debug("🔧 Getting HVAC controller...");
       const controller = hvacModule.getHVACController();
       logger.info("✅ HVAC controller retrieved");
 
       // Start the controller
-      logger.info("🔧 Starting HVAC controller...");
+      logger.debug("🔧 Starting HVAC controller...");
       await controller.start();
-      logger.info("✅ HVAC controller started");
+      logger.debug("✅ HVAC controller started");
     } catch (hvacError) {
       logger.error("❌ HVAC initialization failed:", hvacError);
       throw hvacError;
     }
 
-    logger.info("🔧 App fully operational");
     logger.info("🏠 HAG HVAC automation is running...");
     logger.info("📊 Press Ctrl+C to stop gracefully");
 
@@ -176,7 +175,7 @@ async function validateConfig(configPath: string): Promise<void> {
     const result = await ConfigLoader.validateConfigFile(configPath);
 
     if (result.valid && result.config) {
-      logger.info(`✅ Configuration is valid: ${configPath}`, {
+      logger.debug(`✅ Configuration is valid: ${configPath}`, {
         logLevel: result.config.appOptions.logLevel,
         aiEnabled: result.config.appOptions.useAi,
         tempSensor: result.config.hvacOptions.tempSensor,
@@ -231,9 +230,9 @@ async function getStatus(configPath?: string): Promise<void> {
     logger.info(`AI Enabled: ${status.controller.aiEnabled}`);
 
     if (status.stateMachine) {
-      logger.info(`State Machine: ${status.stateMachine.currentState}`);
+      logger.debug(`State Machine: ${status.stateMachine.currentState}`);
       if (status.stateMachine.hvacMode) {
-        logger.info(`HVAC Mode: ${status.stateMachine.hvacMode}`);
+        logger.debug(`HVAC Mode: ${status.stateMachine.hvacMode}`);
       }
     }
 
@@ -280,7 +279,7 @@ async function manualOverride(
     const result = controller.manualOverride(action, options);
 
     if (result.success) {
-      logger.info(
+      logger.debug(
         `✅ Manual override successful: ${action}`,
         temperature ? { temperature } : undefined,
       );

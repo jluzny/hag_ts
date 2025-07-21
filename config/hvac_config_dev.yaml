@@ -67,6 +67,6 @@ hvacOptions:
   activeHours:
     start: 6
     startWeekday: 6
-    end: 21
+    end: 23
 
   evaluationCacheMs: 100

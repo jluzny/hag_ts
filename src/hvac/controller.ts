@@ -44,7 +44,7 @@ export class HVACController {
     stateMachine?: HVACStateMachine,
     eventBus?: EventBus,
   ) {
-    this.logger = new LoggerService("HAG.hvac.controller-v3");
+    this.logger = new LoggerService("HAG.hvac.controller");
     this.hvacOptions = hvacOptions!;
     this.appOptions = appOptions!;
     this.haClient = haClient!;

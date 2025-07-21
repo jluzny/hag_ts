@@ -58,13 +58,13 @@ hvacOptions:
     presetMode: "windFree"
     temperatureThresholds:
       indoorMin: 23.5
-      indoorMax: 24.5 # Slightly wider range for production comfort
+      indoorMax: 24.5
       outdoorMin: 22.0
       outdoorMax: 45.0
 
   activeHours:
     start: 9
-    startWeekday: 6 # Weekday start
+    startWeekday: 9 # Weekday start
     end: 20
 
   evaluationCacheMs: 100 # Cache evaluations for 100ms

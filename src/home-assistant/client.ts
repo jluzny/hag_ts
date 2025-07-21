@@ -201,7 +201,7 @@ function createHAClientMachine(
                   const data = JSON.parse(event.data);
 
                   if (data.type === "auth_required") {
-                    logger.info("Auth required, sending token");
+                    logger.debug("Auth required, sending token");
                     try {
                       ws.send(
                         JSON.stringify({
@@ -385,7 +385,7 @@ export class HomeAssistantClient {
    * Connect to Home Assistant WebSocket API
    */
   async connect(): Promise<void> {
-    this.logger.info("🚀 Starting Home Assistant connection process");
+    this.logger.debug("🚀 Starting Home Assistant connection process");
 
     if (this.connected) {
       this.logger.info("✅ Already connected to Home Assistant");
@@ -457,7 +457,7 @@ export class HomeAssistantClient {
    * Disconnect from Home Assistant
    */
   disconnect(): Promise<void> {
-    this.logger.info("🔌 Disconnecting from Home Assistant");
+    this.logger.debug("🔌 Disconnecting from Home Assistant");
 
     if (this.pingTimer) {
       clearInterval(this.pingTimer);
@@ -495,11 +495,11 @@ export class HomeAssistantClient {
     return context
       ? { ...context.stats }
       : {
-          totalConnections: 0,
-          totalReconnections: 0,
-          totalMessages: 0,
-          totalErrors: 0,
-        };
+        totalConnections: 0,
+        totalReconnections: 0,
+        totalMessages: 0,
+        totalErrors: 0,
+      };
   }
 
   /**
@@ -582,7 +582,7 @@ export class HomeAssistantClient {
       const messageId = this.getNextMessageId();
       const message = serviceCall.toWebSocketMessage(messageId);
       await this.sendMessage(message);
-      this.logger.info("✅ Service called successfully", {
+      this.logger.debug("✅ Service called successfully", {
         domain: serviceCall.domain,
         service: serviceCall.service,
         serviceData: serviceCall.serviceData,
@@ -635,12 +635,13 @@ export class HomeAssistantClient {
 
     // Check if change is needed
     if (currentValue === value) {
-      this.logger.debug("⏭️ Value unchanged, skipping service call", {
+      this.logger.debug("⏭️ Service call skipped - value unchanged", {
         entityId,
         valueType,
         currentValue,
         desiredValue: value,
         service: `${domain}.${service}`,
+        reason: "Current value matches desired value",
       });
       return;
     }
@@ -658,10 +659,10 @@ export class HomeAssistantClient {
       if (domain === "climate") {
         serviceCall = HassServiceCallImpl.climate(
           service as
-            | "set_hvac_mode"
-            | "set_temperature"
-            | "set_preset_mode"
-            | "turn_off",
+          | "set_hvac_mode"
+          | "set_temperature"
+          | "set_preset_mode"
+          | "turn_off",
           entityId,
           serviceData,
         );
@@ -702,7 +703,7 @@ export class HomeAssistantClient {
    * Subscribe to events
    */
   async subscribeEvents(eventType: string): Promise<void> {
-    this.logger.info("📡 Subscribing to Home Assistant events", { eventType });
+    this.logger.debug("📡 Subscribing to Home Assistant events", { eventType });
 
     if (!this.connected) {
       throw new ConnectionError("Not connected to Home Assistant");
