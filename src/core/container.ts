@@ -4,22 +4,22 @@
  * Uses @needle-di/core for type-safe dependency injection with decorators.
  */
 
-import { Container } from '@needle-di/core';
+import { Container } from "@needle-di/core";
 import type {
   ApplicationOptions,
   HassOptions,
   HvacOptions,
   Settings,
-} from '../config/config.ts';
-import { ConfigLoader } from '../config/loader.ts';
-import { HVACAgent } from '../ai/agent.ts';
-import { TYPES } from './types.ts';
-import { LoggerService } from './logging.ts';
-import { HVACStateMachine } from '../hvac/state-machine.ts';
-import { HomeAssistantClient } from '../home-assistant/client.ts';
-import { EventBus } from './event-system.ts';
-import { HvacModule } from '../hvac/hvac-module.ts';
-import { ModuleRegistry } from './module-registry.ts';
+} from "../config/config.ts";
+import { ConfigLoader } from "../config/loader.ts";
+import { HVACAgent } from "../ai/agent.ts";
+import { TYPES } from "./types.ts";
+import { LoggerService } from "./logging.ts";
+import { HVACStateMachine } from "../hvac/state-machine.ts";
+import { HomeAssistantClient } from "../home-assistant/client.ts";
+import { EventBus } from "./event-system.ts";
+import { HvacModule } from "../hvac/hvac-module.ts";
+import { ModuleRegistry } from "./module-registry.ts";
 
 // Re-export for backward compatibility
 export { LoggerService, TYPES };
@@ -44,13 +44,13 @@ export class ApplicationContainer {
    */
   async initialize(configPathOrSettings?: string | Settings): Promise<void> {
     // Create logger after global logging setup
-    this.logger = new LoggerService('HAG.container');
-    
+    this.logger = new LoggerService("HAG.container");
+
     // Initialize module registry logger after global logging setup
-    this.moduleRegistry.setLogger(new LoggerService('HAG.module-registry'));
+    this.moduleRegistry.setLogger(new LoggerService("HAG.module-registry"));
     try {
       // Load configuration or use provided settings
-      if (typeof configPathOrSettings === 'string') {
+      if (typeof configPathOrSettings === "string") {
         this.settings = await ConfigLoader.loadSettings(configPathOrSettings);
       } else if (configPathOrSettings) {
         this.settings = configPathOrSettings;
@@ -63,7 +63,7 @@ export class ApplicationContainer {
 
       // Register core services
       this.registerCoreServices();
-      
+
       // Initialize logger
       this.logger = this.container.get<LoggerService>(TYPES.Logger);
 
@@ -89,13 +89,12 @@ export class ApplicationContainer {
     }
   }
 
-
   /**
    * Register configuration objects
    */
   private registerConfiguration(): void {
     if (!this.settings) {
-      throw new Error('Settings not loaded');
+      throw new Error("Settings not loaded");
     }
 
     this.container.bind({ provide: TYPES.Settings, useValue: this.settings });
@@ -119,7 +118,7 @@ export class ApplicationContainer {
   private registerCoreServices(): void {
     this.container.bind({
       provide: TYPES.Logger,
-      useFactory: () => new LoggerService('HAG.core'),
+      useFactory: () => new LoggerService("HAG.core"),
     });
     this.container.bind({
       provide: TYPES.ConfigLoader,
@@ -138,51 +137,49 @@ export class ApplicationContainer {
     this.container.bind({
       provide: TYPES.EventBus,
       useFactory: () => {
-        const logger = new LoggerService('HAG.event-bus');
+        const logger = new LoggerService("HAG.event-bus");
         return new EventBus(logger);
       },
     });
-
 
     // Module Registry
     this.container.bind({
       provide: TYPES.ModuleRegistry,
       useValue: this.moduleRegistry,
     });
-
-
   }
 
   /**
    * Register Home Assistant services
    */
   private registerHomeAssistantServices(excludeServices: string[] = []): void {
-    
-    if (!excludeServices.includes('homeassistant')) {
+    if (!excludeServices.includes("homeassistant")) {
       this.container.bind({
         provide: TYPES.HomeAssistantClient,
         useFactory: () => {
           const config = this.container.get<HassOptions>(TYPES.HassOptions);
-          const logger = new LoggerService('HAG.home-assistant.client');
+          const logger = new LoggerService("HAG.home-assistant.client");
           return new HomeAssistantClient(config, logger);
         },
       });
     }
-    
   }
 
   /**
    * Register HVAC services using direct DI
    */
   public registerHVACServices(): void {
-
     // Register HVAC module as a DI service
     this.container.bind({
       provide: TYPES.HvacModule,
       useFactory: () => {
         const hvacOptions = this.container.get<HvacOptions>(TYPES.HvacOptions);
-        const appOptions = this.container.get<ApplicationOptions>(TYPES.ApplicationOptions);
-        const haClient = this.container.get<HomeAssistantClient>(TYPES.HomeAssistantClient);
+        const appOptions = this.container.get<ApplicationOptions>(
+          TYPES.ApplicationOptions,
+        );
+        const haClient = this.container.get<HomeAssistantClient>(
+          TYPES.HomeAssistantClient,
+        );
         const eventBus = this.container.get<EventBus>(TYPES.EventBus);
         return new HvacModule(hvacOptions, appOptions, haClient, eventBus);
       },
@@ -211,16 +208,29 @@ export class ApplicationContainer {
       this.container.bind({
         provide: TYPES.HVACAgent,
         useFactory: () => {
-          const hvacOptions = this.container.get<HvacOptions>(TYPES.HvacOptions);
-          const appOptions = this.container.get<ApplicationOptions>(TYPES.ApplicationOptions);
-          const stateMachine = this.container.get<HVACStateMachine>(TYPES.HVACStateMachine);
-          const haClient = this.container.get<HomeAssistantClient>(TYPES.HomeAssistantClient);
-          const logger = new LoggerService('HAG.ai');
-          return new HVACAgent(hvacOptions, appOptions, stateMachine, haClient, logger);
+          const hvacOptions = this.container.get<HvacOptions>(
+            TYPES.HvacOptions,
+          );
+          const appOptions = this.container.get<ApplicationOptions>(
+            TYPES.ApplicationOptions,
+          );
+          const stateMachine = this.container.get<HVACStateMachine>(
+            TYPES.HVACStateMachine,
+          );
+          const haClient = this.container.get<HomeAssistantClient>(
+            TYPES.HomeAssistantClient,
+          );
+          const logger = new LoggerService("HAG.ai");
+          return new HVACAgent(
+            hvacOptions,
+            appOptions,
+            stateMachine,
+            haClient,
+            logger,
+          );
         },
       });
     }
-    
   }
 
   /**
@@ -268,7 +278,7 @@ export class ApplicationContainer {
    */
   getSettings(): Settings {
     if (!this.settings) {
-      throw new Error('Settings not loaded');
+      throw new Error("Settings not loaded");
     }
     return this.settings;
   }
@@ -276,7 +286,10 @@ export class ApplicationContainer {
   /**
    * Initialize container with settings and optional excluded services
    */
-  async initializeWithSettings(settings: Settings, excludeServices: string[] = []): Promise<void> {
+  async initializeWithSettings(
+    settings: Settings,
+    excludeServices: string[] = [],
+  ): Promise<void> {
     this.settings = settings;
     this.registerConfiguration();
     this.registerCoreServices();
@@ -294,24 +307,21 @@ export class ApplicationContainer {
     return this.container;
   }
 
-
-
-
   /**
    * Register domain modules
    */
   private async registerModules(settings: Settings): Promise<void> {
     if (!settings) {
-      throw new Error('Settings not loaded');
+      throw new Error("Settings not loaded");
     }
 
     // Get HVAC module from DI container (already registered in registerHVACServices)
     const hvacModule = this.container.get<HvacModule>(TYPES.HvacModule);
-    
+
     // Register with module registry for lifecycle management
     await this.moduleRegistry.registerModule(hvacModule, settings.hvacOptions);
 
-    this.logger?.info('✅ Registered all domain modules');
+    this.logger?.info("✅ Registered all domain modules");
   }
 
   /**
@@ -347,8 +357,8 @@ export async function createContainer(
   configPathOrSettings?: string | Settings,
 ): Promise<ApplicationContainer> {
   // Note: Using a temporary logger here as container instance isn't available yet
-  const _tempLogger = new LoggerService('HAG.container');
-  
+  const _tempLogger = new LoggerService("HAG.container");
+
   if (globalContainer) {
     await globalContainer.dispose();
   }
@@ -364,9 +374,9 @@ export async function createContainer(
  */
 export function getContainer(): ApplicationContainer {
   // Note: Using a temporary logger here as we're retrieving the container instance
-  const _tempLogger = new LoggerService('HAG.container');
+  const _tempLogger = new LoggerService("HAG.container");
   if (!globalContainer) {
-    throw new Error('Container not initialized. Call createContainer() first.');
+    throw new Error("Container not initialized. Call createContainer() first.");
   }
   return globalContainer;
 }
@@ -376,7 +386,7 @@ export function getContainer(): ApplicationContainer {
  */
 export async function disposeContainer(): Promise<void> {
   // Note: Using a temporary logger here as we're disposing the container instance
-  const _tempLogger = new LoggerService('HAG.container');
+  const _tempLogger = new LoggerService("HAG.container");
   if (globalContainer) {
     await globalContainer.dispose();
     globalContainer = undefined;

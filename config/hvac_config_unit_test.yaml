@@ -2,32 +2,32 @@
 # Simple configuration without environment variables for testing
 
 appOptions:
-  logLevel: 'critical' # Minimize log noise in tests
+  logLevel: "critical" # Minimize log noise in tests
   useAi: false
-  aiModel: 'gpt-4o-mini'
+  aiModel: "gpt-4o-mini"
   aiTemperature: 0.1
 
 hassOptions:
-  wsUrl: 'ws://localhost:8123/api/websocket'
-  restUrl: 'http://localhost:8123'
-  token: 'test_token'
+  wsUrl: "ws://localhost:8123/api/websocket"
+  restUrl: "http://localhost:8123"
+  token: "test_token"
   maxRetries: 1
   retryDelayMs: 100
   stateCheckInterval: 300000
 
 hvacOptions:
-  tempSensor: 'sensor.indoor_temp'
-  outdoorSensor: 'sensor.outdoor_temp'
-  systemMode: 'auto'
+  tempSensor: "sensor.indoor_temp"
+  outdoorSensor: "sensor.outdoor_temp"
+  systemMode: "auto"
 
   hvacEntities:
-    - entityId: 'climate.test'
+    - entityId: "climate.test"
       enabled: true
       defrost: false
 
   heating:
     temperature: 21.0
-    presetMode: 'comfort'
+    presetMode: "comfort"
     temperatureThresholds:
       indoorMin: 19.0
       indoorMax: 22.0
@@ -36,7 +36,7 @@ hvacOptions:
 
   cooling:
     temperature: 24.0
-    presetMode: 'eco'
+    presetMode: "eco"
     temperatureThresholds:
       indoorMin: 23.0
       indoorMax: 26.0

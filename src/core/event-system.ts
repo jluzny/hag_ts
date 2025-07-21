@@ -4,10 +4,10 @@
  * Maintains backward compatibility with existing HassEventImpl
  */
 
-import { EventEmitter } from 'node:events';
-import { LoggerService } from './logging.ts';
-import { toError } from './exceptions.ts';
-import { HassEventImpl } from '../home-assistant/models.ts';
+import { EventEmitter } from "node:events";
+import { LoggerService } from "./logging.ts";
+import { toError } from "./exceptions.ts";
+import { HassEventImpl } from "../home-assistant/models.ts";
 
 export interface BaseEvent {
   readonly type: string;
@@ -33,7 +33,7 @@ export class EventBus extends EventEmitter {
   constructor(logger?: LoggerService) {
     super();
     this.setMaxListeners(100);
-    this.logger = logger || new LoggerService('HAG.event-bus');
+    this.logger = logger || new LoggerService("HAG.event-bus");
   }
 
   /**
@@ -52,7 +52,7 @@ export class EventBus extends EventEmitter {
    * Publish a Home Assistant event (legacy compatibility)
    */
   publish(event: HassEventImpl): void {
-    this.logger.debug('📤 Publishing event', {
+    this.logger.debug("📤 Publishing event", {
       type: event.eventType,
       origin: event.origin,
       listeners: this.listenerCount(event.eventType),
@@ -72,7 +72,11 @@ export class EventBus extends EventEmitter {
       try {
         await handler(event);
       } catch (error) {
-        this.logger.error(`❌ Event handler error: ${eventType}`, toError(error), { eventType });
+        this.logger.error(
+          `❌ Event handler error: ${eventType}`,
+          toError(error),
+          { eventType },
+        );
       }
     };
 
@@ -97,7 +101,7 @@ export class EventBus extends EventEmitter {
       try {
         await handler(event);
       } catch (error) {
-        this.logger.error('❌ Event handler error', error, {
+        this.logger.error("❌ Event handler error", error, {
           eventType: event.eventType,
           origin: event.origin,
         });
@@ -106,7 +110,7 @@ export class EventBus extends EventEmitter {
 
     this.on(eventType, wrappedHandler);
 
-    this.logger.debug('📡 Subscription added', {
+    this.logger.debug("📡 Subscription added", {
       eventType,
       listeners: this.listenerCount(eventType),
     });
@@ -121,7 +125,7 @@ export class EventBus extends EventEmitter {
       0,
     );
     this.removeAllListeners();
-    this.logger.info('🧹 Cleared all subscriptions', { count });
+    this.logger.info("🧹 Cleared all subscriptions", { count });
   }
 }
 

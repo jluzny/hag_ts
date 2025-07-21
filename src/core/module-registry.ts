@@ -2,8 +2,8 @@
  * Module Registry - Manages application modules and their lifecycle.
  */
 
-import { Container } from '@needle-di/core';
-import { LoggerService } from './logging.ts';
+import { Container } from "@needle-di/core";
+import { LoggerService } from "./logging.ts";
 
 /**
  * Base interface for all application modules.
@@ -39,8 +39,6 @@ export abstract class BaseModule implements Module {
     return Promise.resolve();
   }
 
-
-
   getRequiredDependencies?(): symbol[] {
     return [];
   }
@@ -54,7 +52,6 @@ export abstract class BaseModule implements Module {
   }
 }
 
-
 /**
  * Manages the registration, initialization, and lifecycle of application modules.
  */
@@ -63,9 +60,9 @@ export class ModuleRegistry {
   private logger: LoggerService;
 
   constructor(container: Container, logger?: LoggerService) {
-    this.logger = logger || new LoggerService('HAG.module-registry');
+    this.logger = logger || new LoggerService("HAG.module-registry");
     // Register self in container for other modules to access if needed
-    container.bind({ provide: Symbol.for('ModuleRegistry'), useValue: this });
+    container.bind({ provide: Symbol.for("ModuleRegistry"), useValue: this });
   }
 
   /**
@@ -92,10 +89,10 @@ export class ModuleRegistry {
     await module.initialize(config);
     this.modules.set(module.domain, module);
 
-
-    this.logger.info(`✅ Module registered: ${module.name} (${module.version})`);
+    this.logger.info(
+      `✅ Module registered: ${module.name} (${module.version})`,
+    );
   }
-
 
   /**
    * Get a registered module by its domain.
@@ -104,8 +101,6 @@ export class ModuleRegistry {
     const result = this.modules.get(domain);
     return result;
   }
-
-
 
   /**
    * Dispose all registered modules.
@@ -119,6 +114,6 @@ export class ModuleRegistry {
       }
     }
     this.modules.clear();
-    this.logger.info('🗑️ All modules disposed.');
+    this.logger.info("🗑️ All modules disposed.");
   }
 }

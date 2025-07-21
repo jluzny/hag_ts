@@ -222,9 +222,10 @@ class MockHomeAssistantClient {
 }
 
 // Replace in container
-container.getContainer().rebind(TYPES.HomeAssistantClient).toConstantValue(
-  mockHaClient,
-);
+container
+  .getContainer()
+  .rebind(TYPES.HomeAssistantClient)
+  .toConstantValue(mockHaClient);
 ```
 
 ### Configuration Testing
@@ -232,14 +233,18 @@ container.getContainer().rebind(TYPES.HomeAssistantClient).toConstantValue(
 Tests validate Zod schemas with both valid and invalid inputs:
 
 ```typescript
-await t.step('should validate valid HVAC config', () => {
-  const validConfig = {/* ... */};
+await t.step("should validate valid HVAC config", () => {
+  const validConfig = {
+    /* ... */
+  };
   const result = HvacOptionsSchema.parse(validConfig);
   assertEquals(result.systemMode, SystemMode.AUTO);
 });
 
-await t.step('should reject invalid values', () => {
-  const invalidConfig = {/* ... */};
+await t.step("should reject invalid values", () => {
+  const invalidConfig = {
+    /* ... */
+  };
   assertThrows(() => HvacOptionsSchema.parse(invalidConfig), ZodError);
 });
 ```
@@ -249,7 +254,7 @@ await t.step('should reject invalid values', () => {
 Tests verify component integration without external dependencies:
 
 ```typescript
-await t.step('should start and connect to Home Assistant', async () => {
+await t.step("should start and connect to Home Assistant", async () => {
   await controller.start();
   assertEquals(mockHaClient.connected, true);
 

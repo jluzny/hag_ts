@@ -6,7 +6,7 @@
  * and interactive system testing.
  */
 
-import { LoggerService } from '../src/core/logging.ts';
+import { LoggerService } from "../src/core/logging.ts";
 
 /**
  * Interactive validation helper for system components
@@ -15,7 +15,7 @@ export class ValidationHelper {
   private logger: LoggerService;
 
   constructor() {
-    this.logger = new LoggerService('validation-helper');
+    this.logger = new LoggerService("validation-helper");
   }
 
   /**
@@ -25,20 +25,20 @@ export class ValidationHelper {
     console.log(`\n🔍 ${message}`);
     console.log('Enter "y" to confirm, any other key to skip:');
 
-    const readline = await import('readline');
+    const readline = await import("readline");
     const rl = readline.createInterface({
       input: process.stdin,
-      output: process.stdout
+      output: process.stdout,
     });
-    
+
     const input = await new Promise<string>((resolve) => {
-      rl.question('', (answer) => {
+      rl.question("", (answer) => {
         rl.close();
         resolve(answer.trim().toLowerCase());
       });
     });
 
-    return input === 'y' || input === 'yes';
+    return input === "y" || input === "yes";
   }
 
   /**
@@ -49,10 +49,10 @@ export class ValidationHelper {
     results: Array<{ name: string; status: boolean; details?: string }>,
   ) {
     console.log(`\n📊 ${title}`);
-    console.log('='.repeat(50));
+    console.log("=".repeat(50));
 
     results.forEach((result) => {
-      const icon = result.status ? '✅' : '❌';
+      const icon = result.status ? "✅" : "❌";
       console.log(`${icon} ${result.name}`);
       if (result.details) {
         console.log(`   ${result.details}`);
@@ -77,16 +77,16 @@ export class ValidationHelper {
   /**
    * Wait for user input to continue
    */
-  async waitForContinue(message: string = 'Press Enter to continue...') {
+  async waitForContinue(message: string = "Press Enter to continue...") {
     console.log(`\n⏸️  ${message}`);
-    const readline = await import('readline');
+    const readline = await import("readline");
     const rl = readline.createInterface({
       input: process.stdin,
-      output: process.stdout
+      output: process.stdout,
     });
-    
+
     await new Promise<void>((resolve) => {
-      rl.question('', () => {
+      rl.question("", () => {
         rl.close();
         resolve();
       });
@@ -101,7 +101,7 @@ export class HealthChecker {
   private logger: LoggerService;
 
   constructor() {
-    this.logger = new LoggerService('health-checker');
+    this.logger = new LoggerService("health-checker");
   }
 
   /**
@@ -116,46 +116,46 @@ export class HealthChecker {
     try {
       const bunVersion = Bun.version;
       results.push({
-        name: 'Bun Runtime',
+        name: "Bun Runtime",
         status: true,
         details: `Version: ${bunVersion}`,
       });
     } catch (error) {
       results.push({
-        name: 'Bun Runtime',
+        name: "Bun Runtime",
         status: false,
         details: `Failed to check version: ${error}`,
       });
     }
 
     // Check environment variables
-    const requiredEnvVars = ['HOME', 'PATH'];
+    const requiredEnvVars = ["HOME", "PATH"];
     for (const envVar of requiredEnvVars) {
       const value = process.env[envVar];
       results.push({
         name: `Environment Variable: ${envVar}`,
         status: !!value,
-        details: value ? 'Set' : 'Not set',
+        details: value ? "Set" : "Not set",
       });
     }
 
     // Check file system permissions
     try {
-      const fs = await import('fs');
-      const path = await import('path');
-      const os = await import('os');
-      
-      const tempFile = path.join(os.tmpdir(), 'test-file-' + Date.now());
-      await fs.promises.writeFile(tempFile, 'test');
+      const fs = await import("fs");
+      const path = await import("path");
+      const os = await import("os");
+
+      const tempFile = path.join(os.tmpdir(), "test-file-" + Date.now());
+      await fs.promises.writeFile(tempFile, "test");
       await fs.promises.unlink(tempFile);
       results.push({
-        name: 'File System Access',
+        name: "File System Access",
         status: true,
-        details: 'Read/write permissions available',
+        details: "Read/write permissions available",
       });
     } catch (error) {
       results.push({
-        name: 'File System Access',
+        name: "File System Access",
         status: false,
         details: `Permission error: ${error}`,
       });
@@ -174,18 +174,18 @@ export class HealthChecker {
 
     // Test basic HTTP connectivity
     try {
-      const response = await fetch('https://httpbin.org/status/200', {
-        method: 'GET',
+      const response = await fetch("https://httpbin.org/status/200", {
+        method: "GET",
         signal: AbortSignal.timeout(5000),
       });
       results.push({
-        name: 'HTTP Connectivity',
+        name: "HTTP Connectivity",
         status: response.ok,
         details: `Status: ${response.status}`,
       });
     } catch (error) {
       results.push({
-        name: 'HTTP Connectivity',
+        name: "HTTP Connectivity",
         status: false,
         details: `Failed: ${error instanceof Error ? error.message : String(error)}`,
       });
@@ -194,19 +194,19 @@ export class HealthChecker {
     // Test DNS resolution
     try {
       const start = Date.now();
-      await fetch('https://www.google.com', {
-        method: 'HEAD',
+      await fetch("https://www.google.com", {
+        method: "HEAD",
         signal: AbortSignal.timeout(3000),
       });
       const latency = Date.now() - start;
       results.push({
-        name: 'DNS Resolution',
+        name: "DNS Resolution",
         status: true,
         details: `Latency: ${latency}ms`,
       });
     } catch (error) {
       results.push({
-        name: 'DNS Resolution',
+        name: "DNS Resolution",
         status: false,
         details: `Failed: ${error instanceof Error ? error.message : String(error)}`,
       });
@@ -229,41 +229,41 @@ export class ConfigValidator {
     const results = [];
 
     try {
-      const fs = await import('fs');
+      const fs = await import("fs");
       const configStat = await fs.promises.stat(configPath);
       results.push({
-        name: 'Configuration File Exists',
+        name: "Configuration File Exists",
         status: configStat.isFile,
-        details: configStat.isFile ? 'File found' : 'Not a file',
+        details: configStat.isFile ? "File found" : "Not a file",
       });
 
       if (configStat.isFile) {
-        const configContent = await fs.promises.readFile(configPath, 'utf8');
+        const configContent = await fs.promises.readFile(configPath, "utf8");
         results.push({
-          name: 'Configuration File Readable',
+          name: "Configuration File Readable",
           status: configContent.length > 0,
           details: `Size: ${configContent.length} characters`,
         });
 
         // Basic YAML structure check
-        const hasHomeAssistant = configContent.includes('homeAssistant');
-        const hasHvac = configContent.includes('hvac');
+        const hasHomeAssistant = configContent.includes("homeAssistant");
+        const hasHvac = configContent.includes("hvac");
 
         results.push({
-          name: 'Home Assistant Configuration',
+          name: "Home Assistant Configuration",
           status: hasHomeAssistant,
-          details: hasHomeAssistant ? 'Section found' : 'Section missing',
+          details: hasHomeAssistant ? "Section found" : "Section missing",
         });
 
         results.push({
-          name: 'HVAC Configuration',
+          name: "HVAC Configuration",
           status: hasHvac,
-          details: hasHvac ? 'Section found' : 'Section missing',
+          details: hasHvac ? "Section found" : "Section missing",
         });
       }
     } catch (error) {
       results.push({
-        name: 'Configuration File Access',
+        name: "Configuration File Access",
         status: false,
         details: `Error: ${error instanceof Error ? error.message : String(error)}`,
       });

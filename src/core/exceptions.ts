@@ -11,7 +11,7 @@ export class HAGError extends Error {
     public override readonly cause?: unknown,
   ) {
     super(message);
-    this.name = 'HAGError';
+    this.name = "HAGError";
 
     // Maintains proper stack trace for where error was thrown (only available on V8)
     if (Error.captureStackTrace) {
@@ -26,8 +26,8 @@ export class StateError extends HAGError {
     public readonly state?: string,
     public readonly entityId?: string,
   ) {
-    super(message, 'STATE_ERROR');
-    this.name = 'StateError';
+    super(message, "STATE_ERROR");
+    this.name = "StateError";
   }
 }
 
@@ -37,8 +37,8 @@ export class ConfigurationError extends HAGError {
     public readonly field?: string,
     public readonly value?: unknown,
   ) {
-    super(message, 'CONFIG_ERROR');
-    this.name = 'ConfigurationError';
+    super(message, "CONFIG_ERROR");
+    this.name = "ConfigurationError";
   }
 }
 
@@ -48,8 +48,8 @@ export class ConnectionError extends HAGError {
     public readonly endpoint?: string,
     public readonly retryAttempt?: number,
   ) {
-    super(message, 'CONNECTION_ERROR');
-    this.name = 'ConnectionError';
+    super(message, "CONNECTION_ERROR");
+    this.name = "ConnectionError";
   }
 }
 
@@ -60,8 +60,8 @@ export class ValidationError extends HAGError {
     public readonly expectedType?: string,
     public readonly actualValue?: unknown,
   ) {
-    super(message, 'VALIDATION_ERROR');
-    this.name = 'ValidationError';
+    super(message, "VALIDATION_ERROR");
+    this.name = "ValidationError";
   }
 }
 
@@ -71,8 +71,8 @@ export class HVACOperationError extends HAGError {
     public readonly operation?: string,
     public readonly entityId?: string,
   ) {
-    super(message, 'HVAC_OPERATION_ERROR');
-    this.name = 'HVACOperationError';
+    super(message, "HVAC_OPERATION_ERROR");
+    this.name = "HVACOperationError";
   }
 }
 
@@ -82,8 +82,8 @@ export class AIError extends HAGError {
     public readonly model?: string,
     public readonly context?: string,
   ) {
-    super(message, 'AI_ERROR');
-    this.name = 'AIError';
+    super(message, "AI_ERROR");
+    this.name = "AIError";
   }
 }
 
@@ -122,7 +122,7 @@ export function extractErrorDetails(error: unknown): {
 
   return {
     message: String(error),
-    name: 'UnknownError',
+    name: "UnknownError",
   };
 }
 
@@ -131,23 +131,26 @@ export function extractErrorDetails(error: unknown): {
  */
 export function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
-  if (typeof error === 'string') return error;
+  if (typeof error === "string") return error;
   return String(error);
 }
 
 /**
  * Utility to ensure we have an Error object
  */
-export function toError(error: unknown, fallbackMessage = 'Unknown error'): Error {
+export function toError(
+  error: unknown,
+  fallbackMessage = "Unknown error",
+): Error {
   if (error instanceof Error) return error;
-  if (typeof error === 'string') return new Error(error);
-  
+  if (typeof error === "string") return new Error(error);
+
   // Handle objects with error information
-  if (error && typeof error === 'object') {
-    if ('message' in error && typeof error.message === 'string') {
+  if (error && typeof error === "object") {
+    if ("message" in error && typeof error.message === "string") {
       return new Error(error.message);
     }
-    if ('error' in error && typeof error.error === 'string') {
+    if ("error" in error && typeof error.error === "string") {
       return new Error(error.error);
     }
     // Try to get meaningful info from the object
@@ -156,9 +159,11 @@ export function toError(error: unknown, fallbackMessage = 'Unknown error'): Erro
       return new Error(`${fallbackMessage}: ${serialized}`);
     } catch {
       // Fallback to object inspection
-      return new Error(`${fallbackMessage}: ${Object.prototype.toString.call(error)}`);
+      return new Error(
+        `${fallbackMessage}: ${Object.prototype.toString.call(error)}`,
+      );
     }
   }
-  
+
   return new Error(`${fallbackMessage}: ${String(error)}`);
 }

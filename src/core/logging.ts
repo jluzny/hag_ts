@@ -1,16 +1,16 @@
 /**
  * Comprehensive logging system for HAG Bun variant.
- * 
+ *
  * This module provides a simplified logging system compatible with Bun runtime.
  */
 
-import { injectable } from '@needle-di/core';
+import { injectable } from "@needle-di/core";
 
 export interface LogContext {
   [key: string]: unknown;
 }
 
-export type LevelName = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
+export type LevelName = "DEBUG" | "INFO" | "WARN" | "ERROR";
 
 // Color functions for console output
 const colors = {
@@ -32,14 +32,22 @@ export interface Logger {
 }
 
 class SimpleLogger implements Logger {
-  constructor(private name: string, private level: LevelName = 'INFO') {}
+  constructor(
+    private name: string,
+    private level: LevelName = "INFO",
+  ) {}
 
   private shouldLog(level: LevelName): boolean {
     const levels = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
     return levels[level] >= levels[this.level];
   }
 
-  private formatMessage(level: LevelName, message: string, context?: LogContext, error?: unknown): string {
+  private formatMessage(
+    level: LevelName,
+    message: string,
+    context?: LogContext,
+    error?: unknown,
+  ): string {
     const timestamp = new Date().toISOString();
     const levelColor = {
       DEBUG: colors.dim,
@@ -49,11 +57,11 @@ class SimpleLogger implements Logger {
     }[level];
 
     let formatted = `${colors.dim(timestamp)} ${levelColor(level.padEnd(5))} ${colors.cyan(this.name)} ${message}`;
-    
+
     if (context && Object.keys(context).length > 0) {
       formatted += ` ${colors.dim(JSON.stringify(context))}`;
     }
-    
+
     if (error) {
       if (error instanceof Error) {
         formatted += `\n${colors.red(error.stack || error.message)}`;
@@ -61,36 +69,36 @@ class SimpleLogger implements Logger {
         formatted += `\n${colors.red(String(error))}`;
       }
     }
-    
+
     return formatted;
   }
 
   debug(message: string, context?: LogContext): void {
-    if (this.shouldLog('DEBUG')) {
-      console.log(this.formatMessage('DEBUG', message, context));
+    if (this.shouldLog("DEBUG")) {
+      console.log(this.formatMessage("DEBUG", message, context));
     }
   }
 
   info(message: string, context?: LogContext): void {
-    if (this.shouldLog('INFO')) {
-      console.log(this.formatMessage('INFO', message, context));
+    if (this.shouldLog("INFO")) {
+      console.log(this.formatMessage("INFO", message, context));
     }
   }
 
   warning(message: string, context?: LogContext): void {
-    if (this.shouldLog('WARN')) {
-      console.warn(this.formatMessage('WARN', message, context));
+    if (this.shouldLog("WARN")) {
+      console.warn(this.formatMessage("WARN", message, context));
     }
   }
 
   error(message: string, error?: unknown, context?: LogContext): void {
-    if (this.shouldLog('ERROR')) {
-      console.error(this.formatMessage('ERROR', message, context, error));
+    if (this.shouldLog("ERROR")) {
+      console.error(this.formatMessage("ERROR", message, context, error));
     }
   }
 }
 
-let globalLogLevel: LevelName = 'INFO';
+let globalLogLevel: LevelName = "INFO";
 const loggers = new Map<string, Logger>();
 
 export function setupLogging(level: LevelName): void {
@@ -115,7 +123,7 @@ export function isLogLevelEnabled(level: LevelName): boolean {
 }
 
 export function getAppLogger(): Logger {
-  return getLogger('HAG');
+  return getLogger("HAG");
 }
 
 export function getLogger(name: string): Logger {
@@ -129,7 +137,7 @@ export function getLogger(name: string): Logger {
 export class LoggerService implements Logger {
   private logger: Logger;
 
-  constructor(name: string = 'HAG') {
+  constructor(name: string = "HAG") {
     this.logger = getLogger(name);
   }
 
@@ -144,7 +152,7 @@ export class LoggerService implements Logger {
    * Check if debug level is enabled
    */
   isDebugEnabled(): boolean {
-    return isLogLevelEnabled('DEBUG');
+    return isLogLevelEnabled("DEBUG");
   }
 
   debug(message: string, context?: LogContext): void {

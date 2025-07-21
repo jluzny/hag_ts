@@ -6,14 +6,14 @@
  * Calls a Home Assistant service using the REST API.
  */
 
-import { readFileSync } from 'fs';
-import { parse } from 'yaml';
+import { readFileSync } from "fs";
+import { parse } from "yaml";
 
 // Load configuration
-const configPath = process.env.CONFIG_PATH || 'config/hvac_config_dev.yaml';
+const configPath = process.env.CONFIG_PATH || "config/hvac_config_dev.yaml";
 let config: any;
 try {
-  const configFile = readFileSync(configPath, 'utf8');
+  const configFile = readFileSync(configPath, "utf8");
   config = parse(configFile);
 } catch (error) {
   console.error(`Failed to load config from ${configPath}:`, error);
@@ -25,32 +25,32 @@ const [service, ...args] = process.argv.slice(2);
 
 if (!service) {
   console.error(
-    'Usage: ./call_service.ts <domain>.<service> [--entity_id <entity_id>] [key=value ...]',
+    "Usage: ./call_service.ts <domain>.<service> [--entity_id <entity_id>] [key=value ...]",
   );
   process.exit(1);
 }
 
-const [domain, serviceName] = service.split('.');
+const [domain, serviceName] = service.split(".");
 
 if (!domain || !serviceName) {
-  console.error('Invalid service format. Use <domain>.<service>');
+  console.error("Invalid service format. Use <domain>.<service>");
   process.exit(1);
 }
 
 // Parse service data
 const serviceData: Record<string, unknown> = {};
 for (let i = 0; i < args.length; i++) {
-  if (args[i].startsWith('--')) {
+  if (args[i].startsWith("--")) {
     const key = args[i].substring(2);
     const value = args[i + 1];
-    if (value && !value.startsWith('--')) {
+    if (value && !value.startsWith("--")) {
       serviceData[key] = value;
       i++;
     } else {
       serviceData[key] = true;
     }
-  } else if (args[i].includes('=')) {
-    const [key, value] = args[i].split('=');
+  } else if (args[i].includes("=")) {
+    const [key, value] = args[i].split("=");
     serviceData[key] = value;
   }
 }
@@ -65,10 +65,10 @@ try {
     serviceData,
   );
   const response = await fetch(`${restUrl}/services/${domain}/${serviceName}`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify(serviceData),
   });

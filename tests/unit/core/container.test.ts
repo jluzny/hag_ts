@@ -4,7 +4,15 @@
  * Tests container initialization, service registration, and dependency resolution.
  */
 
-import { expect, test, describe, beforeEach, afterEach, beforeAll, afterAll } from "bun:test";
+import {
+  expect,
+  test,
+  describe,
+  beforeEach,
+  afterEach,
+  beforeAll,
+  afterAll,
+} from "bun:test";
 import {
   ApplicationContainer,
   createContainer,

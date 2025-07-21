@@ -1,18 +1,23 @@
 /**
  * Test helper utilities for HAG tests
- * 
+ *
  * Provides common test setup and utilities to reduce test overhead
  */
 
 import { setupLogging } from "../src/core/logging.ts";
-import type { Settings, HassOptions, HvacOptions, ApplicationOptions } from "../src/config/config.ts";
+import type {
+  Settings,
+  HassOptions,
+  HvacOptions,
+  ApplicationOptions,
+} from "../src/config/config.ts";
 import { LogLevel, SystemMode } from "../src/types/common.ts";
 
 /**
  * Setup logging for tests - call this in test setup to reduce log noise
  */
 export function setupTestLogging(): void {
-  setupLogging('ERROR');
+  setupLogging("ERROR");
 }
 
 /**
@@ -36,14 +41,14 @@ export function createTestConfig(): Settings {
     } as HassOptions,
     hvacOptions: {
       tempSensor: "sensor.indoor_temp",
-      outdoorSensor: "sensor.outdoor_temp", 
+      outdoorSensor: "sensor.outdoor_temp",
       systemMode: SystemMode.AUTO,
       hvacEntities: [
         {
           entityId: "climate.test",
           enabled: true,
           defrost: false,
-        }
+        },
       ],
       heating: {
         temperature: 21.0,
@@ -57,7 +62,7 @@ export function createTestConfig(): Settings {
       },
       cooling: {
         temperature: 25.0,
-        presetMode: "comfort", 
+        presetMode: "comfort",
         temperatureThresholds: {
           indoorMin: 23.0,
           indoorMax: 28.0,
@@ -80,23 +85,27 @@ export function createMockWebSocketFactory(): (url: string) => WebSocket {
       onclose: null as ((event: CloseEvent) => void) | null,
       onerror: null as ((event: Event) => void) | null,
       onmessage: null as ((event: MessageEvent) => void) | null,
-      send: () => { /* mock send */ },
-      close: () => { /* mock close */ },
+      send: () => {
+        /* mock send */
+      },
+      close: () => {
+        /* mock close */
+      },
       failConnection: () => {
         mockWs.readyState = WebSocket.CLOSED;
         if (mockWs.onerror) {
-          mockWs.onerror(new Event('error'));
+          mockWs.onerror(new Event("error"));
         }
       },
     } as any;
-    
+
     // Simulate immediate connection failure for tests
     setTimeout(() => {
       if (mockWs.onerror) {
-        mockWs.onerror(new Event('error'));
+        mockWs.onerror(new Event("error"));
       }
     }, 0);
-    
+
     return mockWs;
   };
 }

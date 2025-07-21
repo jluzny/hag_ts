@@ -144,7 +144,6 @@ export interface HVACContext {
     shouldCool: boolean;
     needsDefrost: boolean;
     reason: string;
-    evaluationTimeMs: number;
   };
 }
 

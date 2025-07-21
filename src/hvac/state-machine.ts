@@ -6,9 +6,7 @@
 
 import { ActorRefFrom, assign, createActor, createMachine } from "xstate";
 import { injectable } from "@needle-di/core";
-import {
-  type HvacOptions,
-} from "../config/config.ts";
+import { type HvacOptions } from "../config/config.ts";
 import {
   HVACContext,
   HVACMode,
@@ -24,24 +22,24 @@ import { HomeAssistantClient } from "../home-assistant/client.ts";
  */
 export type HVACEvent =
   | {
-    type: "MODE_CHANGE";
-    mode: HVACMode;
-    temperature?: number;
-  }
+      type: "MODE_CHANGE";
+      mode: HVACMode;
+      temperature?: number;
+    }
   | { type: "AUTO_EVALUATE" }
   | { type: "DEFROST_NEEDED" }
   | { type: "DEFROST_COMPLETE" }
   | { type: "OFF" }
   | {
-    type: "UPDATE_CONDITIONS";
-    data: Partial<HVACContext>;
-    eventSource?: {
-      type: string;
-      entityId?: string;
-      newValue?: string;
-      [key: string]: any;
-    };
-  }
+      type: "UPDATE_CONDITIONS";
+      data: Partial<HVACContext>;
+      eventSource?: {
+        type: string;
+        entityId?: string;
+        newValue?: string;
+        [key: string]: any;
+      };
+    }
   | { type: "MANUAL_OVERRIDE"; mode: HVACMode; temperature?: number };
 
 /**
@@ -73,8 +71,7 @@ export class HVACStrategy {
     timestamp: number;
   };
 
-  constructor(private hvacOptions: HvacOptions) { }
-
+  constructor(private hvacOptions: HvacOptions) {}
 
   /**
    * Unified evaluation method that returns all condition checks
@@ -90,8 +87,10 @@ export class HVACStrategy {
     const now = Date.now();
 
     // Cache check
-    if (this.evaluationCache?.input === inputKey &&
-      now - this.evaluationCache.timestamp < this.hvacOptions.evaluationCacheMs) {
+    if (
+      this.evaluationCache?.input === inputKey &&
+      now - this.evaluationCache.timestamp < this.hvacOptions.evaluationCacheMs
+    ) {
       return this.evaluationCache.result;
     }
 
@@ -108,7 +107,7 @@ export class HVACStrategy {
           indoorTemp: `${data.currentTemp}°C`,
           outdoorTemp: `${data.weatherTemp}°C`,
           timeOfDay: `${data.hour}:00 ${data.isWeekday ? "weekday" : "weekend"}`,
-        }
+        },
       };
 
       if (shouldTurnOff) {
@@ -125,22 +124,25 @@ export class HVACStrategy {
             ...baseLogData,
             mode: "OFF",
             turnOffReason,
-            activeHours: this.hvacOptions.activeHours
-          })
+            activeHours: this.hvacOptions.activeHours,
+          }),
         };
       }
 
-      if (needsDefrost) return {
-        code: "defrost_required",
-        description: `Defrost needed - outdoor temp ${data.weatherTemp}°C below threshold`,
-        getLogData: () => ({
-          ...baseLogData,
-          mode: "DEFROST"
-        })
-      };
+      if (needsDefrost)
+        return {
+          code: "defrost_required",
+          description: `Defrost needed - outdoor temp ${data.weatherTemp}°C below threshold`,
+          getLogData: () => ({
+            ...baseLogData,
+            mode: "DEFROST",
+          }),
+        };
 
       if (shouldHeat) {
-        const tempDiff = this.hvacOptions.heating.temperatureThresholds.indoorMin - data.currentTemp;
+        const tempDiff =
+          this.hvacOptions.heating.temperatureThresholds.indoorMin -
+          data.currentTemp;
         return {
           code: "heating_required",
           description: `Heating - indoor ${data.currentTemp}°C is ${tempDiff.toFixed(1)}°C below min`,
@@ -150,13 +152,15 @@ export class HVACStrategy {
             thresholds: {
               minIndoor: `${this.hvacOptions.heating.temperatureThresholds.indoorMin}°C`,
               outdoorRange: `${this.hvacOptions.heating.temperatureThresholds.outdoorMin}°C - ${this.hvacOptions.heating.temperatureThresholds.outdoorMax}°C`,
-            }
-          })
+            },
+          }),
         };
       }
 
       if (shouldCool) {
-        const tempDiff = data.currentTemp - this.hvacOptions.cooling.temperatureThresholds.indoorMin;
+        const tempDiff =
+          data.currentTemp -
+          this.hvacOptions.cooling.temperatureThresholds.indoorMin;
         return {
           code: "cooling_required",
           description: `Cooling - indoor ${data.currentTemp}°C is ${tempDiff.toFixed(1)}°C above max`,
@@ -166,21 +170,21 @@ export class HVACStrategy {
             thresholds: {
               maxIndoor: `${this.hvacOptions.cooling.temperatureThresholds.indoorMin}°C`,
               outdoorRange: `${this.hvacOptions.cooling.temperatureThresholds.outdoorMin}°C - ${this.hvacOptions.cooling.temperatureThresholds.outdoorMax}°C`,
-            }
-          })
+            },
+          }),
         };
       }
 
       return {
         code: "no_action_needed",
-        description: "All conditions satisfied - no HVAC action required"
+        description: "All conditions satisfied - no HVAC action required",
       };
     })();
 
     // Unified logging
     this.logger.info("🔍 HVAC Evaluation Result", {
       decision: reason.description,
-      ...(reason.getLogData?.(data) || { data })
+      ...(reason.getLogData?.(data) || { data }),
     });
 
     // Result construction
@@ -196,107 +200,6 @@ export class HVACStrategy {
     this.evaluationCache = { input: inputKey, result, timestamp: now };
     return result;
   }
-
-
-  /**
-   * Unified evaluation method that returns all condition checks
-   */
-  // evaluateConditions(data: StateChangeData): HVACEvaluation {
-  //   const evaluationStart = Date.now();
-  //
-  //   // Create a cache key from the input data
-  //   const inputKey = JSON.stringify(data);
-  //   const now = Date.now();
-  //
-  //   // Check if we have a recent evaluation for the same input
-  //   if (
-  //     this.evaluationCache &&
-  //     this.evaluationCache.input === inputKey &&
-  //     now - this.evaluationCache.timestamp < this.hvacOptions.evaluationCacheMs
-  //   ) {
-  //     return this.evaluationCache.result;
-  //   }
-  //
-  //   const shouldHeat = this.shouldHeat(data);
-  //   const shouldCool = this.shouldCool(data);
-  //   const needsDefrost = this.needsDefrost(data);
-  //
-  //   const evaluationTime = Date.now() - evaluationStart;
-  //
-  //   let reason = "no_action_needed";
-  //   let humanReason = "All conditions satisfied - no HVAC action required";
-  //
-  //   if (needsDefrost) {
-  //     reason = "defrost_required";
-  //     humanReason = `Defrost cycle needed - outdoor temperature ${data.weatherTemp}°C is below threshold`;
-  //   } else if (shouldHeat) {
-  //     reason = "heating_required";
-  //     const tempDiff =
-  //       this.hvacOptions.heating.temperatureThresholds.indoorMin -
-  //       data.currentTemp;
-  //     humanReason = `Heating required - indoor ${data.currentTemp}°C is ${tempDiff.toFixed(1)}°C below minimum ${this.hvacOptions.heating.temperatureThresholds.indoorMin}°C`;
-  //   } else if (shouldCool) {
-  //     reason = "cooling_required";
-  //     const tempDiff =
-  //       data.currentTemp -
-  //       this.hvacOptions.cooling.temperatureThresholds.indoorMin;
-  //     humanReason = `Cooling required - indoor ${data.currentTemp}°C is ${tempDiff.toFixed(1)}°C above maximum ${this.hvacOptions.cooling.temperatureThresholds.indoorMin}°C`;
-  //   }
-  //
-  //   // Enhanced human-readable logging
-  //   if (shouldHeat || shouldCool || needsDefrost) {
-  //     this.logger.info("🔍 HVAC Decision Made", {
-  //       decision: humanReason,
-  //       mode: needsDefrost ? "DEFROST" : shouldHeat ? "HEAT" : "COOL",
-  //       currentConditions: {
-  //         indoorTemp: `${data.currentTemp}°C`,
-  //         outdoorTemp: `${data.weatherTemp}°C`,
-  //         timeOfDay: `${data.hour}:00 ${data.isWeekday ? "weekday" : "weekend"}`,
-  //       },
-  //       thresholds: shouldHeat
-  //         ? {
-  //           minIndoor: `${this.hvacOptions.heating.temperatureThresholds.indoorMin}°C`,
-  //           outdoorRange: `${this.hvacOptions.heating.temperatureThresholds.outdoorMin}°C - ${this.hvacOptions.heating.temperatureThresholds.outdoorMax}°C`,
-  //         }
-  //         : shouldCool
-  //           ? {
-  //             maxIndoor: `${this.hvacOptions.cooling.temperatureThresholds.indoorMin}°C`,
-  //             outdoorRange: `${this.hvacOptions.cooling.temperatureThresholds.outdoorMin}°C - ${this.hvacOptions.cooling.temperatureThresholds.outdoorMax}°C`,
-  //           }
-  //           : undefined,
-  //       evaluationTimeMs: evaluationTime,
-  //     });
-  //   } else {
-  //     this.logger.debug("🔍 HVAC Evaluation Complete", {
-  //       decision: humanReason,
-  //       data,
-  //       evaluationTimeMs: evaluationTime,
-  //     });
-  //   }
-  //
-  //   const result = {
-  //     shouldHeat,
-  //     shouldCool,
-  //     needsDefrost,
-  //     reason,
-  //     evaluationTimeMs: evaluationTime,
-  //   };
-  //
-  //   // Cache the result for subsequent calls with the same input
-  //   this.evaluationCache = {
-  //     input: inputKey,
-  //     result,
-  //     timestamp: now,
-  //   };
-  //
-  //   this.logger.info("🔍 HVAC Evaluation Result", {
-  //     decision: humanReason,
-  //     data,
-  //     evaluationTimeMs: evaluationTime,
-  //   });
-  //
-  //   return result;
-  // }
 
   private shouldHeat(data: StateChangeData): boolean {
     const { heating } = this.hvacOptions;
@@ -644,9 +547,7 @@ export function createHVACMachine(
           const eventType = (event as unknown as { type?: string })?.type;
           if (
             eventType &&
-            !["UPDATE_CONDITIONS", "AUTO_EVALUATE"].includes(
-              eventType,
-            )
+            !["UPDATE_CONDITIONS", "AUTO_EVALUATE"].includes(eventType)
           ) {
             logger.debug("🔄 [HVAC] State transition", {
               event: eventType,
@@ -700,18 +601,14 @@ export function createHVACMachine(
         }),
 
         eventAutoEvaluate: ({ context, self }) => {
-          logger.debug(
-            "🎯 Starting HVAC auto-evaluate logic",
-            {
-              indoorTemp: context.indoorTemp,
-              outdoorTemp: context.outdoorTemp,
-              systemMode: context.systemMode,
-            },
-          );
+          logger.debug("🎯 Starting HVAC auto-evaluate logic", {
+            indoorTemp: context.indoorTemp,
+            outdoorTemp: context.outdoorTemp,
+            systemMode: context.systemMode,
+          });
           // Event evaluation now that conditions are met
           self.send({ type: "AUTO_EVALUATE" });
         },
-
 
         startDefrost: () => {
           hvacStrategy.startDefrost();
@@ -726,7 +623,6 @@ export function createHVACMachine(
             nextState: "heating",
           });
         },
-
 
         executeHeating: async () => {
           if (!haClient) {
@@ -830,7 +726,14 @@ export function createHVACMachine(
 
           for (const entity of enabledEntities) {
             try {
-              await controlHVACEntity(haClient, entity.entityId, "off", undefined, undefined, logger);
+              await controlHVACEntity(
+                haClient,
+                entity.entityId,
+                "off",
+                undefined,
+                undefined,
+                logger,
+              );
               logger.debug("✅ Entity turned off", {
                 entityId: entity.entityId,
               });
@@ -861,7 +764,6 @@ export function createHVACMachine(
         /**
          * Unified guard logic - evaluates all conditions using single strategy
          */
-
 
         shouldAutoHeat: ({ context }) => {
           // Check system mode is AUTO
@@ -968,7 +870,7 @@ export function createHVACMachine(
 }
 
 /**
- * Generic HVAC entity control helper
+ * Generic HVAC entity control helper using the new generic controlEntity method
  */
 async function controlHVACEntity(
   haClient: HomeAssistantClient,
@@ -980,34 +882,42 @@ async function controlHVACEntity(
 ): Promise<void> {
   if (!haClient) return;
 
-  // Import HassServiceCallImpl dynamically to avoid circular dependency
-  const { HassServiceCallImpl } = await import("../home-assistant/models.ts");
-
   if (mode === "off") {
-    // Turn off entity
+    // Turn off entity - turn_off service doesn't need additional parameters
+    // Import HassServiceCallImpl dynamically to avoid circular dependency
+    const { HassServiceCallImpl } = await import("../home-assistant/models.ts");
     const offCall = HassServiceCallImpl.climate("turn_off", entityId, {});
     await haClient.callService(offCall);
   } else {
     // Set HVAC mode (heat, cool, etc.)
-    const modeCall = HassServiceCallImpl.climate("set_hvac_mode", entityId, {
-      hvac_mode: mode,
-    });
-    await haClient.callService(modeCall);
+    await haClient.controlEntity(
+      entityId,
+      "climate",
+      "set_hvac_mode",
+      { type: "state", key: "hvac_mode" },
+      mode,
+    );
 
     // Set temperature if provided
     if (targetTemp !== undefined) {
-      const tempCall = HassServiceCallImpl.climate("set_temperature", entityId, {
-        temperature: targetTemp,
-      });
-      await haClient.callService(tempCall);
+      await haClient.controlEntity(
+        entityId,
+        "climate",
+        "set_temperature",
+        { type: "attribute", key: "temperature" },
+        targetTemp,
+      );
     }
 
     // Set preset mode if provided
     if (presetMode) {
-      const presetCall = HassServiceCallImpl.climate("set_preset_mode", entityId, {
-        preset_mode: presetMode,
-      });
-      await haClient.callService(presetCall);
+      await haClient.controlEntity(
+        entityId,
+        "climate",
+        "set_preset_mode",
+        { type: "attribute", key: "preset_mode" },
+        presetMode,
+      );
     }
   }
 
@@ -1222,4 +1132,3 @@ export class HVACStateMachine {
     };
   }
 }
-

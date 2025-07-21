@@ -344,7 +344,7 @@ test("HVAC State Machine Integration", async () => {
       outdoorTemp: 5.0,
       currentHour: new Date().getHours(),
       isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
-    }
+    },
   }); // Cold indoor, cold outdoor
 
   const statusAfterUpdate = stateMachine.getStatus();

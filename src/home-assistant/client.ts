@@ -12,7 +12,7 @@ import {
   createMachine,
   fromPromise,
   StateValue,
-} from 'xstate';
+} from "xstate";
 import type { HassOptions } from "../config/config.ts";
 import { LoggerService } from "../core/logging.ts";
 import {
@@ -30,17 +30,23 @@ import {
   HassStateImpl,
 } from "./models.ts";
 
+// Value type discriminator for generic entity operations
+// Based on the Rust HAG implementation pattern
+export interface ValueType {
+  type: "state" | "attribute";
+  key: string; // For state: the service parameter name, for attribute: the attribute name
+}
+
 // Define state values as const for type safety
 const HAClientStates = {
-  disconnected: 'disconnected',
-  connecting: 'connecting',
-  authenticating: 'authenticating',
-  connected: 'connected',
-  reconnecting: 'reconnecting',
-  disconnecting: 'disconnecting',
-  error: 'error'
+  disconnected: "disconnected",
+  connecting: "connecting",
+  authenticating: "authenticating",
+  connected: "connected",
+  reconnecting: "reconnecting",
+  disconnecting: "disconnecting",
+  error: "error",
 } as const;
-
 
 // Strongly typed context interface
 interface HAClientContext {
@@ -53,26 +59,26 @@ interface HAClientContext {
 
 // Discriminated union for events with proper typing
 type HAClientEvent =
-  | { type: 'CONNECT' }
-  | { type: 'DISCONNECT' }
-  | { type: 'RETRY' }
-  | { type: 'CONNECTION_LOST' }
-  | { type: 'WS_CONNECTED'; ws: WebSocket }
-  | { type: 'WS_ERROR'; error: string }
-  | { type: 'AUTH_OK' }
-  | { type: 'AUTH_FAILED'; error: string }
-  | { type: 'UPDATE_STATS'; stats: ConnectionStats }
-  | { type: 'INCREMENT_MESSAGE_ID' };
+  | { type: "CONNECT" }
+  | { type: "DISCONNECT" }
+  | { type: "RETRY" }
+  | { type: "CONNECTION_LOST" }
+  | { type: "WS_CONNECTED"; ws: WebSocket }
+  | { type: "WS_ERROR"; error: string }
+  | { type: "AUTH_OK" }
+  | { type: "AUTH_FAILED"; error: string }
+  | { type: "UPDATE_STATS"; stats: ConnectionStats }
+  | { type: "INCREMENT_MESSAGE_ID" };
 
 // Create the machine with full type safety
 function createHAClientMachine(
   config: HassOptions,
   logger: LoggerService,
-  webSocketFactory?: (url: string) => WebSocket
+  webSocketFactory?: (url: string) => WebSocket,
 ) {
   return createMachine({
     /** @xstate-layout N4IgpgJg5mDOIC5QAoC2BDAxgCwJYDswBKAOlwGIAFAFQHkBRAYgG0AGAXUVAAOqsA9ixy9EIABKgANCAC0AZgAsATtIDsuydOkBOABxT5S+QF8tWtJlyCRYyTLhIoAJQAyAUWVsOXHgGFff0QwFTAWdhA2LgBhAEF+ThAAWmDNHVMtVQlpOU05HgA2SQAOGVJDAzMrLGw8fCJSchpaBmY2Zi5eAQkpZTltS2tIOwdnPCUe-wDg4K1dSJaY+ITk1PT0zOyCnP1tKR5dLWlq4rKaipq6xqbmttanJ1d3Ty9ff39g7Uj4SfGk-JSdKvT6JFKfLoXa5FDIqXaacrSMLaUrBa6PTJyKR3KQKIplCpFUoNUrtVQdDofOAfL56DFCKYyRZLLZ7ZYnBZI-a4w5SYnSO5XSrlaqKV7FJEyRTSfLo6TyGFM1TIjF0tktDltPqMjn8vnC4WiiWSiKRLCxZbrebPVJKKWyDJSCqSM3lZVq3L6g1G01m0i0-Gre1nFaXLFPGoPOJq6TGurGhqm1oW80M0DchRMw40-mO52e93e30+j1CkLhUCROIJhPxx7aJPfFOU+7fTWyLWyGqyVWu1UABSAAA=="" */
-    id: 'haClient',
+    id: "haClient",
     initial: HAClientStates.disconnected,
     types: {
       context: {} as HAClientContext,
@@ -94,47 +100,70 @@ function createHAClientMachine(
       [HAClientStates.disconnected]: {
         on: {
           CONNECT: {
-            target: HAClientStates.connecting
-          }
-        }
+            target: HAClientStates.connecting,
+          },
+        },
       },
       [HAClientStates.connecting]: {
         invoke: {
           src: fromPromise(async () => {
             return new Promise<WebSocket>((resolve, reject) => {
               try {
-                const ws = webSocketFactory ? webSocketFactory(config.wsUrl) : new WebSocket(config.wsUrl);
+                const ws = webSocketFactory
+                  ? webSocketFactory(config.wsUrl)
+                  : new WebSocket(config.wsUrl);
 
                 ws.onopen = () => {
-                  logger.info('WebSocket connection established');
+                  logger.info("WebSocket connection established");
                   resolve(ws);
                 };
 
                 ws.onerror = (event: Event | ErrorEvent) => {
                   const errorEvent = event as ErrorEvent;
-                  const errorMessage = errorEvent.error?.message || errorEvent.message || 'Connection refused';
+                  const errorMessage =
+                    errorEvent.error?.message ||
+                    errorEvent.message ||
+                    "Connection refused";
 
-                  logger.error('WebSocket connection failed', new Error(errorMessage), { url: config.wsUrl });
-                  reject(new Error(`WebSocket connection error: ${errorMessage}`));
+                  logger.error(
+                    "WebSocket connection failed",
+                    new Error(errorMessage),
+                    { url: config.wsUrl },
+                  );
+                  reject(
+                    new Error(`WebSocket connection error: ${errorMessage}`),
+                  );
                 };
 
                 ws.onclose = (event) => {
                   if (event.code !== 1000) {
-                    const reason = event.reason || 'No reason provided';
-                    logger.error('WebSocket closed unexpectedly', new Error(reason), { url: config.wsUrl, code: event.code });
-                    reject(new Error(`WebSocket closed unexpectedly: ${event.code} - ${reason}`));
+                    const reason = event.reason || "No reason provided";
+                    logger.error(
+                      "WebSocket closed unexpectedly",
+                      new Error(reason),
+                      { url: config.wsUrl, code: event.code },
+                    );
+                    reject(
+                      new Error(
+                        `WebSocket closed unexpectedly: ${event.code} - ${reason}`,
+                      ),
+                    );
                   }
                 };
               } catch (error) {
-                reject(new Error(`WebSocket connection failed: ${getErrorMessage(error)}`));
+                reject(
+                  new Error(
+                    `WebSocket connection failed: ${getErrorMessage(error)}`,
+                  ),
+                );
               }
             });
           }),
           onDone: {
             target: HAClientStates.authenticating,
             actions: assign({
-              ws: ({ event }) => event.output
-            })
+              ws: ({ event }) => event.output,
+            }),
           },
           onError: {
             target: HAClientStates.error,
@@ -142,11 +171,11 @@ function createHAClientMachine(
               error: ({ event }) => getErrorMessage(event.error),
               stats: ({ context }) => ({
                 ...context.stats,
-                totalErrors: context.stats.totalErrors + 1
-              })
-            })
-          }
-        }
+                totalErrors: context.stats.totalErrors + 1,
+              }),
+            }),
+          },
+        },
       },
       [HAClientStates.authenticating]: {
         invoke: {
@@ -155,12 +184,12 @@ function createHAClientMachine(
 
             return new Promise<void>((resolve, reject) => {
               if (!ws) {
-                reject(new Error('WebSocket not available'));
+                reject(new Error("WebSocket not available"));
                 return;
               }
 
               const authTimeout = setTimeout(() => {
-                reject(new Error('Authentication timeout'));
+                reject(new Error("Authentication timeout"));
               }, 20000);
 
               const cleanup = () => {
@@ -168,27 +197,33 @@ function createHAClientMachine(
               };
 
               ws.onmessage = (event) => {
-                if (typeof event.data === 'string') {
+                if (typeof event.data === "string") {
                   const data = JSON.parse(event.data);
 
-                  if (data.type === 'auth_required') {
-                    logger.info('Auth required, sending token');
+                  if (data.type === "auth_required") {
+                    logger.info("Auth required, sending token");
                     try {
-                      ws.send(JSON.stringify({
-                        type: 'auth',
-                        access_token: config.token
-                      }));
+                      ws.send(
+                        JSON.stringify({
+                          type: "auth",
+                          access_token: config.token,
+                        }),
+                      );
                     } catch (err) {
                       cleanup();
-                      reject(new Error(`Failed to send auth: ${getErrorMessage(err)}`));
+                      reject(
+                        new Error(
+                          `Failed to send auth: ${getErrorMessage(err)}`,
+                        ),
+                      );
                     }
-                  } else if (data.type === 'auth_ok') {
-                    logger.info('Authentication successful');
+                  } else if (data.type === "auth_ok") {
+                    logger.info("Authentication successful");
                     cleanup();
                     resolve();
-                  } else if (data.type === 'auth_invalid') {
+                  } else if (data.type === "auth_invalid") {
                     cleanup();
-                    reject(new Error('Authentication failed - invalid token'));
+                    reject(new Error("Authentication failed - invalid token"));
                   }
                 }
               };
@@ -201,41 +236,43 @@ function createHAClientMachine(
               stats: ({ context }) => ({
                 ...context.stats,
                 totalConnections: context.stats.totalConnections + 1,
-                lastConnected: new Date()
+                lastConnected: new Date(),
               }),
               retryCount: 0,
-              error: undefined
-            })
+              error: undefined,
+            }),
           },
           onError: {
             target: HAClientStates.error,
             actions: assign({
-              error: ({ event }) => getErrorMessage(event.error)
-            })
-          }
-        }
+              error: ({ event }) => getErrorMessage(event.error),
+            }),
+          },
+        },
       },
       [HAClientStates.connected]: {
         on: {
           DISCONNECT: {
-            target: HAClientStates.disconnecting
+            target: HAClientStates.disconnecting,
           },
           CONNECTION_LOST: {
-            target: HAClientStates.reconnecting
+            target: HAClientStates.reconnecting,
           },
           UPDATE_STATS: {
             actions: assign({
               stats: ({ event, context }) => {
-                return event.type === 'UPDATE_STATS' ? event.stats : context.stats;
-              }
-            })
+                return event.type === "UPDATE_STATS"
+                  ? event.stats
+                  : context.stats;
+              },
+            }),
           },
           INCREMENT_MESSAGE_ID: {
             actions: assign({
-              messageId: ({ context }) => context.messageId + 1
-            })
-          }
-        }
+              messageId: ({ context }) => context.messageId + 1,
+            }),
+          },
+        },
       },
       [HAClientStates.reconnecting]: {
         after: {
@@ -244,16 +281,16 @@ function createHAClientMachine(
             actions: assign({
               stats: ({ context }) => ({
                 ...context.stats,
-                totalReconnections: context.stats.totalReconnections + 1
-              })
-            })
-          }
+                totalReconnections: context.stats.totalReconnections + 1,
+              }),
+            }),
+          },
         },
         on: {
           DISCONNECT: {
-            target: HAClientStates.disconnecting
-          }
-        }
+            target: HAClientStates.disconnecting,
+          },
+        },
       },
       [HAClientStates.disconnecting]: {
         entry: assign({
@@ -263,15 +300,15 @@ function createHAClientMachine(
               try {
                 ws.close();
               } catch (err) {
-                logger.error('Error closing WebSocket', err);
+                logger.error("Error closing WebSocket", err);
               }
             }
             return undefined;
-          }
+          },
         }),
         always: {
-          target: HAClientStates.disconnected
-        }
+          target: HAClientStates.disconnected,
+        },
       },
       [HAClientStates.error]: {
         on: {
@@ -280,12 +317,12 @@ function createHAClientMachine(
             guard: ({ context }) => context.retryCount < config.maxRetries,
             actions: assign({
               retryCount: ({ context }) => context.retryCount + 1,
-              error: undefined
-            })
+              error: undefined,
+            }),
           },
           DISCONNECT: {
-            target: HAClientStates.disconnecting
-          }
+            target: HAClientStates.disconnecting,
+          },
         },
         after: {
           5000: {
@@ -293,12 +330,12 @@ function createHAClientMachine(
             guard: ({ context }) => context.retryCount < config.maxRetries,
             actions: assign({
               retryCount: ({ context }) => context.retryCount + 1,
-              error: undefined
-            })
-          }
-        }
-      }
-    }
+              error: undefined,
+            }),
+          },
+        },
+      },
+    },
   });
 }
 
@@ -307,7 +344,9 @@ type HAClientMachine = ReturnType<typeof createHAClientMachine>;
 type HAClientActor = ActorRefFrom<HAClientMachine>;
 
 // Type guards for state checking
-function isConnectedState(state: StateValue): state is typeof HAClientStates.connected {
+function isConnectedState(
+  state: StateValue,
+): state is typeof HAClientStates.connected {
   return state === HAClientStates.connected;
 }
 
@@ -315,12 +354,14 @@ function isErrorState(state: StateValue): state is typeof HAClientStates.error {
   return state === HAClientStates.error;
 }
 
-
 @injectable()
 export class HomeAssistantClient {
   private machine: HAClientMachine;
   private actor?: HAClientActor;
-  private eventHandlers = new Map<string, Set<(event: HassEventImpl) => void>>();
+  private eventHandlers = new Map<
+    string,
+    Set<(event: HassEventImpl) => void>
+  >();
   private subscriptions = new Set<string>();
   private pingTimer?: NodeJS.Timeout;
   private config: HassOptions;
@@ -333,7 +374,11 @@ export class HomeAssistantClient {
   ) {
     this.config = config!;
     this.logger = logger!;
-    this.machine = createHAClientMachine(this.config, this.logger, this.webSocketFactory);
+    this.machine = createHAClientMachine(
+      this.config,
+      this.logger,
+      this.webSocketFactory,
+    );
   }
 
   /**
@@ -359,14 +404,21 @@ export class HomeAssistantClient {
           this.logger.info("✅ Connected to Home Assistant successfully");
           subscription.unsubscribe();
           resolve();
-        } else if (isErrorState(state.value) && state.context.retryCount >= this.config.maxRetries) {
+        } else if (
+          isErrorState(state.value) &&
+          state.context.retryCount >= this.config.maxRetries
+        ) {
           this.logger.error("❌ All connection attempts exhausted");
           subscription.unsubscribe();
-          reject(new ConnectionError(`Failed to connect after ${this.config.maxRetries} attempts: ${state.context.error}`));
+          reject(
+            new ConnectionError(
+              `Failed to connect after ${this.config.maxRetries} attempts: ${state.context.error}`,
+            ),
+          );
         }
       });
 
-      this.actor!.send({ type: 'CONNECT' });
+      this.actor!.send({ type: "CONNECT" });
     });
   }
 
@@ -374,22 +426,26 @@ export class HomeAssistantClient {
     const ws = this.actor?.getSnapshot().context.ws;
     if (ws) {
       (ws as WebSocket).onmessage = async (event: MessageEvent) => {
-        if (typeof event.data === 'string') {
+        if (typeof event.data === "string") {
           await this.handleMessage(JSON.parse(event.data));
         }
       };
 
       (ws as WebSocket).onclose = () => {
-        this.logger.warning('Connection lost');
-        this.actor?.send({ type: 'CONNECTION_LOST' });
+        this.logger.warning("Connection lost");
+        this.actor?.send({ type: "CONNECTION_LOST" });
       };
 
       (ws as WebSocket).onerror = (event: Event | ErrorEvent) => {
         const errorEvent = event as ErrorEvent;
-        const errorMessage = errorEvent.error?.message || errorEvent.message || 'WebSocket error';
+        const errorMessage =
+          errorEvent.error?.message || errorEvent.message || "WebSocket error";
 
-        this.logger.error('WebSocket error in connected state', new Error(errorMessage));
-        this.actor?.send({ type: 'CONNECTION_LOST' });
+        this.logger.error(
+          "WebSocket error in connected state",
+          new Error(errorMessage),
+        );
+        this.actor?.send({ type: "CONNECTION_LOST" });
       };
 
       this.startPingTimer();
@@ -412,7 +468,7 @@ export class HomeAssistantClient {
     this.subscriptions.clear();
 
     if (this.actor) {
-      this.actor.send({ type: 'DISCONNECT' });
+      this.actor.send({ type: "DISCONNECT" });
       this.actor.stop();
       this.actor = undefined;
     }
@@ -426,7 +482,9 @@ export class HomeAssistantClient {
    */
   get connected(): boolean {
     const snapshot = this.actor?.getSnapshot();
-    return snapshot ? isConnectedState(snapshot.value) && snapshot.context.ws !== undefined : false;
+    return snapshot
+      ? isConnectedState(snapshot.value) && snapshot.context.ws !== undefined
+      : false;
   }
 
   /**
@@ -434,12 +492,14 @@ export class HomeAssistantClient {
    */
   getStats(): ConnectionStats {
     const context = this.actor?.getSnapshot().context;
-    return context ? { ...context.stats } : {
-      totalConnections: 0,
-      totalReconnections: 0,
-      totalMessages: 0,
-      totalErrors: 0,
-    };
+    return context
+      ? { ...context.stats }
+      : {
+          totalConnections: 0,
+          totalReconnections: 0,
+          totalMessages: 0,
+          totalErrors: 0,
+        };
   }
 
   /**
@@ -449,7 +509,11 @@ export class HomeAssistantClient {
     this.logger.debug("🔍 Getting entity state", { entityId });
 
     if (!this.connected) {
-      this.logger.error("❌ Cannot get state: not connected to Home Assistant", undefined, { entityId });
+      this.logger.error(
+        "❌ Cannot get state: not connected to Home Assistant",
+        undefined,
+        { entityId },
+      );
       throw new ConnectionError("Not connected to Home Assistant");
     }
 
@@ -464,9 +528,17 @@ export class HomeAssistantClient {
 
       if (!response.ok) {
         if (response.status === 404) {
-          throw new StateError(`Entity not found: ${entityId}`, undefined, entityId);
+          throw new StateError(
+            `Entity not found: ${entityId}`,
+            undefined,
+            entityId,
+          );
         }
-        throw new StateError(`HTTP ${response.status}: ${response.statusText}`, undefined, entityId);
+        throw new StateError(
+          `HTTP ${response.status}: ${response.statusText}`,
+          undefined,
+          entityId,
+        );
       }
 
       const data = await response.json();
@@ -520,6 +592,109 @@ export class HomeAssistantClient {
       throw new ConnectionError(
         `Failed to call service ${serviceCall.domain}.${serviceCall.service}: ${getErrorMessage(error)}`,
       );
+    }
+  }
+
+  /**
+   * Generic entity control with state checking to prevent unnecessary calls
+   * Based on the Rust HAG implementation pattern
+   */
+  async controlEntity(
+    entityId: string,
+    domain: string,
+    service: string,
+    valueType: ValueType,
+    value: any,
+  ): Promise<void> {
+    if (!this.connected) {
+      throw new ConnectionError("Not connected to Home Assistant");
+    }
+
+    // Get current entity state to check if changes are needed
+    let currentState: HassStateImpl | undefined;
+    try {
+      currentState = await this.getState(entityId);
+    } catch (error) {
+      this.logger.warning(
+        "⚠️ Could not get current state, proceeding with service call",
+        {
+          entityId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
+    }
+
+    // Get current value based on value type
+    let currentValue: any;
+    if (currentState) {
+      currentValue =
+        valueType.type === "state"
+          ? currentState.state
+          : currentState.attributes?.[valueType.key];
+    }
+
+    // Check if change is needed
+    if (currentValue === value) {
+      this.logger.debug("⏭️ Value unchanged, skipping service call", {
+        entityId,
+        valueType,
+        currentValue,
+        desiredValue: value,
+        service: `${domain}.${service}`,
+      });
+      return;
+    }
+
+    try {
+      // Build service data payload dynamically
+      const serviceData: Record<string, any> = {};
+
+      // Add the value with appropriate key based on service conventions
+      serviceData[valueType.key] = value;
+
+      // Create service call using domain-specific factory methods
+      let serviceCall: HassServiceCallImpl;
+
+      if (domain === "climate") {
+        serviceCall = HassServiceCallImpl.climate(
+          service as
+            | "set_hvac_mode"
+            | "set_temperature"
+            | "set_preset_mode"
+            | "turn_off",
+          entityId,
+          serviceData,
+        );
+      } else if (domain === "homeassistant") {
+        serviceCall = HassServiceCallImpl.homeassistant(
+          service as "update_entity" | "reload_config_entry",
+          entityId,
+        );
+      } else {
+        // Fallback to direct construction for other domains
+        serviceCall = new HassServiceCallImpl(domain, service, {
+          entity_id: entityId,
+          ...serviceData,
+        });
+      }
+
+      await this.callService(serviceCall);
+
+      this.logger.debug("🔄 Applied entity change", {
+        entityId,
+        operation: `${domain}.${service}`,
+        valueType,
+        from: currentValue,
+        to: value,
+      });
+    } catch (error) {
+      this.logger.error("❌ Failed to apply entity change", error, {
+        entityId,
+        operation: `${domain}.${service}`,
+        valueType,
+        value,
+      });
+      throw error;
     }
   }
 
@@ -607,20 +782,20 @@ export class HomeAssistantClient {
       if (snapshot) {
         const newStats = {
           ...snapshot.context.stats,
-          totalMessages: snapshot.context.stats.totalMessages + 1
+          totalMessages: snapshot.context.stats.totalMessages + 1,
         };
         // Update stats in machine context
-        this.actor?.send({ type: 'UPDATE_STATS', stats: newStats });
+        this.actor?.send({ type: "UPDATE_STATS", stats: newStats });
       }
 
       switch (data.type) {
-        case 'event':
+        case "event":
           const event = HassEventImpl.fromWebSocketEvent(data);
-          this.logger.debug('📨 Received Home Assistant event', {
+          this.logger.debug("📨 Received Home Assistant event", {
             eventType: event.eventType,
             hasHandlers: this.eventHandlers.has(event.eventType),
             handlerCount: this.eventHandlers.get(event.eventType)?.size || 0,
-            eventData: event.data
+            eventData: event.data,
           });
 
           const handlers = this.eventHandlers.get(event.eventType);
@@ -629,34 +804,42 @@ export class HomeAssistantClient {
               try {
                 handler(event);
               } catch (error) {
-                this.logger.error('Event handler failed', error);
+                this.logger.error("Event handler failed", error);
               }
             }
           } else {
-            this.logger.debug('No handlers registered for event type', { eventType: event.eventType });
-          }
-          break;
-
-        case 'result':
-          if (data.success) {
-            this.logger.debug('Command result: success', { messageId: data.id });
-          } else {
-            this.logger.error('Command result: failed', toError(data.error, 'Home Assistant command failed'), {
-              messageId: data.id,
-              errorData: data.error
+            this.logger.debug("No handlers registered for event type", {
+              eventType: event.eventType,
             });
           }
           break;
 
-        case 'pong':
-          this.logger.debug('Pong received - connection alive');
+        case "result":
+          if (data.success) {
+            this.logger.debug("Command result: success", {
+              messageId: data.id,
+            });
+          } else {
+            this.logger.error(
+              "Command result: failed",
+              toError(data.error, "Home Assistant command failed"),
+              {
+                messageId: data.id,
+                errorData: data.error,
+              },
+            );
+          }
+          break;
+
+        case "pong":
+          this.logger.debug("Pong received - connection alive");
           break;
 
         default:
-          this.logger.debug('Unhandled message type', { type: data.type });
+          this.logger.debug("Unhandled message type", { type: data.type });
       }
     } catch (error) {
-      this.logger.error('Error handling WebSocket message', error);
+      this.logger.error("Error handling WebSocket message", error);
     }
   }
 
@@ -685,7 +868,7 @@ export class HomeAssistantClient {
     if (snapshot) {
       const nextId = snapshot.context.messageId + 1;
       // Update messageId in context by sending an event
-      this.actor?.send({ type: 'INCREMENT_MESSAGE_ID' });
+      this.actor?.send({ type: "INCREMENT_MESSAGE_ID" });
       return nextId;
     }
     return 1;
@@ -702,8 +885,8 @@ export class HomeAssistantClient {
         try {
           this.sendMessage(pingMessage);
         } catch (error) {
-          this.logger.error('Ping failed', error);
-          this.actor?.send({ type: 'CONNECTION_LOST' });
+          this.logger.error("Ping failed", error);
+          this.actor?.send({ type: "CONNECTION_LOST" });
         }
       }
     }, 30000);
@@ -711,9 +894,9 @@ export class HomeAssistantClient {
 
   private async subscribeToInitialEvents(): Promise<void> {
     try {
-      await this.subscribeEvents('state_changed');
+      await this.subscribeEvents("state_changed");
     } catch (error) {
-      this.logger.error('Failed to subscribe to initial events', error);
+      this.logger.error("Failed to subscribe to initial events", error);
     }
   }
 }

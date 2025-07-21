@@ -287,8 +287,9 @@ test("Home Assistant Integration - Error handling", async () => {
   try {
     // This should fail quickly - localhost connection refused happens immediately
     const connectPromise = invalidClient.connect();
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Connection timeout")), 200), // Short timeout since localhost should fail fast
+    const timeoutPromise = new Promise(
+      (_, reject) =>
+        setTimeout(() => reject(new Error("Connection timeout")), 200), // Short timeout since localhost should fail fast
     );
 
     await Promise.race([connectPromise, timeoutPromise]);

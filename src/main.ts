@@ -94,27 +94,30 @@ async function runApplication(
     if (logLevel) {
       // Map CLI log level to LogLevel enum
       const logLevelMapping: Record<string, LogLevel> = {
-        'debug': LogLevel.DEBUG,
-        'info': LogLevel.INFO,
-        'warning': LogLevel.WARNING,
-        'warn': LogLevel.WARNING,
-        'error': LogLevel.ERROR,
+        debug: LogLevel.DEBUG,
+        info: LogLevel.INFO,
+        warning: LogLevel.WARNING,
+        warn: LogLevel.WARNING,
+        error: LogLevel.ERROR,
       };
-      config.appOptions.logLevel = logLevelMapping[logLevel.toLowerCase()] || LogLevel.INFO;
+      config.appOptions.logLevel =
+        logLevelMapping[logLevel.toLowerCase()] || LogLevel.INFO;
     }
 
     // Setup logging before creating container
     // Convert LogLevel enum to LevelName
     const logLevelToLevelName: Record<LogLevel, LevelName> = {
-      [LogLevel.DEBUG]: 'DEBUG',
-      [LogLevel.INFO]: 'INFO', 
-      [LogLevel.WARNING]: 'WARN',
-      [LogLevel.ERROR]: 'ERROR',
+      [LogLevel.DEBUG]: "DEBUG",
+      [LogLevel.INFO]: "INFO",
+      [LogLevel.WARNING]: "WARN",
+      [LogLevel.ERROR]: "ERROR",
     };
-    const levelName = logLevelToLevelName[config.appOptions.logLevel] || 'INFO';
+    const levelName = logLevelToLevelName[config.appOptions.logLevel] || "INFO";
     setupLogging(levelName);
     logger = getAppLogger();
-    logger.info("🔧 Logging setup completed", { logLevel: config.appOptions.logLevel });
+    logger.info("🔧 Logging setup completed", {
+      logLevel: config.appOptions.logLevel,
+    });
 
     // Create and initialize container with pre-loaded config
     logger.info("🔧 Creating container...");

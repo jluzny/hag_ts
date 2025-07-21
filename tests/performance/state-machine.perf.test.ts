@@ -70,12 +70,26 @@ async function testXStatePerformance(): Promise<void> {
 
   // Use mock for fast testing - avoid heavy container creation
   const mockStateMachine = {
-    start: () => { /* mock */ },
-    stop: () => { /* mock */ },
-    send: () => { /* mock */ },
-    getStatus: () => ({ state: 'idle', context: {} }),
-    evaluateConditions: () => ({ shouldHeat: false, shouldCool: false, needsDefrost: false, reason: 'test', evaluationTimeMs: 0 }),
-    manualOverride: () => { /* mock */ }
+    start: () => {
+      /* mock */
+    },
+    stop: () => {
+      /* mock */
+    },
+    send: () => {
+      /* mock */
+    },
+    getStatus: () => ({ state: "idle", context: {} }),
+    evaluateConditions: () => ({
+      shouldHeat: false,
+      shouldCool: false,
+      needsDefrost: false,
+      reason: "test",
+      evaluationTimeMs: 0,
+    }),
+    manualOverride: () => {
+      /* mock */
+    },
   };
 
   const results: BenchmarkResult[] = [];
@@ -190,9 +204,17 @@ async function testConcurrentOperations(): Promise<void> {
   // Use mock for fast testing
   const mockStateMachine = {
     send: () => Promise.resolve(),
-    getStatus: () => ({ state: 'idle', context: {} }),
-    evaluateConditions: () => ({ shouldHeat: false, shouldCool: false, needsDefrost: false, reason: 'test', evaluationTimeMs: 0 }),
-    stop: () => { /* mock */ }
+    getStatus: () => ({ state: "idle", context: {} }),
+    evaluateConditions: () => ({
+      shouldHeat: false,
+      shouldCool: false,
+      needsDefrost: false,
+      reason: "test",
+      evaluationTimeMs: 0,
+    }),
+    stop: () => {
+      /* mock */
+    },
   };
 
   const startTime = performance.now();

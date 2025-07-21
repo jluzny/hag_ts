@@ -52,7 +52,6 @@ export class HvacModule extends BaseModule {
       this.stateMachine,
       eventBus,
     );
-
   }
 
   /**

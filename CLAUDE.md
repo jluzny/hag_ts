@@ -17,7 +17,7 @@ This is the main HAG implementation using TypeScript with Bun runtime for optima
 - **Dependency Injection**: @needle-di/core for type-safe DI
 - **State Management**: XState v5 for HVAC state machine
 - **AI Integration**: LangChain v0.3 with OpenAI for intelligent decisions
-- **CLI Framework**: @std/cli (via npm:@jsr/std__cli)
+- **CLI Framework**: @std/cli (via npm:@jsr/std\_\_cli)
 - **Configuration**: Zod schemas with YAML/environment variable support
 
 ## Development Commands
@@ -42,7 +42,7 @@ bun run scripts/call_service.ts climate.turn_off --entity_id climate.living_room
 bun run scripts/call_service.ts climate.set_hvac_mode --entity_id climate.living_room_ac --hvac_mode cool
 
 # Status checking - validate current system state
-bun scripts/check_hvac_status.ts                  # Check all configured HVAC entities  
+bun scripts/check_hvac_status.ts                  # Check all configured HVAC entities
 bun scripts/list_entities.ts climate              # Discover available climate entities
 bun scripts/discover_sensors.ts                   # Find temperature/outdoor sensors
 
@@ -53,6 +53,7 @@ bun scripts/discover_sensors.ts                   # Find temperature/outdoor sen
 ### Testing Methodology
 
 For testing HVAC automation behavior:
+
 1. Use service calls to set initial HVAC states
 2. Run the app with timeout to observe decision-making
 3. Validate final states match expected behavior
@@ -93,9 +94,9 @@ bun run ci                  # Full CI pipeline
 
 ### Bun-Specific Dependencies
 
-- `@std/cli`: npm:@jsr/std__cli@^1.0.20 (CLI framework)
-- `@std/assert`: npm:@jsr/std__assert@^1.0.13 (assertions)
-- `@std/log`: npm:@jsr/std__log@^0.224.14 (logging)
+- `@std/cli`: npm:@jsr/std\_\_cli@^1.0.20 (CLI framework)
+- `@std/assert`: npm:@jsr/std\_\_assert@^1.0.13 (assertions)
+- `@std/log`: npm:@jsr/std\_\_log@^0.224.14 (logging)
 - `dotenv`: ^17.2.0 (environment variables)
 - `minimist`: ^1.2.8 (argument parsing)
 

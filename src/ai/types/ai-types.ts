@@ -2,7 +2,7 @@
  * Type definitions for AI-enhanced HVAC system
  */
 
-import { SystemMode } from '../../types/common.ts';
+import { SystemMode } from "../../types/common.ts";
 
 /**
  * Context information for AI decision making
@@ -35,14 +35,14 @@ export interface HVACDecisionContext {
 
   // Energy and optimization context
   energyPrice?: {
-    level: 'low' | 'medium' | 'high';
+    level: "low" | "medium" | "high";
     rate: number; // per kWh
   };
 
   // Weather forecast (for future enhancements)
   weatherForecast?: {
     nextHourTemp?: number;
-    next4HourTrend?: 'rising' | 'falling' | 'stable';
+    next4HourTrend?: "rising" | "falling" | "stable";
   };
 
   // User preferences (for future enhancements)
@@ -58,7 +58,7 @@ export interface HVACDecisionContext {
  */
 export interface DecisionResult {
   // Primary decision
-  action: 'heating' | 'cooling' | 'idle' | 'off';
+  action: "heating" | "cooling" | "idle" | "off";
 
   // Confidence and reasoning
   confidence: number; // 0.0 to 1.0
@@ -66,11 +66,11 @@ export interface DecisionResult {
   factors: string[];
 
   // Impact assessment
-  energyImpact: 'low' | 'medium' | 'high';
-  comfortImpact: 'low' | 'medium' | 'high';
+  energyImpact: "low" | "medium" | "high";
+  comfortImpact: "low" | "medium" | "high";
 
   // Metadata
-  source: 'ai' | 'fallback' | 'rule_based';
+  source: "ai" | "fallback" | "rule_based";
   executionTimeMs: number;
   fallbackUsed: boolean;
   fallbackReason?: string;
@@ -133,7 +133,7 @@ export interface ScheduleItem {
   startTime: Date;
   endTime: Date;
   targetTemp: number;
-  priority: 'low' | 'medium' | 'high';
+  priority: "low" | "medium" | "high";
   energyBudget?: number;
 }
 
@@ -143,7 +143,7 @@ export interface ScheduleItem {
 export interface UserPattern {
   timeOfDay: number; // Hour of day
   dayOfWeek: number; // 0-6
-  action: 'manual_override' | 'schedule_change' | 'mode_change';
+  action: "manual_override" | "schedule_change" | "mode_change";
   context: Record<string, unknown>;
   frequency: number; // How often this pattern occurs
   confidence: number; // 0.0 to 1.0
@@ -199,10 +199,10 @@ export interface EnergyUsageData {
 export interface UserInteraction {
   timestamp: Date;
   type:
-    | 'manual_override'
-    | 'schedule_change'
-    | 'mode_change'
-    | 'preference_update';
+    | "manual_override"
+    | "schedule_change"
+    | "mode_change"
+    | "preference_update";
   details: Record<string, unknown>;
   context: {
     indoorTemp?: number;
@@ -291,8 +291,8 @@ export interface EnergyOptimizationResult {
     percentage: number; // % improvement
   };
   tradeoffs: {
-    comfortImpact: 'minimal' | 'moderate' | 'significant';
-    convenienceImpact: 'minimal' | 'moderate' | 'significant';
+    comfortImpact: "minimal" | "moderate" | "significant";
+    convenienceImpact: "minimal" | "moderate" | "significant";
   };
   confidence: number; // 0.0 to 1.0
 }

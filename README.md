@@ -55,6 +55,7 @@ HAG (Home Assistant aGentic HVAC Automation) is a production-ready TypeScript/Bu
 ## 🏗️ Architecture
 
 ### Production Application (`src/`)
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    HAG HVAC System                         │
@@ -78,6 +79,7 @@ HAG (Home Assistant aGentic HVAC Automation) is a production-ready TypeScript/Bu
 ```
 
 **Architecture Principles**:
+
 - **Production Focus**: Core system uses proven, reliable technologies
 - **Performance**: Optimized for low latency and high throughput
 - **Modularity**: Clean separation of concerns with dependency injection
@@ -86,6 +88,7 @@ HAG (Home Assistant aGentic HVAC Automation) is a production-ready TypeScript/Bu
 ## 🛠️ Technology Stack
 
 ### Production Application (`src/`)
+
 - **Runtime**: Bun 1.2+ (Fast TypeScript runtime)
 - **Language**: TypeScript with experimental decorators
 - **State Management**: XState v5 finite state machines with Actor system
@@ -96,16 +99,19 @@ HAG (Home Assistant aGentic HVAC Automation) is a production-ready TypeScript/Bu
 - **Home Assistant**: Native WebSocket and REST API integration
 
 ### Optional AI Features
+
 - **AI Framework**: LangChain v0.3 with OpenAI integration
 - **Enhanced Processing**: Complex event processing and pattern recognition
 
 ## 📋 Prerequisites
 
 ### Production Application
+
 - **Bun 1.2+** - [Install Bun](https://bun.sh/docs/installation)
 - **Home Assistant** - Running instance with WebSocket API enabled
 
 ### Optional AI Features
+
 - **OpenAI API Key** - Only required for experimental AI research features
 
 ## 🚀 Quick Start
@@ -159,23 +165,23 @@ Edit `config/hvac_config.yaml` to match your Home Assistant setup:
 
 ```yaml
 hassOptions:
-  wsUrl: 'ws://homeassistant.local:8123/api/websocket'
-  restUrl: 'http://homeassistant.local:8123/api'
-  token: 'your_long_lived_access_token'
+  wsUrl: "ws://homeassistant.local:8123/api/websocket"
+  restUrl: "http://homeassistant.local:8123/api"
+  token: "your_long_lived_access_token"
 
 hvacOptions:
-  tempSensor: 'sensor.indoor_temperature'
-  outdoorSensor: 'sensor.outdoor_temperature'
-  systemMode: 'auto'
+  tempSensor: "sensor.indoor_temperature"
+  outdoorSensor: "sensor.outdoor_temperature"
+  systemMode: "auto"
   hvacEntities:
-    - entityId: 'climate.main_hvac'
+    - entityId: "climate.main_hvac"
       enabled: true
       defrost: false
 
 appOptions:
-  logLevel: 'info'
-  useAi: false  # Set to true for AI features
-  aiModel: 'gpt-4'
+  logLevel: "info"
+  useAi: false # Set to true for AI features
+  aiModel: "gpt-4"
 ```
 
 ## 🎮 Usage
@@ -299,9 +305,9 @@ config/
 
 ```yaml
 hassOptions:
-  wsUrl: 'ws://homeassistant.local:8123/api/websocket'
-  restUrl: 'http://homeassistant.local:8123/api'
-  token: '${HASS_TOKEN}'
+  wsUrl: "ws://homeassistant.local:8123/api/websocket"
+  restUrl: "http://homeassistant.local:8123/api"
+  token: "${HASS_TOKEN}"
   maxRetries: 5
   retryDelayMs: 5000
 ```
@@ -310,22 +316,22 @@ hassOptions:
 
 ```yaml
 hvacOptions:
-  tempSensor: 'sensor.indoor_temperature'
-  outdoorSensor: 'sensor.outdoor_temperature'
-  systemMode: 'auto'
+  tempSensor: "sensor.indoor_temperature"
+  outdoorSensor: "sensor.outdoor_temperature"
+  systemMode: "auto"
   hvacEntities:
-    - entityId: 'climate.main_hvac'
+    - entityId: "climate.main_hvac"
       enabled: true
       defrost: false
   heating:
     temperature: 21
-    presetMode: 'comfort'
+    presetMode: "comfort"
     temperatureThresholds:
       indoorMin: 18
       indoorMax: 24
   cooling:
     temperature: 24
-    presetMode: 'comfort'
+    presetMode: "comfort"
     temperatureThresholds:
       indoorMin: 20
       indoorMax: 26
@@ -335,9 +341,9 @@ hvacOptions:
 
 ```yaml
 appOptions:
-  logLevel: 'info'
+  logLevel: "info"
   useAi: false
-  aiModel: 'gpt-4'
+  aiModel: "gpt-4"
   aiTemperature: 0.1
 ```
 

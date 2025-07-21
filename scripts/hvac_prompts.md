@@ -26,8 +26,9 @@ Read and remember the initial state of all HVAC units from Home Assistant; turn 
 **Description:** This prompt tests the new after-hours automatic shutdown logic. It verifies that enabled HVAC entities are automatically turned off when the system detects operation outside configured working hours (6:00-21:00), and that only enabled entities are affected.
 
 **Test Scenario:**
+
 1. Turn on enabled HVAC entities during after-hours
-2. Simulate sensor change to trigger evaluation 
+2. Simulate sensor change to trigger evaluation
 3. Verify system automatically turns off enabled entities
 4. Confirm non-enabled entities remain unaffected
 

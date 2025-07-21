@@ -158,7 +158,11 @@ describe("XState Home Assistant Client - Connection Management", () => {
   });
 
   test.skip("should handle connection failure with XState machine", async () => {
-    const client = clientFactory({ ...mockHassOptions, maxRetries: 1, retryDelayMs: 10 });
+    const client = clientFactory({
+      ...mockHassOptions,
+      maxRetries: 1,
+      retryDelayMs: 10,
+    });
     const connectPromise = client.connect();
 
     // Wait for WebSocket to be created then fail it
@@ -175,13 +179,13 @@ describe("XState Home Assistant Client - Connection Management", () => {
     expect(() => {
       throw new ConnectionError("Authentication failed");
     }).toThrow(ConnectionError);
-    
+
     // Test passes immediately without complex async operations
   }, 10); // Very fast timeout
 
   test("should not connect when already connected", async () => {
     const client = clientFactory({ ...mockHassOptions });
-    
+
     try {
       // First connection
       const connectPromise1 = client.connect();
@@ -194,14 +198,14 @@ describe("XState Home Assistant Client - Connection Management", () => {
         mockWs.receiveMessage({ type: "auth_ok" });
       }
       await connectPromise1;
-      
+
       expect(client.connected).toBe(true);
-      
+
       // Second connection attempt should resolve immediately
       const startTime = Date.now();
       await client.connect();
       const endTime = Date.now();
-      
+
       // Should resolve quickly since already connected
       expect(endTime - startTime).toBeLessThan(100);
       expect(client.connected).toBe(true);
@@ -292,13 +296,13 @@ describe("XState Home Assistant Client - Messaging", () => {
     mockWs.receiveMessage({
       type: "event",
       id: 1,
-      event: { 
-        event_type: "state_changed", 
-        data: { 
+      event: {
+        event_type: "state_changed",
+        data: {
           entity_id: "sensor.test",
           new_state: { state: "on" },
-          old_state: { state: "off" }
-        } 
+          old_state: { state: "off" },
+        },
       },
     });
 
@@ -327,25 +331,25 @@ describe("XState Home Assistant Client - Messaging", () => {
     mockWs.receiveMessage({
       type: "event",
       id: 1,
-      event: { 
-        event_type: "state_changed", 
-        data: { 
+      event: {
+        event_type: "state_changed",
+        data: {
           entity_id: "sensor.temperature",
-          new_state: { 
+          new_state: {
             entity_id: "sensor.temperature",
             state: "25.5",
             attributes: {},
             last_changed: new Date().toISOString(),
-            last_updated: new Date().toISOString()
+            last_updated: new Date().toISOString(),
           },
-          old_state: { 
+          old_state: {
             entity_id: "sensor.temperature",
             state: "24.1",
             attributes: {},
             last_changed: new Date().toISOString(),
-            last_updated: new Date().toISOString()
-          }
-        } 
+            last_updated: new Date().toISOString(),
+          },
+        },
       },
     });
 
@@ -365,13 +369,17 @@ describe("XState Home Assistant Client - Messaging", () => {
       { hvac_mode: "heat" },
     );
 
-    await expect(client.callService(serviceCall)).rejects.toThrow(ConnectionError);
+    await expect(client.callService(serviceCall)).rejects.toThrow(
+      ConnectionError,
+    );
   });
 
   test("should fail event subscription when not connected", async () => {
     const client = clientFactory();
-    
-    await expect(client.subscribeEvents("state_changed")).rejects.toThrow(ConnectionError);
+
+    await expect(client.subscribeEvents("state_changed")).rejects.toThrow(
+      ConnectionError,
+    );
   });
 });
 
@@ -392,13 +400,13 @@ describe("XState Home Assistant Client - State Management", () => {
 
   test("should track connection statistics", async () => {
     const client = clientFactory();
-    
+
     // Initial stats
     const initialStats = client.getStats();
     expect(initialStats.totalConnections).toBe(0);
     expect(initialStats.totalMessages).toBe(0);
     expect(initialStats.totalErrors).toBe(0);
-    
+
     // Connect
     const connectPromise = client.connect();
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -408,21 +416,21 @@ describe("XState Home Assistant Client - State Management", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     mockWs.receiveMessage({ type: "auth_ok" });
     await connectPromise;
-    
+
     // Check stats after connection
     const connectedStats = client.getStats();
     expect(connectedStats.totalConnections).toBe(1);
     expect(connectedStats.lastConnected).toBeDefined();
-    
+
     // Send some messages to increase message count
     mockWs.receiveMessage({ type: "pong", id: 1 });
     mockWs.receiveMessage({ type: "result", id: 2, success: true });
-    
+
     await new Promise((resolve) => setTimeout(resolve, 0));
-    
+
     const finalStats = client.getStats();
     expect(finalStats.totalMessages).toBeGreaterThan(0);
-    
+
     await client.disconnect();
   });
 
@@ -436,24 +444,24 @@ describe("XState Home Assistant Client - State Management", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     mockWs.receiveMessage({ type: "auth_ok" });
     await connectPromise;
-    
+
     // Add an event handler that throws an error
     client.addEventHandler("state_changed", () => {
       throw new Error("Handler error");
     });
-    
+
     // Send event that would trigger the error
     mockWs.receiveMessage({
       type: "event",
       id: 1,
       event: { event_type: "state_changed", data: {} },
     });
-    
+
     await new Promise((r) => setTimeout(r, 10));
-    
+
     // Client should still be connected despite handler error
     expect(client.connected).toBe(true);
-    
+
     await client.disconnect();
   });
 });
