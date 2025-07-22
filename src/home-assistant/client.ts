@@ -251,6 +251,7 @@ function createHAClientMachine(
         },
       },
       [HAClientStates.connected]: {
+        // Remove entry action - will handle this in the client class
         on: {
           DISCONNECT: {
             target: HAClientStates.disconnecting,
@@ -417,12 +418,19 @@ export class HomeAssistantClient {
     if (!this.actor) {
       this.actor = createActor(this.machine);
       this.actor.start();
+      
+      // Set up permanent subscription to handle reconnections
+      this.actor.subscribe((state) => {
+        if (isConnectedState(state.value) && this.connected) {
+          // This will be called on both initial connection and reconnections
+          this.setupConnectedState();
+        }
+      });
     }
 
     return new Promise((resolve, reject) => {
       const subscription = this.actor!.subscribe((state) => {
         if (isConnectedState(state.value)) {
-          this.setupConnectedState();
           this.logger.info("✅ Connected to Home Assistant successfully");
           subscription.unsubscribe();
           resolve();
@@ -444,7 +452,14 @@ export class HomeAssistantClient {
     });
   }
 
-  private setupConnectedState(): void {
+  private connectedStateSetup = false;
+
+  public setupConnectedState(): void {
+    // Prevent duplicate setup
+    if (this.connectedStateSetup) {
+      return;
+    }
+    
     const ws = this.actor?.getSnapshot().context.ws;
     if (ws) {
       (ws as WebSocket).onmessage = async (event: MessageEvent) => {
@@ -455,6 +470,7 @@ export class HomeAssistantClient {
 
       (ws as WebSocket).onclose = () => {
         this.logger.warning("Connection lost");
+        this.connectedStateSetup = false; // Reset flag on disconnect
         this.actor?.send({ type: "CONNECTION_LOST" });
       };
 
@@ -467,11 +483,13 @@ export class HomeAssistantClient {
           "WebSocket error in connected state",
           new Error(errorMessage),
         );
+        this.connectedStateSetup = false; // Reset flag on error
         this.actor?.send({ type: "CONNECTION_LOST" });
       };
 
       this.startPingTimer();
       this.subscribeToInitialEvents();
+      this.connectedStateSetup = true; // Mark as set up
     }
   }
 
