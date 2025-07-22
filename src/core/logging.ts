@@ -48,7 +48,7 @@ class SimpleLogger implements Logger {
     context?: LogContext,
     error?: unknown,
   ): string {
-    const timestamp = new Date().toISOString();
+    const timestamp = new Date().toLocaleString();
     const levelColor = {
       DEBUG: colors.dim,
       INFO: colors.blue,
