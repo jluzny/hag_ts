@@ -471,6 +471,7 @@ export class HomeAssistantClient {
       (ws as WebSocket).onclose = () => {
         this.logger.warning("Connection lost");
         this.connectedStateSetup = false; // Reset flag on disconnect
+        this.subscriptions.clear(); // Clear subscriptions on connection loss
         this.actor?.send({ type: "CONNECTION_LOST" });
       };
 
@@ -484,6 +485,7 @@ export class HomeAssistantClient {
           new Error(errorMessage),
         );
         this.connectedStateSetup = false; // Reset flag on error
+        this.subscriptions.clear(); // Clear subscriptions on error
         this.actor?.send({ type: "CONNECTION_LOST" });
       };
 
@@ -935,9 +937,23 @@ export class HomeAssistantClient {
 
   private async subscribeToInitialEvents(): Promise<void> {
     try {
+      // Add small delay to ensure WebSocket is fully ready after authentication
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       await this.subscribeEvents("state_changed");
     } catch (error) {
       this.logger.error("Failed to subscribe to initial events", error);
+      
+      // Retry once after a longer delay for reconnection scenarios
+      try {
+        this.logger.info("Retrying event subscription after delay...");
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        await this.subscribeEvents("state_changed");
+      } catch (retryError) {
+        this.logger.error("Event subscription retry also failed", retryError);
+        // Reset setup flag so we can try again on next reconnection
+        this.connectedStateSetup = false;
+      }
     }
   }
 }
