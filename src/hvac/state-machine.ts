@@ -15,7 +15,7 @@ import {
 } from "../types/common.ts";
 import { StateError } from "../core/exceptions.ts";
 import { LoggerService } from "../core/logging.ts";
-import { HomeAssistantClient } from "../home-assistant/client.ts";
+import { HomeAssistantClient, deriveTemperatureSensor } from "../home-assistant/client.ts";
 
 /**
  * Simplified HVAC events that can trigger state transitions
@@ -677,29 +677,75 @@ export function createHVACMachine(
             (e) => e.enabled,
           );
 
-          logger.info("❄️ Executing cooling mode on entities", {
+          logger.info("❄️ Executing individual cooling control on entities", {
             targetTemp: hvacOptions.cooling.temperature,
             presetMode: hvacOptions.cooling.presetMode,
             enabledEntities: enabledEntities.length,
+            indoorMax: hvacOptions.cooling.temperatureThresholds.indoorMax,
+            indoorMin: hvacOptions.cooling.temperatureThresholds.indoorMin,
           });
 
           for (const entity of enabledEntities) {
             try {
-              await controlHVACEntity(
-                haClient,
-                entity.entityId,
-                "cool",
-                hvacOptions.cooling.temperature,
-                hvacOptions.cooling.presetMode,
-                logger,
-              );
-              logger.debug("✅ Cooling entity controlled", {
+              // Derive temperature sensor for this unit
+              const tempSensorId = deriveTemperatureSensor(entity.entityId);
+              
+              // Get current room temperature
+              const tempState = await haClient.getState(tempSensorId);
+              const roomTemp = parseFloat(tempState.state);
+
+              logger.debug("🌡️ Room temperature check", {
                 entityId: entity.entityId,
-                temperature: hvacOptions.cooling.temperature,
-                presetMode: hvacOptions.cooling.presetMode,
+                tempSensorId,
+                roomTemp,
+                indoorMax: hvacOptions.cooling.temperatureThresholds.indoorMax,
+                indoorMin: hvacOptions.cooling.temperatureThresholds.indoorMin,
               });
+
+              // Individual unit decision logic
+              if (roomTemp > hvacOptions.cooling.temperatureThresholds.indoorMax) {
+                // Turn ON cooling - room too hot
+                await controlHVACEntity(
+                  haClient,
+                  entity.entityId,
+                  "cool",
+                  hvacOptions.cooling.temperature,
+                  hvacOptions.cooling.presetMode,
+                  logger,
+                );
+                logger.info("❄️ Unit turned ON - room too hot", {
+                  entityId: entity.entityId,
+                  roomTemp,
+                  threshold: hvacOptions.cooling.temperatureThresholds.indoorMax,
+                  excess: (roomTemp - hvacOptions.cooling.temperatureThresholds.indoorMax).toFixed(1),
+                });
+              } else if (roomTemp < hvacOptions.cooling.temperatureThresholds.indoorMin) {
+                // Turn OFF cooling - room cool enough
+                await controlHVACEntity(
+                  haClient,
+                  entity.entityId,
+                  "off",
+                  undefined,
+                  undefined,
+                  logger,
+                );
+                logger.info("🔴 Unit turned OFF - room cool enough", {
+                  entityId: entity.entityId,
+                  roomTemp,
+                  threshold: hvacOptions.cooling.temperatureThresholds.indoorMin,
+                  deficit: (hvacOptions.cooling.temperatureThresholds.indoorMin - roomTemp).toFixed(1),
+                });
+              } else {
+                // Room temperature in acceptable range - maintain current state
+                logger.info("✅ Unit state maintained - room temperature acceptable", {
+                  entityId: entity.entityId,
+                  roomTemp,
+                  minThreshold: hvacOptions.cooling.temperatureThresholds.indoorMin,
+                  maxThreshold: hvacOptions.cooling.temperatureThresholds.indoorMax,
+                });
+              }
             } catch (error) {
-              logger.error("❌ Failed to control cooling entity", error, {
+              logger.error("❌ Failed to control cooling entity individually", error, {
                 entityId: entity.entityId,
               });
             }

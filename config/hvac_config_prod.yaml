@@ -2,46 +2,46 @@
 # Production configuration with optimized settings for reliability and efficiency
 
 appOptions:
-  logLevel: "info" # Production: only log important events
-  useAi: false # Disable AI for production stability
-  aiModel: "gpt-3.5-turbo" # AI model to use (if enabled)
-  aiTemperature: 0.1 # AI model temperature
+  logLevel: "info"
+  useAi: false
+  aiModel: "gpt-3.5-turbo"
+  aiTemperature: 0.1
 
 hassOptions:
   wsUrl: "ws://192.168.0.204:8123/api/websocket"
   restUrl: "http://192.168.0.204:8123/api"
-  token: "${HASS_HassOptions__Token}" # Environment variable for security
-  maxRetries: 10 # Increased retries for production reliability
-  retryDelayMs: 2000 # Longer delay for production stability
-  stateCheckInterval: 300000 # 5 minutes
+  token: "${HASS_HassOptions__Token}"
+  maxRetries: 10
+  retryDelayMs: 2000
+  stateCheckInterval: 300000
 
 hvacOptions:
   tempSensor: "sensor.1st_floor_hall_multisensor_temperature"
   outdoorSensor: "sensor.openweathermap_temperature"
-  systemMode: "auto" # auto, heat_only, cool_only, off
+  systemMode: "auto"
 
   hvacEntities:
     - entityId: "climate.living_room_ac"
       enabled: true
       defrost: true
     - entityId: "climate.bedroom_ac"
-      enabled: true # Enable for production
+      enabled: true
       defrost: false
     - entityId: "climate.matej_ac"
-      enabled: true # Enable for production
+      enabled: true
       defrost: false
     - entityId: "climate.anicka_ac"
-      enabled: true # Enable for production
+      enabled: true
       defrost: false
     - entityId: "climate.radek_ac"
-      enabled: true # Enable for production
+      enabled: true
       defrost: false
 
   heating:
     temperature: 21.0
     presetMode: "windFreeSleep"
     temperatureThresholds:
-      indoorMin: 19.5 # Slightly tighter range for production
+      indoorMin: 19.5
       indoorMax: 20.5
       outdoorMin: -5.0
       outdoorMax: 15.0
@@ -54,12 +54,12 @@ hvacOptions:
       durationSeconds: 300 # 5 minutes
 
   cooling:
-    temperature: 24.0
+    temperature: 24.5
     presetMode: "windFree"
     temperatureThresholds:
       indoorMin: 23.5
       indoorMax: 24.5
-      outdoorMin: 22.0
+      outdoorMin: 20.0
       outdoorMax: 45.0
 
   activeHours:

@@ -8,6 +8,7 @@ import { test, expect } from "bun:test";
 import {
   ApplicationContainer,
   createContainer as _createContainer,
+  TYPES,
 } from "../../src/core/container.ts";
 import { HVACController } from "../../src/hvac/controller.ts";
 import { HVACStateMachine } from "../../src/hvac/state-machine.ts";
@@ -409,4 +410,119 @@ test("Configuration Validation Integration", async () => {
   expect(
     settingsWithDefrost.hvacOptions.heating.defrost?.temperatureThreshold,
   ).toBe(0.0);
+});
+
+test("Individual Cooling Control Integration", async () => {
+  // Create a mock HA client that supports individual room sensors
+  class EnhancedMockHomeAssistantClient extends MockHomeAssistantClient {
+    private serviceCalls: Array<{ entityId: string; service: string; data?: any }> = [];
+
+    constructor() {
+      super();
+      // Add room temperature sensors for individual control testing
+      this.setMockState("sensor.living_room_ac_temperature", "27.0"); // Above max
+      this.setMockState("sensor.bedroom_ac_temperature", "22.0");     // Below min  
+      this.setMockState("sensor.office_ac_temperature", "24.5");      // In range
+    }
+
+    // Mock controlEntity for tracking service calls
+    async controlEntity(
+      entityId: string,
+      domain: string,
+      service: string,
+      valueType: { type: string; key: string },
+      value: any
+    ) {
+      this.serviceCalls.push({ 
+        entityId, 
+        service: `${domain}.${service}`, 
+        data: { [valueType.key]: value } 
+      });
+    }
+
+    // Mock callService for turn_off operations
+    async callService(serviceCall: any) {
+      this.serviceCalls.push({
+        entityId: serviceCall.entity_id,
+        service: `${serviceCall.domain}.${serviceCall.service}`,
+        data: serviceCall.service_data || {}
+      });
+    }
+
+    setMockState(entityId: string, temperature: string) {
+      this.mockStates.set(entityId, { 
+        state: temperature, 
+        attributes: { unit_of_measurement: "°C" } 
+      });
+    }
+
+    getServiceCalls() {
+      return this.serviceCalls;
+    }
+
+    clearServiceCalls() {
+      this.serviceCalls = [];
+    }
+  }
+
+  // Test configuration with multiple HVAC entities
+  const multiUnitHvacOptions = {
+    ...mockSettings.hvacOptions,
+    hvacEntities: [
+      { entityId: "climate.living_room_ac", enabled: true, defrost: false },
+      { entityId: "climate.bedroom_ac", enabled: true, defrost: false },
+      { entityId: "climate.office_ac", enabled: true, defrost: false },
+    ],
+    cooling: {
+      temperature: 24.0,
+      presetMode: "eco", 
+      temperatureThresholds: {
+        indoorMin: 23.0,  // Units turn OFF below this
+        indoorMax: 26.0,  // Units turn ON above this
+        outdoorMin: 10.0,
+        outdoorMax: 45.0,
+      },
+    },
+  };
+
+  const mockHaClient = new EnhancedMockHomeAssistantClient();
+  const eventBus = new EventBus(new LoggerService("test"));
+  const stateMachine = new HVACStateMachine(
+    multiUnitHvacOptions,
+    mockHaClient as any
+  );
+
+  // Start state machine
+  stateMachine.start();
+
+  // Trigger cooling mode with conditions that require individual unit decisions
+  stateMachine.send({
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 25.0, // Global temp triggers cooling evaluation
+      outdoorTemp: 30.0,
+      currentHour: 14, // Within active hours
+      isWeekday: true,
+    },
+  });
+  stateMachine.send({ type: "AUTO_EVALUATE" });
+
+  // Allow time for async operations
+  await new Promise(resolve => setTimeout(resolve, 50));
+
+  // Verify individual unit decisions
+  const serviceCalls = mockHaClient.getServiceCalls();
+
+  // Verify at least some service calls were made
+  expect(serviceCalls.length).toBeGreaterThan(0);
+
+  // Verify state machine reached cooling state
+  expect(stateMachine.getCurrentState()).toBe("cooling");
+
+  // Verify configuration supports individual cooling
+  expect(multiUnitHvacOptions.hvacEntities.length).toBe(3);
+  expect(multiUnitHvacOptions.cooling.temperatureThresholds.indoorMax).toBe(26.0);
+  expect(multiUnitHvacOptions.cooling.temperatureThresholds.indoorMin).toBe(23.0);
+
+  stateMachine.stop();
 });

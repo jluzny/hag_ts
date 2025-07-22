@@ -56,10 +56,10 @@ hvacOptions:
       durationSeconds: 300
 
   cooling:
-    temperature: 24.0
+    temperature: 24.5
     presetMode: "windFree"
     temperatureThresholds:
-      indoorMin: 22.5
+      indoorMin: 23.5
       indoorMax: 26.0
       outdoorMin: 10.0
       outdoorMax: 45.0

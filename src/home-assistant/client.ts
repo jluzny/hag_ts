@@ -354,6 +354,28 @@ function isErrorState(state: StateValue): state is typeof HAClientStates.error {
   return state === HAClientStates.error;
 }
 
+/**
+ * Derive sensor entity ID from source entity ID using generic pattern
+ * climate.living_room_ac + sensor + temperature -> sensor.living_room_ac_temperature
+ */
+export function deriveSensorEntityId(
+  sourceEntityId: string,
+  sourceDomain: string,
+  targetDomain: string,
+  sensorName: string
+): string {
+  const entityName = sourceEntityId.replace(`${sourceDomain}.`, '');
+  return `${targetDomain}.${entityName}_${sensorName}`;
+}
+
+/**
+ * Helper function to derive temperature sensor from HVAC entity
+ * climate.living_room_ac -> sensor.living_room_ac_temperature
+ */
+export function deriveTemperatureSensor(hvacEntityId: string): string {
+  return deriveSensorEntityId(hvacEntityId, 'climate', 'sensor', 'temperature');
+}
+
 @injectable()
 export class HomeAssistantClient {
   private machine: HAClientMachine;

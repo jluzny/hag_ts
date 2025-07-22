@@ -3,7 +3,7 @@
  */
 
 import { expect, test, describe } from "bun:test";
-import { HomeAssistantClient } from "../../../src/home-assistant/client.ts";
+import { HomeAssistantClient, deriveSensorEntityId, deriveTemperatureSensor } from "../../../src/home-assistant/client.ts";
 import { HassOptions } from "../../../src/config/config.ts";
 import { ConnectionError } from "../../../src/core/exceptions.ts";
 import { HassServiceCallImpl } from "../../../src/home-assistant/models.ts";
@@ -114,6 +114,65 @@ const mockHassOptions: HassOptions = {
   retryDelayMs: 10,
   stateCheckInterval: 1000,
 };
+
+describe("Entity ID Helper Functions", () => {
+  setupTestLogging();
+
+  describe("deriveSensorEntityId", () => {
+    test("should derive sensor entity ID from climate entity", () => {
+      const result = deriveSensorEntityId(
+        "climate.living_room_ac",
+        "climate",
+        "sensor",
+        "temperature"
+      );
+      expect(result).toBe("sensor.living_room_ac_temperature");
+    });
+
+    test("should derive sensor entity ID from different domains", () => {
+      const result = deriveSensorEntityId(
+        "switch.bedroom_light",
+        "switch",
+        "sensor",
+        "power"
+      );
+      expect(result).toBe("sensor.bedroom_light_power");
+    });
+
+    test("should handle entity with multiple underscores", () => {
+      const result = deriveSensorEntityId(
+        "climate.first_floor_hall_ac",
+        "climate",
+        "sensor",
+        "humidity"
+      );
+      expect(result).toBe("sensor.first_floor_hall_ac_humidity");
+    });
+  });
+
+  describe("deriveTemperatureSensor", () => {
+    test("should derive temperature sensor from HVAC entity", () => {
+      const result = deriveTemperatureSensor("climate.living_room_ac");
+      expect(result).toBe("sensor.living_room_ac_temperature");
+    });
+
+    test("should work with different room names", () => {
+      expect(deriveTemperatureSensor("climate.bedroom_ac"))
+        .toBe("sensor.bedroom_ac_temperature");
+      
+      expect(deriveTemperatureSensor("climate.matej_ac"))
+        .toBe("sensor.matej_ac_temperature");
+      
+      expect(deriveTemperatureSensor("climate.anicka_ac"))
+        .toBe("sensor.anicka_ac_temperature");
+    });
+
+    test("should handle complex entity names", () => {
+      const result = deriveTemperatureSensor("climate.first_floor_main_ac_unit");
+      expect(result).toBe("sensor.first_floor_main_ac_unit_temperature");
+    });
+  });
+});
 
 describe("XState Home Assistant Client - Connection Management", () => {
   setupTestLogging();
