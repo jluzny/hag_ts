@@ -8,7 +8,6 @@ import { test, expect } from "bun:test";
 import {
   ApplicationContainer,
   createContainer as _createContainer,
-  TYPES,
 } from "../../src/core/container.ts";
 import { HVACController } from "../../src/hvac/controller.ts";
 import { HVACStateMachine } from "../../src/hvac/state-machine.ts";
@@ -486,7 +485,6 @@ test("Individual Cooling Control Integration", async () => {
   };
 
   const mockHaClient = new EnhancedMockHomeAssistantClient();
-  const eventBus = new EventBus(new LoggerService("test"));
   const stateMachine = new HVACStateMachine(
     multiUnitHvacOptions,
     mockHaClient as any

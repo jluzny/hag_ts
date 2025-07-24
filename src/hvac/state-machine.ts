@@ -388,7 +388,17 @@ export class HVACStrategy {
    * Check if we should turn off all entities
    */
   shouldTurnOff(data: StateChangeData): boolean {
-    return !this.isActiveHour(data.hour, data.isWeekday);
+    // Turn off if outside active hours
+    if (!this.isActiveHour(data.hour, data.isWeekday)) {
+      return true;
+    }
+
+    // Turn off if temperature is within comfortable range (neither heating nor cooling needed)
+    const needsHeating = this.shouldHeat(data);
+    const needsCooling = this.shouldCool(data);
+    
+    // If neither heating nor cooling is needed, turn off
+    return !needsHeating && !needsCooling;
   }
 }
 

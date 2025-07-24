@@ -5,8 +5,8 @@
  * based on its room temperature sensor.
  */
 
-import { test, expect, describe, beforeEach, jest } from "bun:test";
-import { createHVACMachine, HVACStateMachine } from "../../../src/hvac/state-machine.ts";
+import { test, expect, describe, beforeEach } from "bun:test";
+import { HVACStateMachine } from "../../../src/hvac/state-machine.ts";
 import { HvacOptions } from "../../../src/config/config.ts";
 import { SystemMode, HVACMode } from "../../../src/types/common.ts";
 import { LoggerService } from "../../../src/core/logging.ts";
