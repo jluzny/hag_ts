@@ -54,13 +54,13 @@ hvacOptions:
       durationSeconds: 300 # 5 minutes
 
   cooling:
-    temperature: 24.5
+    temperature: 25
     presetMode: "windFree"
     temperatureThresholds:
-      indoorMin: 23.5
+      indoorMin: 24
       indoorMax: 24.5
-      outdoorMin: 23.5
-      outdoorMax: 45.0
+      outdoorMin: 23
+      outdoorMax: 55.0
 
   activeHours:
     start: 9
