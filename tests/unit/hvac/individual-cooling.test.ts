@@ -1,6 +1,6 @@
 /**
  * Unit tests for individual HVAC unit cooling control logic.
- * 
+ *
  * Tests the enhanced executeCooling action that treats each unit individually
  * based on its room temperature sensor.
  */
@@ -10,7 +10,10 @@ import { HVACStateMachine } from "../../../src/hvac/state-machine.ts";
 import { HvacOptions } from "../../../src/config/config.ts";
 import { SystemMode, HVACMode } from "../../../src/types/common.ts";
 import { LoggerService } from "../../../src/core/logging.ts";
-import { HomeAssistantClient, deriveTemperatureSensor } from "../../../src/home-assistant/client.ts";
+import {
+  HomeAssistantClient,
+  deriveTemperatureSensor,
+} from "../../../src/home-assistant/client.ts";
 import { setupTestLogging } from "../../test-helpers.ts";
 
 // Mock logger that captures calls
@@ -25,7 +28,11 @@ class MockLoggerService extends LoggerService {
     this.logs.push({ level: "info", message, data });
   }
 
-  override error(message: string, error?: unknown, data?: Record<string, unknown>): void {
+  override error(
+    message: string,
+    error?: unknown,
+    data?: Record<string, unknown>,
+  ): void {
     this.logs.push({ level: "error", message, data: { error, ...data } });
   }
 
@@ -45,7 +52,11 @@ class MockLoggerService extends LoggerService {
 // Mock Home Assistant client
 class MockHomeAssistantClient extends HomeAssistantClient {
   private mockStates = new Map<string, { state: string }>();
-  private serviceCalls: Array<{ entityId: string; service: string; data?: any }> = [];
+  private serviceCalls: Array<{
+    entityId: string;
+    service: string;
+    data?: any;
+  }> = [];
 
   constructor() {
     super();
@@ -66,9 +77,13 @@ class MockHomeAssistantClient extends HomeAssistantClient {
     domain: string,
     service: string,
     valueType: { type: string; key: string },
-    value: any
+    value: any,
   ) {
-    this.serviceCalls.push({ entityId, service: `${domain}.${service}`, data: { [valueType.key]: value } });
+    this.serviceCalls.push({
+      entityId,
+      service: `${domain}.${service}`,
+      data: { [valueType.key]: value },
+    });
   }
 
   // Mock callService method for turn_off
@@ -76,7 +91,7 @@ class MockHomeAssistantClient extends HomeAssistantClient {
     this.serviceCalls.push({
       entityId: serviceCall.entity_id,
       service: `${serviceCall.domain}.${serviceCall.service}`,
-      data: serviceCall.service_data
+      data: serviceCall.service_data,
     });
   }
 
@@ -123,8 +138,8 @@ const mockHvacOptions: HvacOptions = {
     temperature: 24.0,
     presetMode: "eco",
     temperatureThresholds: {
-      indoorMin: 23.0,  // Turn OFF when below this
-      indoorMax: 26.0,  // Turn ON when above this
+      indoorMin: 23.0, // Turn OFF when below this
+      indoorMax: 26.0, // Turn ON when above this
       outdoorMin: 10.0,
       outdoorMax: 45.0,
     },
@@ -139,7 +154,7 @@ const mockHvacOptions: HvacOptions = {
 
 describe("Individual HVAC Unit Cooling Control", () => {
   setupTestLogging();
-  
+
   let mockLogger: MockLoggerService;
   let mockHaClient: MockHomeAssistantClient;
   let stateMachine: HVACStateMachine;
@@ -147,24 +162,27 @@ describe("Individual HVAC Unit Cooling Control", () => {
   beforeEach(() => {
     mockLogger = new MockLoggerService();
     mockHaClient = new MockHomeAssistantClient();
-    
+
     // Set up mock temperature sensors for each unit
     mockHaClient.setMockState("sensor.living_room_ac_temperature", "25.0"); // Between thresholds
-    mockHaClient.setMockState("sensor.bedroom_ac_temperature", "27.5");     // Above max (should turn ON)
-    mockHaClient.setMockState("sensor.office_ac_temperature", "22.0");      // Below min (should turn OFF)
-    
+    mockHaClient.setMockState("sensor.bedroom_ac_temperature", "27.5"); // Above max (should turn ON)
+    mockHaClient.setMockState("sensor.office_ac_temperature", "22.0"); // Below min (should turn OFF)
+
     // Create state machine with mocks - pass logger and client to createHVACMachine
     stateMachine = new HVACStateMachine(mockHvacOptions, mockHaClient);
   });
 
   describe("deriveTemperatureSensor helper", () => {
     test("should correctly derive temperature sensor names", () => {
-      expect(deriveTemperatureSensor("climate.living_room_ac"))
-        .toBe("sensor.living_room_ac_temperature");
-      expect(deriveTemperatureSensor("climate.bedroom_ac"))
-        .toBe("sensor.bedroom_ac_temperature");
-      expect(deriveTemperatureSensor("climate.office_ac"))
-        .toBe("sensor.office_ac_temperature");
+      expect(deriveTemperatureSensor("climate.living_room_ac")).toBe(
+        "sensor.living_room_ac_temperature",
+      );
+      expect(deriveTemperatureSensor("climate.bedroom_ac")).toBe(
+        "sensor.bedroom_ac_temperature",
+      );
+      expect(deriveTemperatureSensor("climate.office_ac")).toBe(
+        "sensor.office_ac_temperature",
+      );
     });
   });
 
@@ -175,7 +193,7 @@ describe("Individual HVAC Unit Cooling Control", () => {
 
       // Start state machine and trigger cooling by forcing transition to cooling state
       stateMachine.start();
-      
+
       // Set global conditions that meet cooling requirements
       stateMachine.send({
         type: "UPDATE_CONDITIONS",
@@ -186,19 +204,19 @@ describe("Individual HVAC Unit Cooling Control", () => {
           isWeekday: true,
         },
       });
-      
+
       // Force into cooling mode to test individual unit logic
-      stateMachine.send({ 
-        type: "MODE_CHANGE", 
+      stateMachine.send({
+        type: "MODE_CHANGE",
         mode: HVACMode.COOL,
-        temperature: 24.0 
+        temperature: 24.0,
       });
 
       // Allow some time for async operations
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
       const serviceCalls = mockHaClient.getServiceCalls();
-      
+
       // Verify that some service calls were made (individual unit control)
       expect(serviceCalls.length).toBeGreaterThan(0);
 
@@ -215,7 +233,7 @@ describe("Individual HVAC Unit Cooling Control", () => {
       mockHaClient.setMockState("sensor.office_ac_temperature", "24.0");
 
       stateMachine.start();
-      
+
       // Force into cooling mode with acceptable room temperatures
       stateMachine.send({
         type: "UPDATE_CONDITIONS",
@@ -226,14 +244,14 @@ describe("Individual HVAC Unit Cooling Control", () => {
           isWeekday: true,
         },
       });
-      
-      stateMachine.send({ 
-        type: "MODE_CHANGE", 
+
+      stateMachine.send({
+        type: "MODE_CHANGE",
         mode: HVACMode.COOL,
-        temperature: 24.0 
+        temperature: 24.0,
       });
 
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
       // Verify state machine reached cooling state
       expect(stateMachine.getCurrentState()).toBe("cooling");
@@ -244,8 +262,8 @@ describe("Individual HVAC Unit Cooling Control", () => {
     test("should handle mixed room temperatures correctly", async () => {
       // Set mixed temperatures: one hot, one cold, one acceptable
       mockHaClient.setMockState("sensor.living_room_ac_temperature", "27.0"); // > 26.0 (turn ON)
-      mockHaClient.setMockState("sensor.bedroom_ac_temperature", "22.5");     // < 23.0 (turn OFF)
-      mockHaClient.setMockState("sensor.office_ac_temperature", "24.5");      // 23-26 range (maintain)
+      mockHaClient.setMockState("sensor.bedroom_ac_temperature", "22.5"); // < 23.0 (turn OFF)
+      mockHaClient.setMockState("sensor.office_ac_temperature", "24.5"); // 23-26 range (maintain)
 
       stateMachine.start();
       stateMachine.send({
@@ -257,14 +275,14 @@ describe("Individual HVAC Unit Cooling Control", () => {
           isWeekday: true,
         },
       });
-      
-      stateMachine.send({ 
-        type: "MODE_CHANGE", 
+
+      stateMachine.send({
+        type: "MODE_CHANGE",
         mode: HVACMode.COOL,
-        temperature: 24.0 
+        temperature: 24.0,
       });
 
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 50));
 
       // Verify state machine reached cooling state
       expect(stateMachine.getCurrentState()).toBe("cooling");
@@ -275,8 +293,12 @@ describe("Individual HVAC Unit Cooling Control", () => {
     test("should create state machine with correct configuration", () => {
       // Test that state machine is created with correct HVAC options
       expect(mockHvacOptions.hvacEntities.length).toBe(3);
-      expect(mockHvacOptions.cooling.temperatureThresholds.indoorMax).toBe(26.0);
-      expect(mockHvacOptions.cooling.temperatureThresholds.indoorMin).toBe(23.0);
+      expect(mockHvacOptions.cooling.temperatureThresholds.indoorMax).toBe(
+        26.0,
+      );
+      expect(mockHvacOptions.cooling.temperatureThresholds.indoorMin).toBe(
+        23.0,
+      );
       expect(mockHvacOptions.systemMode).toBe(SystemMode.AUTO);
     });
   });

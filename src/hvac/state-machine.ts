@@ -15,31 +15,34 @@ import {
 } from "../types/common.ts";
 import { StateError } from "../core/exceptions.ts";
 import { LoggerService } from "../core/logging.ts";
-import { HomeAssistantClient, deriveTemperatureSensor } from "../home-assistant/client.ts";
+import {
+  HomeAssistantClient,
+  deriveTemperatureSensor,
+} from "../home-assistant/client.ts";
 
 /**
  * Simplified HVAC events that can trigger state transitions
  */
 export type HVACEvent =
   | {
-    type: "MODE_CHANGE";
-    mode: HVACMode;
-    temperature?: number;
-  }
+      type: "MODE_CHANGE";
+      mode: HVACMode;
+      temperature?: number;
+    }
   | { type: "AUTO_EVALUATE" }
   | { type: "DEFROST_NEEDED" }
   | { type: "DEFROST_COMPLETE" }
   | { type: "OFF" }
   | {
-    type: "UPDATE_CONDITIONS";
-    data: Partial<HVACContext>;
-    eventSource?: {
-      type: string;
-      entityId?: string;
-      newValue?: string;
-      [key: string]: any;
-    };
-  }
+      type: "UPDATE_CONDITIONS";
+      data: Partial<HVACContext>;
+      eventSource?: {
+        type: string;
+        entityId?: string;
+        newValue?: string;
+        [key: string]: any;
+      };
+    }
   | { type: "MANUAL_OVERRIDE"; mode: HVACMode; temperature?: number };
 
 /**
@@ -71,7 +74,7 @@ export class HVACStrategy {
     timestamp: number;
   };
 
-  constructor(private hvacOptions: HvacOptions) { }
+  constructor(private hvacOptions: HvacOptions) {}
 
   /**
    * Unified evaluation method that returns all condition checks
@@ -396,7 +399,7 @@ export class HVACStrategy {
     // Turn off if temperature is within comfortable range (neither heating nor cooling needed)
     const needsHeating = this.shouldHeat(data);
     const needsCooling = this.shouldCool(data);
-    
+
     // If neither heating nor cooling is needed, turn off
     return !needsHeating && !needsCooling;
   }
@@ -699,7 +702,7 @@ export function createHVACMachine(
             try {
               // Derive temperature sensor for this unit
               const tempSensorId = deriveTemperatureSensor(entity.entityId);
-              
+
               // Get current room temperature
               const tempState = await haClient.getState(tempSensorId);
               const roomTemp = parseFloat(tempState.state);
@@ -713,7 +716,9 @@ export function createHVACMachine(
               });
 
               // Individual unit decision logic
-              if (roomTemp > hvacOptions.cooling.temperatureThresholds.indoorMax) {
+              if (
+                roomTemp > hvacOptions.cooling.temperatureThresholds.indoorMax
+              ) {
                 // Turn ON cooling - room too hot
                 await controlHVACEntity(
                   haClient,
@@ -726,10 +731,16 @@ export function createHVACMachine(
                 logger.info("❄️ Unit turned ON - room too hot", {
                   entityId: entity.entityId,
                   roomTemp,
-                  threshold: hvacOptions.cooling.temperatureThresholds.indoorMax,
-                  excess: (roomTemp - hvacOptions.cooling.temperatureThresholds.indoorMax).toFixed(1),
+                  threshold:
+                    hvacOptions.cooling.temperatureThresholds.indoorMax,
+                  excess: (
+                    roomTemp -
+                    hvacOptions.cooling.temperatureThresholds.indoorMax
+                  ).toFixed(1),
                 });
-              } else if (roomTemp < hvacOptions.cooling.temperatureThresholds.indoorMin) {
+              } else if (
+                roomTemp < hvacOptions.cooling.temperatureThresholds.indoorMin
+              ) {
                 // Turn OFF cooling - room cool enough
                 await controlHVACEntity(
                   haClient,
@@ -742,22 +753,35 @@ export function createHVACMachine(
                 logger.info("🔴 Unit turned OFF - room cool enough", {
                   entityId: entity.entityId,
                   roomTemp,
-                  threshold: hvacOptions.cooling.temperatureThresholds.indoorMin,
-                  deficit: (hvacOptions.cooling.temperatureThresholds.indoorMin - roomTemp).toFixed(1),
+                  threshold:
+                    hvacOptions.cooling.temperatureThresholds.indoorMin,
+                  deficit: (
+                    hvacOptions.cooling.temperatureThresholds.indoorMin -
+                    roomTemp
+                  ).toFixed(1),
                 });
               } else {
                 // Room temperature in acceptable range - maintain current state
-                logger.info("✅ Unit state maintained - room temperature acceptable", {
-                  entityId: entity.entityId,
-                  roomTemp,
-                  minThreshold: hvacOptions.cooling.temperatureThresholds.indoorMin,
-                  maxThreshold: hvacOptions.cooling.temperatureThresholds.indoorMax,
-                });
+                logger.info(
+                  "✅ Unit state maintained - room temperature acceptable",
+                  {
+                    entityId: entity.entityId,
+                    roomTemp,
+                    minThreshold:
+                      hvacOptions.cooling.temperatureThresholds.indoorMin,
+                    maxThreshold:
+                      hvacOptions.cooling.temperatureThresholds.indoorMax,
+                  },
+                );
               }
             } catch (error) {
-              logger.error("❌ Failed to control cooling entity individually", error, {
-                entityId: entity.entityId,
-              });
+              logger.error(
+                "❌ Failed to control cooling entity individually",
+                error,
+                {
+                  entityId: entity.entityId,
+                },
+              );
             }
           }
         },

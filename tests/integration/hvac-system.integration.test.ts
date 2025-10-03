@@ -414,14 +414,18 @@ test("Configuration Validation Integration", async () => {
 test("Individual Cooling Control Integration", async () => {
   // Create a mock HA client that supports individual room sensors
   class EnhancedMockHomeAssistantClient extends MockHomeAssistantClient {
-    private serviceCalls: Array<{ entityId: string; service: string; data?: any }> = [];
+    private serviceCalls: Array<{
+      entityId: string;
+      service: string;
+      data?: any;
+    }> = [];
 
     constructor() {
       super();
       // Add room temperature sensors for individual control testing
       this.setMockState("sensor.living_room_ac_temperature", "27.0"); // Above max
-      this.setMockState("sensor.bedroom_ac_temperature", "22.0");     // Below min  
-      this.setMockState("sensor.office_ac_temperature", "24.5");      // In range
+      this.setMockState("sensor.bedroom_ac_temperature", "22.0"); // Below min
+      this.setMockState("sensor.office_ac_temperature", "24.5"); // In range
     }
 
     // Mock controlEntity for tracking service calls
@@ -430,12 +434,12 @@ test("Individual Cooling Control Integration", async () => {
       domain: string,
       service: string,
       valueType: { type: string; key: string },
-      value: any
+      value: any,
     ) {
-      this.serviceCalls.push({ 
-        entityId, 
-        service: `${domain}.${service}`, 
-        data: { [valueType.key]: value } 
+      this.serviceCalls.push({
+        entityId,
+        service: `${domain}.${service}`,
+        data: { [valueType.key]: value },
       });
     }
 
@@ -444,14 +448,14 @@ test("Individual Cooling Control Integration", async () => {
       this.serviceCalls.push({
         entityId: serviceCall.entity_id,
         service: `${serviceCall.domain}.${serviceCall.service}`,
-        data: serviceCall.service_data || {}
+        data: serviceCall.service_data || {},
       });
     }
 
     setMockState(entityId: string, temperature: string) {
-      this.mockStates.set(entityId, { 
-        state: temperature, 
-        attributes: { unit_of_measurement: "°C" } 
+      this.mockStates.set(entityId, {
+        state: temperature,
+        attributes: { unit_of_measurement: "°C" },
       });
     }
 
@@ -474,10 +478,10 @@ test("Individual Cooling Control Integration", async () => {
     ],
     cooling: {
       temperature: 24.0,
-      presetMode: "eco", 
+      presetMode: "eco",
       temperatureThresholds: {
-        indoorMin: 23.0,  // Units turn OFF below this
-        indoorMax: 26.0,  // Units turn ON above this
+        indoorMin: 23.0, // Units turn OFF below this
+        indoorMax: 26.0, // Units turn ON above this
         outdoorMin: 10.0,
         outdoorMax: 45.0,
       },
@@ -487,7 +491,7 @@ test("Individual Cooling Control Integration", async () => {
   const mockHaClient = new EnhancedMockHomeAssistantClient();
   const stateMachine = new HVACStateMachine(
     multiUnitHvacOptions,
-    mockHaClient as any
+    mockHaClient as any,
   );
 
   // Start state machine
@@ -506,7 +510,7 @@ test("Individual Cooling Control Integration", async () => {
   stateMachine.send({ type: "AUTO_EVALUATE" });
 
   // Allow time for async operations
-  await new Promise(resolve => setTimeout(resolve, 50));
+  await new Promise((resolve) => setTimeout(resolve, 50));
 
   // Verify individual unit decisions
   const serviceCalls = mockHaClient.getServiceCalls();
@@ -519,8 +523,12 @@ test("Individual Cooling Control Integration", async () => {
 
   // Verify configuration supports individual cooling
   expect(multiUnitHvacOptions.hvacEntities.length).toBe(3);
-  expect(multiUnitHvacOptions.cooling.temperatureThresholds.indoorMax).toBe(26.0);
-  expect(multiUnitHvacOptions.cooling.temperatureThresholds.indoorMin).toBe(23.0);
+  expect(multiUnitHvacOptions.cooling.temperatureThresholds.indoorMax).toBe(
+    26.0,
+  );
+  expect(multiUnitHvacOptions.cooling.temperatureThresholds.indoorMin).toBe(
+    23.0,
+  );
 
   stateMachine.stop();
 });

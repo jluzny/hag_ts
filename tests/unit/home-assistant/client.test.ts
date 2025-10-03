@@ -3,7 +3,11 @@
  */
 
 import { expect, test, describe } from "bun:test";
-import { HomeAssistantClient, deriveSensorEntityId, deriveTemperatureSensor } from "../../../src/home-assistant/client.ts";
+import {
+  HomeAssistantClient,
+  deriveSensorEntityId,
+  deriveTemperatureSensor,
+} from "../../../src/home-assistant/client.ts";
 import { HassOptions } from "../../../src/config/config.ts";
 import { ConnectionError } from "../../../src/core/exceptions.ts";
 import { HassServiceCallImpl } from "../../../src/home-assistant/models.ts";
@@ -124,7 +128,7 @@ describe("Entity ID Helper Functions", () => {
         "climate.living_room_ac",
         "climate",
         "sensor",
-        "temperature"
+        "temperature",
       );
       expect(result).toBe("sensor.living_room_ac_temperature");
     });
@@ -134,7 +138,7 @@ describe("Entity ID Helper Functions", () => {
         "switch.bedroom_light",
         "switch",
         "sensor",
-        "power"
+        "power",
       );
       expect(result).toBe("sensor.bedroom_light_power");
     });
@@ -144,7 +148,7 @@ describe("Entity ID Helper Functions", () => {
         "climate.first_floor_hall_ac",
         "climate",
         "sensor",
-        "humidity"
+        "humidity",
       );
       expect(result).toBe("sensor.first_floor_hall_ac_humidity");
     });
@@ -157,18 +161,23 @@ describe("Entity ID Helper Functions", () => {
     });
 
     test("should work with different room names", () => {
-      expect(deriveTemperatureSensor("climate.bedroom_ac"))
-        .toBe("sensor.bedroom_ac_temperature");
-      
-      expect(deriveTemperatureSensor("climate.matej_ac"))
-        .toBe("sensor.matej_ac_temperature");
-      
-      expect(deriveTemperatureSensor("climate.anicka_ac"))
-        .toBe("sensor.anicka_ac_temperature");
+      expect(deriveTemperatureSensor("climate.bedroom_ac")).toBe(
+        "sensor.bedroom_ac_temperature",
+      );
+
+      expect(deriveTemperatureSensor("climate.matej_ac")).toBe(
+        "sensor.matej_ac_temperature",
+      );
+
+      expect(deriveTemperatureSensor("climate.anicka_ac")).toBe(
+        "sensor.anicka_ac_temperature",
+      );
     });
 
     test("should handle complex entity names", () => {
-      const result = deriveTemperatureSensor("climate.first_floor_main_ac_unit");
+      const result = deriveTemperatureSensor(
+        "climate.first_floor_main_ac_unit",
+      );
       expect(result).toBe("sensor.first_floor_main_ac_unit_temperature");
     });
   });

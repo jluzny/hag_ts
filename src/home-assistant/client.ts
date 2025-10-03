@@ -363,9 +363,9 @@ export function deriveSensorEntityId(
   sourceEntityId: string,
   sourceDomain: string,
   targetDomain: string,
-  sensorName: string
+  sensorName: string,
 ): string {
-  const entityName = sourceEntityId.replace(`${sourceDomain}.`, '');
+  const entityName = sourceEntityId.replace(`${sourceDomain}.`, "");
   return `${targetDomain}.${entityName}_${sensorName}`;
 }
 
@@ -374,7 +374,7 @@ export function deriveSensorEntityId(
  * climate.living_room_ac -> sensor.living_room_ac_temperature
  */
 export function deriveTemperatureSensor(hvacEntityId: string): string {
-  return deriveSensorEntityId(hvacEntityId, 'climate', 'sensor', 'temperature');
+  return deriveSensorEntityId(hvacEntityId, "climate", "sensor", "temperature");
 }
 
 @injectable()
@@ -418,7 +418,7 @@ export class HomeAssistantClient {
     if (!this.actor) {
       this.actor = createActor(this.machine);
       this.actor.start();
-      
+
       // Set up permanent subscription to handle reconnections
       this.actor.subscribe((state) => {
         if (isConnectedState(state.value) && this.connected) {
@@ -459,7 +459,7 @@ export class HomeAssistantClient {
     if (this.connectedStateSetup) {
       return;
     }
-    
+
     const ws = this.actor?.getSnapshot().context.ws;
     if (ws) {
       (ws as WebSocket).onmessage = async (event: MessageEvent) => {
@@ -537,11 +537,11 @@ export class HomeAssistantClient {
     return context
       ? { ...context.stats }
       : {
-        totalConnections: 0,
-        totalReconnections: 0,
-        totalMessages: 0,
-        totalErrors: 0,
-      };
+          totalConnections: 0,
+          totalReconnections: 0,
+          totalMessages: 0,
+          totalErrors: 0,
+        };
   }
 
   /**
@@ -701,10 +701,10 @@ export class HomeAssistantClient {
       if (domain === "climate") {
         serviceCall = HassServiceCallImpl.climate(
           service as
-          | "set_hvac_mode"
-          | "set_temperature"
-          | "set_preset_mode"
-          | "turn_off",
+            | "set_hvac_mode"
+            | "set_temperature"
+            | "set_preset_mode"
+            | "turn_off",
           entityId,
           serviceData,
         );
@@ -938,16 +938,16 @@ export class HomeAssistantClient {
   private async subscribeToInitialEvents(): Promise<void> {
     try {
       // Add small delay to ensure WebSocket is fully ready after authentication
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       await this.subscribeEvents("state_changed");
     } catch (error) {
       this.logger.error("Failed to subscribe to initial events", error);
-      
+
       // Retry once after a longer delay for reconnection scenarios
       try {
         this.logger.info("Retrying event subscription after delay...");
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
         await this.subscribeEvents("state_changed");
       } catch (retryError) {
         this.logger.error("Event subscription retry also failed", retryError);

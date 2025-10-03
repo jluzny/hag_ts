@@ -48,13 +48,14 @@ Turn on all enabled HVAC entities using call_service script; check their status 
 
 1. Set different room temperatures to create mixed conditions:
    - Living room: hot (>26°C) - should turn ON cooling
-   - Bedroom: cool (<23°C) - should turn OFF cooling  
+   - Bedroom: cool (<23°C) - should turn OFF cooling
    - Office: comfortable (23-26°C) - should maintain current state
 2. Trigger global cooling evaluation with suitable outdoor conditions
 3. Verify each unit responds based on its individual room temperature
 4. Confirm service calls match expected individual unit logic
 
 **Expected Individual Unit Behavior:**
+
 - `climate.living_room_ac`: Turn ON cooling (room temp 27.5°C > 26°C threshold)
 - `climate.bedroom_ac`: Turn OFF cooling (room temp 22°C < 23°C threshold)
 - `climate.office_ac`: Maintain state (room temp 24.5°C in 23-26°C range)
