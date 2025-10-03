@@ -11,8 +11,8 @@ hassOptions:
   wsUrl: "ws://192.168.0.204:8123/api/websocket"
   restUrl: "http://192.168.0.204:8123/api"
   token: "${HASS_HassOptions__Token}"
-  maxRetries: 10
-  retryDelayMs: 2000
+  maxRetries: 1000
+  retryDelayMs: 5000
   stateCheckInterval: 300000
 
 hvacOptions:
@@ -42,7 +42,7 @@ hvacOptions:
     presetMode: "windFreeSleep"
     temperatureThresholds:
       indoorMin: 19.5
-      indoorMax: 20.5
+      indoorMax: 22.0
       outdoorMin: -5.0
       outdoorMax: 15.0
     defrost:
@@ -68,4 +68,3 @@ hvacOptions:
     end: 20
 
   evaluationCacheMs: 100 # Cache evaluations for 100ms
-
