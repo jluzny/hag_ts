@@ -145,13 +145,13 @@ export class HVACStrategy {
 
       if (shouldHeat) {
         const targetTemp = this.hvacOptions.heating.temperature;
-        const tempDiff = targetTemp - data.currentTemp;
         const minThreshold = this.hvacOptions.heating.temperatureThresholds.indoorMin;
         const maxThreshold = this.hvacOptions.heating.temperatureThresholds.indoorMax;
+        const maxDiff = maxThreshold - data.currentTemp;
 
         return {
           code: "heating_required",
-          description: `Heating - indoor ${data.currentTemp}°C is ${tempDiff.toFixed(1)}°C below target (${targetTemp}°C)`,
+          description: `Heating - indoor ${data.currentTemp}°C is ${maxDiff.toFixed(1)}°C below maximum threshold (${maxThreshold}°C)`,
           getLogData: () => ({
             ...baseLogData,
             mode: "HEAT",
