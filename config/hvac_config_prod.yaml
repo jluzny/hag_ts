@@ -28,10 +28,10 @@ hvacOptions:
       enabled: false
       defrost: false
     - entityId: "climate.matej_ac"
-      enabled: true
+      enabled: false
       defrost: false
     - entityId: "climate.anicka_ac"
-      enabled: true
+      enabled: false
       defrost: false
     - entityId: "climate.radek_ac"
       enabled: true
@@ -41,7 +41,7 @@ hvacOptions:
     temperature: 21.0
     presetMode: "wind_free_sleep"
     temperatureThresholds:
-      indoorMin: 20.5
+      indoorMin: 21.0
       indoorMax: 22.0
       outdoorMin: -5.0
       outdoorMax: 15.0
