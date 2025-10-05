@@ -238,7 +238,7 @@ describe("Discover Sensors E2E Tests", () => {
     expect(tableData.length).toBeGreaterThan(0);
 
     // Verify table structure
-    tableData.forEach((row) => {
+    tableData.forEach((row: any) => {
       expect(row).toHaveProperty("entityId");
       expect(row).toHaveProperty("friendlyName");
       expect(row).toHaveProperty("value");

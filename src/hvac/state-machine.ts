@@ -144,19 +144,22 @@ export class HVACStrategy {
         };
 
       if (shouldHeat) {
-        const tempDiff =
-          this.hvacOptions.heating.temperatureThresholds.indoorMin -
-          data.currentTemp;
+        const targetTemp = this.hvacOptions.heating.temperature;
+        const tempDiff = targetTemp - data.currentTemp;
+        const minThreshold = this.hvacOptions.heating.temperatureThresholds.indoorMin;
+
         return {
           code: "heating_required",
-          description: `Heating - indoor ${data.currentTemp}°C is ${tempDiff.toFixed(1)}°C below min`,
+          description: `Heating - indoor ${data.currentTemp}°C is ${tempDiff.toFixed(1)}°C below target (${targetTemp}°C)`,
           getLogData: () => ({
             ...baseLogData,
             mode: "HEAT",
             thresholds: {
-              minIndoor: `${this.hvacOptions.heating.temperatureThresholds.indoorMin}°C`,
+              targetTemp: `${targetTemp}°C`,
+              minIndoor: `${minThreshold}°C`,
               outdoorRange: `${this.hvacOptions.heating.temperatureThresholds.outdoorMin}°C - ${this.hvacOptions.heating.temperatureThresholds.outdoorMax}°C`,
             },
+            hysteresisBehavior: `Will continue heating until reaching ${targetTemp}°C target`,
           }),
         };
       }
@@ -208,16 +211,32 @@ export class HVACStrategy {
   private shouldHeat(data: StateChangeData): boolean {
     const { heating } = this.hvacOptions;
     const thresholds = heating.temperatureThresholds;
+    const targetTemp = heating.temperature;
 
-    // Check temperature conditions
+    // Check temperature conditions - comprehensive validation
     if (data.currentTemp >= thresholds.indoorMax) {
       this.logger.debug(
         "❌ Heating not activated - indoor temp at/above maximum",
         {
           currentTemp: `${data.currentTemp}°C`,
           maxThreshold: `${thresholds.indoorMax}°C`,
+          targetTemp: `${targetTemp}°C`,
           reason:
-            "Indoor temperature is already at or above maximum heating threshold",
+            "Indoor temperature is already at or above maximum threshold",
+        },
+      );
+      return false;
+    }
+
+    // NEW: Don't heat if already at or above target temperature
+    if (data.currentTemp >= targetTemp) {
+      this.logger.debug(
+        "❌ Heating not activated - indoor temp at/above target",
+        {
+          currentTemp: `${data.currentTemp}°C`,
+          targetTemp: `${targetTemp}°C`,
+          minThreshold: `${thresholds.indoorMin}°C`,
+          reason: "Indoor temperature is already at or above target temperature",
         },
       );
       return false;
@@ -234,6 +253,7 @@ export class HVACStrategy {
 
       this.logger.debug("❌ Heating not activated - invalid conditions", {
         currentTemp: `${data.currentTemp}°C`,
+        targetTemp: `${targetTemp}°C`,
         outdoorTemp: `${data.weatherTemp}°C`,
         timeCheck: timeReason,
         temperatureCheck: tempReason,
@@ -242,21 +262,28 @@ export class HVACStrategy {
       return false;
     }
 
-    const shouldHeat = data.currentTemp < thresholds.indoorMin;
+    // FIXED: Heat when below target temperature AND below maximum threshold
+    // This creates proper hysteresis: starts at min threshold (20.7°C), stops at target (21.0°C)
+    const shouldHeat = data.currentTemp < targetTemp && data.currentTemp < thresholds.indoorMax;
 
     if (shouldHeat) {
       this.logger.debug("✅ Heating conditions met", {
         currentTemp: `${data.currentTemp}°C`,
+        targetTemp: `${targetTemp}°C`,
         minThreshold: `${thresholds.indoorMin}°C`,
-        tempDeficit: `${(thresholds.indoorMin - data.currentTemp).toFixed(1)}°C below minimum`,
+        tempDeficit: `${(targetTemp - data.currentTemp).toFixed(1)}°C below target`,
         outdoorTemp: `${data.weatherTemp}°C (within ${thresholds.outdoorMin}°C-${thresholds.outdoorMax}°C range)`,
         timeOfDay: `${data.hour}:00 ${data.isWeekday ? "weekday" : "weekend"}`,
+        hysteresisInfo: `Heating will continue until reaching ${targetTemp}°C target`,
       });
     } else {
       this.logger.debug("ℹ️ Heating not needed", {
         currentTemp: `${data.currentTemp}°C`,
+        targetTemp: `${targetTemp}°C`,
         minThreshold: `${thresholds.indoorMin}°C`,
-        tempAboveMin: `${(data.currentTemp - thresholds.indoorMin).toFixed(1)}°C above minimum`,
+        reason: data.currentTemp >= targetTemp
+          ? "Temperature at or above target"
+          : "Temperature above minimum threshold",
       });
     }
 
@@ -389,11 +416,44 @@ export class HVACStrategy {
   }
 
   /**
+   * Check if target temperature has been reached
+   */
+  private hasReachedTargetTemperature(data: StateChangeData): boolean {
+    const targetTemp = this.hvacOptions.heating.temperature;
+    const hasReachedTarget = data.currentTemp >= targetTemp;
+
+    if (hasReachedTarget) {
+      this.logger.debug("🎯 Target temperature reached", {
+        currentTemp: `${data.currentTemp}°C`,
+        targetTemp: `${targetTemp}°C`,
+        difference: `${(data.currentTemp - targetTemp).toFixed(1)}°C above target`,
+      });
+    }
+
+    return hasReachedTarget;
+  }
+
+  /**
    * Check if we should turn off all entities
    */
   shouldTurnOff(data: StateChangeData): boolean {
     // Turn off if outside active hours
     if (!this.isActiveHour(data.hour, data.isWeekday)) {
+      this.logger.debug("🕐 Turn off required - outside active hours", {
+        currentHour: data.hour,
+        isWeekday: data.isWeekday,
+        activeHours: this.hvacOptions.activeHours,
+      });
+      return true;
+    }
+
+    // NEW: Turn off if target temperature has been reached (heating complete)
+    if (this.hasReachedTargetTemperature(data)) {
+      this.logger.debug("🎯 Turn off heating - target temperature reached", {
+        currentTemp: `${data.currentTemp}°C`,
+        targetTemp: `${this.hvacOptions.heating.temperature}°C`,
+        reason: "Heating cycle completed - target reached",
+      });
       return true;
     }
 
@@ -402,7 +462,19 @@ export class HVACStrategy {
     const needsCooling = this.shouldCool(data);
 
     // If neither heating nor cooling is needed, turn off
-    return !needsHeating && !needsCooling;
+    const shouldTurnOff = !needsHeating && !needsCooling;
+
+    if (shouldTurnOff) {
+      this.logger.debug("🔄 Turn off required - comfortable temperature maintained", {
+        currentTemp: `${data.currentTemp}°C`,
+        targetTemp: `${this.hvacOptions.heating.temperature}°C`,
+        needsHeating,
+        needsCooling,
+        reason: "Temperature in comfortable range",
+      });
+    }
+
+    return shouldTurnOff;
   }
 }
 
