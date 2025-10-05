@@ -416,21 +416,23 @@ export class HVACStrategy {
   }
 
   /**
-   * Check if target temperature has been reached
+   * Check if maximum temperature threshold has been reached (for proper hysteresis)
    */
-  private hasReachedTargetTemperature(data: StateChangeData): boolean {
-    const targetTemp = this.hvacOptions.heating.temperature;
-    const hasReachedTarget = data.currentTemp >= targetTemp;
+  private hasReachedMaximumTemperature(data: StateChangeData): boolean {
+    const maxThreshold = this.hvacOptions.heating.temperatureThresholds.indoorMax;
+    const hasReachedMax = data.currentTemp >= maxThreshold;
 
-    if (hasReachedTarget) {
-      this.logger.debug("🎯 Target temperature reached", {
+    if (hasReachedMax) {
+      this.logger.debug("🎯 Maximum temperature reached - heating cycle complete", {
         currentTemp: `${data.currentTemp}°C`,
-        targetTemp: `${targetTemp}°C`,
-        difference: `${(data.currentTemp - targetTemp).toFixed(1)}°C above target`,
+        maxThreshold: `${maxThreshold}°C`,
+        targetTemp: `${this.hvacOptions.heating.temperature}°C`,
+        difference: `${(data.currentTemp - maxThreshold).toFixed(1)}°C above maximum threshold`,
+        hysteresisInfo: `Heating started at ${this.hvacOptions.heating.temperatureThresholds.indoorMin}°C, stopping at ${maxThreshold}°C`,
       });
     }
 
-    return hasReachedTarget;
+    return hasReachedMax;
   }
 
   /**
@@ -447,12 +449,13 @@ export class HVACStrategy {
       return true;
     }
 
-    // NEW: Turn off if target temperature has been reached (heating complete)
-    if (this.hasReachedTargetTemperature(data)) {
-      this.logger.debug("🎯 Turn off heating - target temperature reached", {
+    // FIXED: Turn off if maximum temperature threshold has been reached (proper hysteresis)
+    if (this.hasReachedMaximumTemperature(data)) {
+      this.logger.debug("🎯 Turn off heating - maximum threshold reached", {
         currentTemp: `${data.currentTemp}°C`,
+        maxThreshold: `${this.hvacOptions.heating.temperatureThresholds.indoorMax}°C`,
         targetTemp: `${this.hvacOptions.heating.temperature}°C`,
-        reason: "Heating cycle completed - target reached",
+        reason: "Heating cycle completed - maximum threshold reached for anti-cycling",
       });
       return true;
     }
