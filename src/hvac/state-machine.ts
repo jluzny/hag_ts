@@ -147,6 +147,7 @@ export class HVACStrategy {
         const targetTemp = this.hvacOptions.heating.temperature;
         const tempDiff = targetTemp - data.currentTemp;
         const minThreshold = this.hvacOptions.heating.temperatureThresholds.indoorMin;
+        const maxThreshold = this.hvacOptions.heating.temperatureThresholds.indoorMax;
 
         return {
           code: "heating_required",
@@ -157,9 +158,10 @@ export class HVACStrategy {
             thresholds: {
               targetTemp: `${targetTemp}°C`,
               minIndoor: `${minThreshold}°C`,
+              maxIndoor: `${maxThreshold}°C`,
               outdoorRange: `${this.hvacOptions.heating.temperatureThresholds.outdoorMin}°C - ${this.hvacOptions.heating.temperatureThresholds.outdoorMax}°C`,
             },
-            hysteresisBehavior: `Will continue heating until reaching ${targetTemp}°C target`,
+            hysteresisBehavior: `Will continue heating until reaching ${maxThreshold}°C maximum threshold (target: ${targetTemp}°C)`,
           }),
         };
       }
@@ -274,7 +276,7 @@ export class HVACStrategy {
         tempDeficit: `${(targetTemp - data.currentTemp).toFixed(1)}°C below target`,
         outdoorTemp: `${data.weatherTemp}°C (within ${thresholds.outdoorMin}°C-${thresholds.outdoorMax}°C range)`,
         timeOfDay: `${data.hour}:00 ${data.isWeekday ? "weekday" : "weekend"}`,
-        hysteresisInfo: `Heating will continue until reaching ${targetTemp}°C target`,
+        hysteresisInfo: `Heating will continue until reaching ${thresholds.indoorMax}°C maximum threshold (target: ${targetTemp}°C)`,
       });
     } else {
       this.logger.debug("ℹ️ Heating not needed", {
