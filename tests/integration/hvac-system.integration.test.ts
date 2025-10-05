@@ -70,7 +70,7 @@ const mockSettings: Settings = {
 // Mock Home Assistant client that doesn't make real network calls
 class MockHomeAssistantClient {
   private _connected = false;
-  private mockStates = new Map<
+  protected mockStates = new Map<
     string,
     { state: string; attributes: Record<string, unknown> }
   >();
@@ -101,21 +101,31 @@ class MockHomeAssistantClient {
     return this._connected;
   }
 
-  getState(entityId: string) {
+  async getState(entityId: string) {
     const mockState = this.mockStates.get(entityId);
     if (!mockState) {
       throw new Error(`Entity ${entityId} not found`);
     }
 
+    // Return a proper HassStateImpl-like object
     return {
       entityId,
       state: mockState.state,
       attributes: mockState.attributes,
+      lastChanged: new Date(),
+      lastUpdated: new Date(),
       getNumericState: () => parseFloat(mockState.state),
+      isValidTemperature: function () {
+        const temp = this.getNumericState();
+        return temp !== null && temp >= -50 && temp <= 60;
+      },
+      getUnit: function () {
+        return (this.attributes.unit_of_measurement as string) || null;
+      },
     };
   }
 
-  callService(): Promise<void> {
+  async callService(serviceCall?: any): Promise<void> {
     // Mock service call - just resolve
     return Promise.resolve();
   }
@@ -195,8 +205,8 @@ test("HVAC Integration - Setup and basic functionality", async () => {
 
   // In mock environment, the controller should be able to read sensor states
   // Test that the mock Home Assistant client can provide temperature data
-  const indoorTemp = mockHaClient.getState("sensor.indoor_temperature");
-  const outdoorTemp = mockHaClient.getState("sensor.outdoor_temperature");
+  const indoorTemp = await mockHaClient.getState("sensor.indoor_temperature");
+  const outdoorTemp = await mockHaClient.getState("sensor.outdoor_temperature");
 
   expect(indoorTemp.state).toBe("22.5");
   expect(outdoorTemp.state).toBe("15.0");

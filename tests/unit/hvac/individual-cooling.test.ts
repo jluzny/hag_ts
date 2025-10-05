@@ -68,7 +68,22 @@ class MockHomeAssistantClient extends HomeAssistantClient {
     if (!state) {
       throw new Error(`Entity ${entityId} not found`);
     }
-    return state;
+    // Return a proper HassStateImpl-like object
+    return {
+      entityId,
+      state: state.state,
+      attributes: { unit_of_measurement: "°C" },
+      lastChanged: new Date(),
+      lastUpdated: new Date(),
+      getNumericState: () => parseFloat(state.state),
+      isValidTemperature: function () {
+        const temp = this.getNumericState();
+        return temp !== null && temp >= -50 && temp <= 60;
+      },
+      getUnit: function () {
+        return (this.attributes.unit_of_measurement as string) || null;
+      },
+    };
   }
 
   // Mock controlEntity method to track service calls
@@ -93,6 +108,44 @@ class MockHomeAssistantClient extends HomeAssistantClient {
       service: `${serviceCall.domain}.${serviceCall.service}`,
       data: serviceCall.service_data,
     });
+  }
+
+  // Required methods from HomeAssistantClient
+  async connect(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  async disconnect(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  get connected(): boolean {
+    return true;
+  }
+
+  async subscribeEvents(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  addEventHandler(): void {
+    // Mock implementation
+  }
+
+  removeEventHandler(): void {
+    // Mock implementation
+  }
+
+  onStateChanged(): void {
+    // Mock implementation
+  }
+
+  getStats() {
+    return {
+      totalConnections: 1,
+      totalReconnections: 0,
+      totalMessages: 0,
+      totalErrors: 0,
+    };
   }
 
   // Test helpers
