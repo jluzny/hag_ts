@@ -125,7 +125,7 @@ class MockHomeAssistantClient {
     };
   }
 
-  async callService(serviceCall?: any): Promise<void> {
+  async callService(_serviceCall?: any): Promise<void> {
     // Mock service call - just resolve
     return Promise.resolve();
   }

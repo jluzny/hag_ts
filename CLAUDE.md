@@ -31,34 +31,6 @@ bun run prod                 # Production mode
 bun run prod:build           # Build for production
 ```
 
-### HVAC Testing Scripts
-
-The `scripts/` directory contains testing utilities that automatically load configuration from `config/hvac_config_dev.yaml`. All scripts use the correct Home Assistant URLs and authentication tokens from the config.
-
-```bash
-# Service calls - control HVAC entities directly
-bun run scripts/call_service.ts <domain>.<service> [--entity_id <entity>] [--key value]
-bun run scripts/call_service.ts climate.turn_off --entity_id climate.living_room_ac
-bun run scripts/call_service.ts climate.set_hvac_mode --entity_id climate.living_room_ac --hvac_mode cool
-
-# Status checking - validate current system state
-bun scripts/check_hvac_status.ts                  # Check all configured HVAC entities
-bun scripts/list_entities.ts climate              # Discover available climate entities
-bun scripts/discover_sensors.ts                   # Find temperature/outdoor sensors
-
-# Testing prompts - see scripts/hvac_prompts.md for test sequences
-# Scripts support timeout commands and can be chained for complex test scenarios
-```
-
-### Testing Methodology
-
-For testing HVAC automation behavior:
-
-1. Use service calls to set initial HVAC states
-2. Run the app with timeout to observe decision-making
-3. Validate final states match expected behavior
-4. Check logs for human-readable decision explanations
-
 ### Testing
 
 ```bash
@@ -68,7 +40,31 @@ bun run test:integration     # Integration tests only
 bun run test:performance     # Performance tests only
 bun run test:watch           # Watch mode
 bun run test:coverage        # With coverage
+bun test tests/e2e/          # E2E tests only
 ```
+
+### E2E Tests
+
+The `tests/e2e/` directory contains end-to-end tests that validate the full HVAC system functionality with real Home Assistant integration. These tests have been migrated from the original `scripts/` directory to provide proper test structure and automation.
+
+Available E2E Tests:
+- `hvac-status.e2e.test.ts` - Check HVAC entity status and state structure
+- `heating-windfree.e2e.test.ts` - Test heating with WindFree preset mode
+- `call-service.e2e.test.ts` - Test Home Assistant service calls
+- `list-entities.e2e.test.ts` - Discover and list available entities
+- `discover-sensors.e2e.test.ts` - Find and categorize temperature sensors
+- `simulate-sensor-change.e2e.test.ts` - Test sensor change simulation and HVAC evaluation
+- `check-climate-details.e2e.test.ts` - Get detailed climate entity information
+
+### Testing Methodology
+
+For testing HVAC automation behavior:
+
+1. Run E2E tests for full system validation: `bun test tests/e2e/`
+2. Use service call tests to set initial HVAC states
+3. Run HVAC controller tests to observe decision-making
+4. Validate final states match expected behavior through test assertions
+5. Check logs for human-readable decision explanations
 
 ### Quality & Build
 
@@ -182,6 +178,14 @@ tests/
 ├── integration/          # System integration tests
 │   ├── home-assistant.integration.test.ts
 │   └── hvac-system.integration.test.ts
+├── e2e/                  # End-to-end tests (migrated from scripts/)
+│   ├── hvac-status.e2e.test.ts
+│   ├── heating-windfree.e2e.test.ts
+│   ├── call-service.e2e.test.ts
+│   ├── list-entities.e2e.test.ts
+│   ├── discover-sensors.e2e.test.ts
+│   ├── simulate-sensor-change.e2e.test.ts
+│   └── check-climate-details.e2e.test.ts
 └── performance/          # Performance benchmarks
     └── state-machine.perf.test.ts
 ```

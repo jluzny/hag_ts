@@ -28,6 +28,7 @@ export type HVACEvent =
       type: "MODE_CHANGE";
       mode: HVACMode;
       temperature?: number;
+      presetMode?: string;
     }
   | { type: "AUTO_EVALUATE" }
   | { type: "DEFROST_NEEDED" }
@@ -439,6 +440,7 @@ export function createHVACMachine(
                   event.mode === HVACMode.HEAT &&
                   context.systemMode !== SystemMode.COOL_ONLY &&
                   context.systemMode !== SystemMode.OFF,
+                actions: "storeManualOverride",
               },
               {
                 target: "cooling",
@@ -446,6 +448,7 @@ export function createHVACMachine(
                   event.mode === HVACMode.COOL &&
                   context.systemMode !== SystemMode.HEAT_ONLY &&
                   context.systemMode !== SystemMode.OFF,
+                actions: "storeManualOverride",
               },
             ],
             AUTO_EVALUATE: {
@@ -594,6 +597,26 @@ export function createHVACMachine(
           } as any;
         }),
 
+        storeManualOverride: assign(({ context, event }) => {
+          if (event.type !== "MODE_CHANGE") return context;
+
+          logger.info(`🎯 [HVAC] Manual override stored from MODE_CHANGE`, {
+            mode: (event as any).mode,
+            temperature: (event as any).temperature,
+            presetMode: (event as any).presetMode,
+          });
+
+          return {
+            ...context,
+            manualOverride: {
+              mode: (event as any).mode,
+              temperature: (event as any).temperature,
+              presetMode: (event as any).presetMode,
+              timestamp: new Date(),
+            },
+          } as any;
+        }),
+
         updateConditions: assign(({ context, event }) => {
           if (event.type !== "UPDATE_CONDITIONS") return context;
 
@@ -637,7 +660,7 @@ export function createHVACMachine(
           });
         },
 
-        executeHeating: async () => {
+        executeHeating: async ({ context }: { context: HVACContext }) => {
           if (!haClient) {
             logger.warning(
               "⚠️ No Home Assistant client available for heating control",
@@ -649,10 +672,19 @@ export function createHVACMachine(
             (e) => e.enabled,
           );
 
+          // Use manual override preset mode if available, otherwise use config default
+          const presetMode =
+            context.manualOverride?.presetMode ??
+            hvacOptions.heating.presetMode;
+          const targetTemp =
+            context.manualOverride?.temperature ??
+            hvacOptions.heating.temperature;
+
           logger.info("🔥 Executing heating mode on entities", {
-            targetTemp: hvacOptions.heating.temperature,
-            presetMode: hvacOptions.heating.presetMode,
+            targetTemp,
+            presetMode,
             enabledEntities: enabledEntities.length,
+            isManualOverride: !!context.manualOverride,
           });
 
           for (const entity of enabledEntities) {
@@ -661,14 +693,14 @@ export function createHVACMachine(
                 haClient,
                 entity.entityId,
                 "heat",
-                hvacOptions.heating.temperature,
-                hvacOptions.heating.presetMode,
+                targetTemp,
+                presetMode,
                 logger,
               );
               logger.debug("✅ Heating entity controlled", {
                 entityId: entity.entityId,
-                temperature: hvacOptions.heating.temperature,
-                presetMode: hvacOptions.heating.presetMode,
+                temperature: targetTemp,
+                presetMode,
               });
             } catch (error) {
               logger.error("❌ Failed to control heating entity", error, {

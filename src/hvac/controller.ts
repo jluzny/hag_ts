@@ -19,8 +19,8 @@ import { HVACContext } from "../types/common.ts";
  * Mode change request event
  */
 class ModeChangeRequestEvent extends AppEvent {
-  constructor(mode: string, temperature?: number) {
-    super("hvac.mode_change_request", { mode, temperature });
+  constructor(mode: string, temperature?: number, presetMode?: string) {
+    super("hvac.mode_change_request", { mode, temperature, presetMode });
   }
 }
 
@@ -216,13 +216,14 @@ export class HVACController {
 
       const mode = options.mode as HVACMode;
       const temperature = options.temperature as number | undefined;
+      const presetMode = options.presetMode as string | undefined;
 
       if (!mode) {
         throw new HVACOperationError("Mode is required for manual override");
       }
 
       // Send mode change request event
-      const event = new ModeChangeRequestEvent(mode, temperature);
+      const event = new ModeChangeRequestEvent(mode, temperature, presetMode);
       this.eventBus.publishEvent(event);
 
       this.logger.info("✅ Manual override event published", {
@@ -494,11 +495,16 @@ export class HVACController {
    * Handle mode change requests
    */
   private handleModeChangeRequest(event: AppEvent): void {
-    const payload = event.payload as { mode: string; temperature?: number };
+    const payload = event.payload as {
+      mode: string;
+      temperature?: number;
+      presetMode?: string;
+    };
 
     this.logger.info("🎛️ Processing mode change request via state machine", {
       mode: payload.mode,
       temperature: payload.temperature,
+      presetMode: payload.presetMode,
     });
 
     // Send mode change event to state machine
@@ -506,6 +512,7 @@ export class HVACController {
       type: "MODE_CHANGE",
       mode: payload.mode as HVACMode,
       temperature: payload.temperature,
+      presetMode: payload.presetMode,
     });
   }
 

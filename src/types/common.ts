@@ -137,6 +137,7 @@ export interface HVACContext {
   manualOverride?: {
     mode: HVACMode;
     temperature?: number;
+    presetMode?: string;
     timestamp: Date;
   };
   currentEvaluation?: {
