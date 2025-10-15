@@ -40,11 +40,11 @@ hvacOptions:
       defrost: false
 
   heating:
-    temperature: 21.0
+    temperature: 21.5
     presetMode: "wind_free_sleep"
     temperatureThresholds:
-      indoorMin: 19.5
-      indoorMax: 22.5
+      indoorMin: 20.0
+      indoorMax: 23.0
       outdoorMin: -5.0
       outdoorMax: 15.0
     defrost:

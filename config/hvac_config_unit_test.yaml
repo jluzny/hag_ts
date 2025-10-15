@@ -26,11 +26,11 @@ hvacOptions:
       defrost: false
 
   heating:
-    temperature: 21.0
+    temperature: 21.5
     presetMode: "comfort"
     temperatureThresholds:
-      indoorMin: 19.0
-      indoorMax: 22.0
+      indoorMin: 19.5
+      indoorMax: 22.5
       outdoorMin: -10.0
       outdoorMax: 15.0
 
