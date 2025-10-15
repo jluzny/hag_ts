@@ -38,7 +38,7 @@ hvacOptions:
       defrost: false
 
   heating:
-    temperature: 21.5
+    temperature: 21.0
     presetMode: "wind_free_sleep"
     temperatureThresholds:
       indoorMin: 20.7
@@ -54,7 +54,7 @@ hvacOptions:
       durationSeconds: 300 # 5 minutes
 
   cooling:
-    temperature: 25
+    temperature: 24.3
     presetMode: "wind_free"
     temperatureThresholds:
       indoorMin: 24

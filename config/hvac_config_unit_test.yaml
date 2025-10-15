@@ -2,7 +2,7 @@
 # Simple configuration without environment variables for testing
 
 appOptions:
-  logLevel: "critical" # Minimize log noise in tests
+  logLevel: "error" # Minimize log noise in tests
   useAi: false
   aiModel: "gpt-4o-mini"
   aiTemperature: 0.1
