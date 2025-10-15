@@ -88,29 +88,51 @@ export const DefrostOptionsSchema = z.object({
 /**
  * Heating configuration schema
  */
-export const HeatingOptionsSchema = z.object({
-  temperature: z
-    .number()
-    .min(10)
-    .max(35)
-    .describe("Target heating temperature"),
-  presetMode: z.string().describe("Heating preset mode"),
-  temperatureThresholds: TemperatureThresholdsSchema,
-  defrost: DefrostOptionsSchema.optional().describe("Defrost configuration"),
-});
+export const HeatingOptionsSchema = z
+  .object({
+    temperature: z
+      .number()
+      .min(10)
+      .max(35)
+      .describe("Target heating temperature"),
+    presetMode: z.string().describe("Heating preset mode"),
+    temperatureThresholds: TemperatureThresholdsSchema,
+    defrost: DefrostOptionsSchema.optional().describe("Defrost configuration"),
+  })
+  .refine(
+    (data) =>
+      data.temperature >= data.temperatureThresholds.indoorMin &&
+      data.temperature <= data.temperatureThresholds.indoorMax,
+    {
+      message:
+        "Target temperature must be between indoorMin and indoorMax thresholds for proper hysteresis",
+      path: ["temperature"],
+    },
+  );
 
 /**
  * Cooling configuration schema
  */
-export const CoolingOptionsSchema = z.object({
-  temperature: z
-    .number()
-    .min(15)
-    .max(35)
-    .describe("Target cooling temperature"),
-  presetMode: z.string().describe("Cooling preset mode"),
-  temperatureThresholds: TemperatureThresholdsSchema,
-});
+export const CoolingOptionsSchema = z
+  .object({
+    temperature: z
+      .number()
+      .min(15)
+      .max(35)
+      .describe("Target cooling temperature"),
+    presetMode: z.string().describe("Cooling preset mode"),
+    temperatureThresholds: TemperatureThresholdsSchema,
+  })
+  .refine(
+    (data) =>
+      data.temperature >= data.temperatureThresholds.indoorMin &&
+      data.temperature <= data.temperatureThresholds.indoorMax,
+    {
+      message:
+        "Target temperature must be between indoorMin and indoorMax thresholds for proper hysteresis",
+      path: ["temperature"],
+    },
+  );
 
 /**
  * Active hours configuration schema

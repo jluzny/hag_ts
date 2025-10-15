@@ -145,8 +145,10 @@ export class HVACStrategy {
 
       if (shouldHeat) {
         const targetTemp = this.hvacOptions.heating.temperature;
-        const minThreshold = this.hvacOptions.heating.temperatureThresholds.indoorMin;
-        const maxThreshold = this.hvacOptions.heating.temperatureThresholds.indoorMax;
+        const minThreshold =
+          this.hvacOptions.heating.temperatureThresholds.indoorMin;
+        const maxThreshold =
+          this.hvacOptions.heating.temperatureThresholds.indoorMax;
         const maxDiff = maxThreshold - data.currentTemp;
 
         return {
@@ -223,22 +225,7 @@ export class HVACStrategy {
           currentTemp: `${data.currentTemp}°C`,
           maxThreshold: `${thresholds.indoorMax}°C`,
           targetTemp: `${targetTemp}°C`,
-          reason:
-            "Indoor temperature is already at or above maximum threshold",
-        },
-      );
-      return false;
-    }
-
-    // NEW: Don't heat if already at or above target temperature
-    if (data.currentTemp >= targetTemp) {
-      this.logger.debug(
-        "❌ Heating not activated - indoor temp at/above target",
-        {
-          currentTemp: `${data.currentTemp}°C`,
-          targetTemp: `${targetTemp}°C`,
-          minThreshold: `${thresholds.indoorMin}°C`,
-          reason: "Indoor temperature is already at or above target temperature",
+          reason: "Indoor temperature is already at or above maximum threshold",
         },
       );
       return false;
@@ -264,9 +251,7 @@ export class HVACStrategy {
       return false;
     }
 
-    // FIXED: Heat when below target temperature AND below maximum threshold
-    // This creates proper hysteresis: starts at min threshold (20.7°C), stops at target (21.0°C)
-    const shouldHeat = data.currentTemp < targetTemp && data.currentTemp < thresholds.indoorMax;
+    const shouldHeat = data.currentTemp < thresholds.indoorMin;
 
     if (shouldHeat) {
       this.logger.debug("✅ Heating conditions met", {
@@ -283,9 +268,10 @@ export class HVACStrategy {
         currentTemp: `${data.currentTemp}°C`,
         targetTemp: `${targetTemp}°C`,
         minThreshold: `${thresholds.indoorMin}°C`,
-        reason: data.currentTemp >= targetTemp
-          ? "Temperature at or above target"
-          : "Temperature above minimum threshold",
+        reason:
+          data.currentTemp >= targetTemp
+            ? "Temperature at or above target"
+            : "Temperature above minimum threshold",
       });
     }
 
@@ -421,17 +407,21 @@ export class HVACStrategy {
    * Check if maximum temperature threshold has been reached (for proper hysteresis)
    */
   private hasReachedMaximumTemperature(data: StateChangeData): boolean {
-    const maxThreshold = this.hvacOptions.heating.temperatureThresholds.indoorMax;
+    const maxThreshold =
+      this.hvacOptions.heating.temperatureThresholds.indoorMax;
     const hasReachedMax = data.currentTemp >= maxThreshold;
 
     if (hasReachedMax) {
-      this.logger.debug("🎯 Maximum temperature reached - heating cycle complete", {
-        currentTemp: `${data.currentTemp}°C`,
-        maxThreshold: `${maxThreshold}°C`,
-        targetTemp: `${this.hvacOptions.heating.temperature}°C`,
-        difference: `${(data.currentTemp - maxThreshold).toFixed(1)}°C above maximum threshold`,
-        hysteresisInfo: `Heating started at ${this.hvacOptions.heating.temperatureThresholds.indoorMin}°C, stopping at ${maxThreshold}°C`,
-      });
+      this.logger.debug(
+        "🎯 Maximum temperature reached - heating cycle complete",
+        {
+          currentTemp: `${data.currentTemp}°C`,
+          maxThreshold: `${maxThreshold}°C`,
+          targetTemp: `${this.hvacOptions.heating.temperature}°C`,
+          difference: `${(data.currentTemp - maxThreshold).toFixed(1)}°C above maximum threshold`,
+          hysteresisInfo: `Heating started at ${this.hvacOptions.heating.temperatureThresholds.indoorMin}°C, stopping at ${maxThreshold}°C`,
+        },
+      );
     }
 
     return hasReachedMax;
@@ -457,7 +447,8 @@ export class HVACStrategy {
         currentTemp: `${data.currentTemp}°C`,
         maxThreshold: `${this.hvacOptions.heating.temperatureThresholds.indoorMax}°C`,
         targetTemp: `${this.hvacOptions.heating.temperature}°C`,
-        reason: "Heating cycle completed - maximum threshold reached for anti-cycling",
+        reason:
+          "Heating cycle completed - maximum threshold reached for anti-cycling",
       });
       return true;
     }
@@ -470,13 +461,16 @@ export class HVACStrategy {
     const shouldTurnOff = !needsHeating && !needsCooling;
 
     if (shouldTurnOff) {
-      this.logger.debug("🔄 Turn off required - comfortable temperature maintained", {
-        currentTemp: `${data.currentTemp}°C`,
-        targetTemp: `${this.hvacOptions.heating.temperature}°C`,
-        needsHeating,
-        needsCooling,
-        reason: "Temperature in comfortable range",
-      });
+      this.logger.debug(
+        "🔄 Turn off required - comfortable temperature maintained",
+        {
+          currentTemp: `${data.currentTemp}°C`,
+          targetTemp: `${this.hvacOptions.heating.temperature}°C`,
+          needsHeating,
+          needsCooling,
+          reason: "Temperature in comfortable range",
+        },
+      );
     }
 
     return shouldTurnOff;

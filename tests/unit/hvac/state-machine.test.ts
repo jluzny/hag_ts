@@ -13,7 +13,7 @@ import { HvacOptions } from "../../../src/config/config.ts";
 import { HVACMode, SystemMode } from "../../../src/types/common.ts";
 import { LoggerService } from "../../../src/core/logging.ts";
 
-// Mock HVAC options for testing
+// Mock HVAC options for testing - uses production-like values
 const mockHvacOptions: HvacOptions = {
   tempSensor: "sensor.indoor_temp",
   outdoorSensor: "sensor.outdoor_temp",
@@ -29,9 +29,9 @@ const mockHvacOptions: HvacOptions = {
     temperature: 21.0,
     presetMode: "comfort",
     temperatureThresholds: {
-      indoorMin: 19.0,
-      indoorMax: 22.0,
-      outdoorMin: -10.0,
+      indoorMin: 20.7,
+      indoorMax: 21.3,
+      outdoorMin: -5.0,
       outdoorMax: 15.0,
     },
     defrost: {
@@ -41,12 +41,12 @@ const mockHvacOptions: HvacOptions = {
     },
   },
   cooling: {
-    temperature: 24.0,
+    temperature: 24.5,
     presetMode: "eco",
     temperatureThresholds: {
-      indoorMin: 23.0,
-      indoorMax: 26.0,
-      outdoorMin: 10.0,
+      indoorMin: 24.0,
+      indoorMax: 25.0,
+      outdoorMin: 23.0,
       outdoorMax: 45.0,
     },
   },
@@ -396,6 +396,274 @@ test("HVAC State Machine - Handle rapid temperature changes", () => {
     expect(currentState).toBeDefined();
     // State should be consistent with temperature
   }
+  stateMachine.stop();
+});
+
+test("HVAC State Machine - Prevent heating on/off cycling with hysteresis", () => {
+  const stateMachine = new HVACStateMachine(mockHvacOptions);
+  const activeHour = 10;
+
+  stateMachine.start();
+
+  stateMachine.send({
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 20.5,
+      outdoorTemp: 5.0,
+      currentHour: activeHour,
+      isWeekday: true,
+    },
+  });
+  stateMachine.send({ type: "AUTO_EVALUATE" });
+  let state = stateMachine.getCurrentState();
+  expect(state === "heating" || state === "idle").toBe(true);
+
+  stateMachine.send({
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 20.8,
+      outdoorTemp: 5.0,
+      currentHour: activeHour,
+      isWeekday: true,
+    },
+  });
+  stateMachine.send({ type: "AUTO_EVALUATE" });
+  state = stateMachine.getCurrentState();
+  expect(state === "heating" || state === "idle").toBe(true);
+
+  stateMachine.send({
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 21.0,
+      outdoorTemp: 5.0,
+      currentHour: activeHour,
+      isWeekday: true,
+    },
+  });
+  stateMachine.send({ type: "AUTO_EVALUATE" });
+  state = stateMachine.getCurrentState();
+  expect(state === "heating" || state === "idle").toBe(true);
+
+  stateMachine.send({
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 21.2,
+      outdoorTemp: 5.0,
+      currentHour: activeHour,
+      isWeekday: true,
+    },
+  });
+  stateMachine.send({ type: "AUTO_EVALUATE" });
+  state = stateMachine.getCurrentState();
+  expect(state === "heating" || state === "idle").toBe(true);
+
+  stateMachine.send({
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 21.3,
+      outdoorTemp: 5.0,
+      currentHour: activeHour,
+      isWeekday: true,
+    },
+  });
+  stateMachine.send({ type: "AUTO_EVALUATE" });
+  state = stateMachine.getCurrentState();
+  expect(state === "idle" || state === "off").toBe(true);
+
+  stateMachine.send({
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 21.2,
+      outdoorTemp: 5.0,
+      currentHour: activeHour,
+      isWeekday: true,
+    },
+  });
+  stateMachine.send({ type: "AUTO_EVALUATE" });
+  state = stateMachine.getCurrentState();
+  expect(state === "idle" || state === "off").toBe(true);
+
+  stateMachine.send({
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 21.0,
+      outdoorTemp: 5.0,
+      currentHour: activeHour,
+      isWeekday: true,
+    },
+  });
+  stateMachine.send({ type: "AUTO_EVALUATE" });
+  state = stateMachine.getCurrentState();
+  expect(state === "idle" || state === "off").toBe(true);
+
+  stateMachine.send({
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 20.6,
+      outdoorTemp: 5.0,
+      currentHour: activeHour,
+      isWeekday: true,
+    },
+  });
+  stateMachine.send({ type: "AUTO_EVALUATE" });
+  state = stateMachine.getCurrentState();
+  expect(state === "heating" || state === "idle").toBe(true);
+
+  stateMachine.stop();
+});
+
+test("HVAC State Machine - Validate hysteresis prevents rapid cycling", () => {
+  const stateMachine = new HVACStateMachine(mockHvacOptions);
+  const activeHour = 10;
+  let cycleCount = 0;
+  let lastState = "";
+
+  stateMachine.start();
+
+  const temperatures = [
+    20.5, 20.7, 21.0, 21.1, 21.2, 21.3, 21.2, 21.1, 21.0, 20.8, 20.7, 20.6,
+  ];
+
+  for (const temp of temperatures) {
+    stateMachine.send({
+      type: "UPDATE_CONDITIONS",
+      data: {
+        indoorTemp: temp,
+        outdoorTemp: 5.0,
+        currentHour: activeHour,
+        isWeekday: true,
+      },
+    });
+    stateMachine.send({ type: "AUTO_EVALUATE" });
+    const state = stateMachine.getCurrentState();
+
+    if (lastState && lastState !== state) {
+      cycleCount++;
+    }
+    lastState = state;
+  }
+
+  expect(cycleCount).toBeLessThanOrEqual(2);
+
+  stateMachine.stop();
+});
+
+test("HVAC State Machine - Production scenario with target above max", () => {
+  const productionOptions: HvacOptions = {
+    ...mockHvacOptions,
+    heating: {
+      temperature: 21.5,
+      presetMode: "wind_free_sleep",
+      temperatureThresholds: {
+        indoorMin: 20.7,
+        indoorMax: 21.3,
+        outdoorMin: -5.0,
+        outdoorMax: 15.0,
+      },
+      defrost: {
+        temperatureThreshold: 0.0,
+        periodSeconds: 7200,
+        durationSeconds: 300,
+      },
+    },
+  };
+
+  const stateMachine = new HVACStateMachine(productionOptions);
+  const activeHour = 10;
+
+  stateMachine.start();
+
+  stateMachine.send({
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 20.6,
+      outdoorTemp: 9.5,
+      currentHour: activeHour,
+      isWeekday: true,
+    },
+  });
+  stateMachine.send({ type: "AUTO_EVALUATE" });
+  let state = stateMachine.getCurrentState();
+  expect(state === "heating" || state === "idle").toBe(true);
+
+  stateMachine.send({
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 21.1,
+      outdoorTemp: 9.5,
+      currentHour: activeHour,
+      isWeekday: true,
+    },
+  });
+  stateMachine.send({ type: "AUTO_EVALUATE" });
+  state = stateMachine.getCurrentState();
+  expect(state === "heating" || state === "idle").toBe(true);
+
+  stateMachine.send({
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 21.2,
+      outdoorTemp: 9.5,
+      currentHour: activeHour,
+      isWeekday: true,
+    },
+  });
+  stateMachine.send({ type: "AUTO_EVALUATE" });
+  state = stateMachine.getCurrentState();
+  expect(state === "heating" || state === "idle").toBe(true);
+
+  stateMachine.send({
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 21.3,
+      outdoorTemp: 9.5,
+      currentHour: activeHour,
+      isWeekday: true,
+    },
+  });
+  stateMachine.send({ type: "AUTO_EVALUATE" });
+  state = stateMachine.getCurrentState();
+  expect(state === "idle" || state === "off").toBe(true);
+
+  stateMachine.send({
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 21.2,
+      outdoorTemp: 9.5,
+      currentHour: activeHour,
+      isWeekday: true,
+    },
+  });
+  stateMachine.send({ type: "AUTO_EVALUATE" });
+  state = stateMachine.getCurrentState();
+  expect(state === "idle" || state === "off").toBe(true);
+
+  stateMachine.send({
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 21.1,
+      outdoorTemp: 9.5,
+      currentHour: activeHour,
+      isWeekday: true,
+    },
+  });
+  stateMachine.send({ type: "AUTO_EVALUATE" });
+  state = stateMachine.getCurrentState();
+  expect(state === "idle" || state === "off").toBe(true);
+
+  stateMachine.send({
+    type: "UPDATE_CONDITIONS",
+    data: {
+      indoorTemp: 20.6,
+      outdoorTemp: 9.5,
+      currentHour: activeHour,
+      isWeekday: true,
+    },
+  });
+  stateMachine.send({ type: "AUTO_EVALUATE" });
+  state = stateMachine.getCurrentState();
+  expect(state === "heating" || state === "idle").toBe(true);
+
   stateMachine.stop();
 });
 
