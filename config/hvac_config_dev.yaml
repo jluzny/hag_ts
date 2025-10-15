@@ -2,7 +2,7 @@
 # Direct port from Python configuration with TypeScript-specific enhancements
 
 appOptions:
-  logLevel: "debug" # debug, info, warn, error, critical
+  logLevel: "info" # debug, info, warn, error, critical
   useAi: false # Enable AI agent for intelligent decisions
   aiModel: "gpt-3.5-turbo" # AI model to use
   aiTemperature: 0.1 # AI model temperature
@@ -40,11 +40,11 @@ hvacOptions:
       defrost: false
 
   heating:
-    temperature: 21.0
+    temperature: 21.5
     presetMode: "wind_free_sleep"
     temperatureThresholds:
-      indoorMin: 20.50
-      indoorMax: 22.50
+      indoorMin: 20.70
+      indoorMax: 21.30
       outdoorMin: -5.0
       outdoorMax: 15.0
     defrost:
