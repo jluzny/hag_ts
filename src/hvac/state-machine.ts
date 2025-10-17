@@ -19,6 +19,7 @@ import {
   HomeAssistantClient,
   deriveTemperatureSensor,
 } from "../home-assistant/client.ts";
+import { CyclingMonitor } from "./cycling-monitor.ts";
 
 /**
  * Simplified HVAC events that can trigger state transitions
@@ -74,8 +75,19 @@ export class HVACStrategy {
     result: HVACEvaluation;
     timestamp: number;
   };
+  public cyclingMonitor: CyclingMonitor;
 
-  constructor(private hvacOptions: HvacOptions) {}
+  constructor(private hvacOptions: HvacOptions) {
+    this.cyclingMonitor = new CyclingMonitor(this.logger);
+  }
+
+  public getCyclingMonitor(): CyclingMonitor {
+    return this.cyclingMonitor;
+  }
+
+  public logCyclingHealth(): void {
+    this.cyclingMonitor.logHealthStatus();
+  }
 
   /**
    * Unified evaluation method that returns all condition checks
@@ -192,10 +204,30 @@ export class HVACStrategy {
       };
     })();
 
-    // Unified logging
+    // Unified logging with cycling detection
+    const logData = reason.getLogData?.(data) || { data };
+
+    // Add cycling prevention metrics
+    if (
+      reason.code === "no_action_needed" &&
+      data.currentTemp >=
+        this.hvacOptions.heating.temperatureThresholds.indoorMin &&
+      data.currentTemp <=
+        this.hvacOptions.heating.temperatureThresholds.indoorMax
+    ) {
+      logData.hysteresisStatus = "COMFORT_ZONE";
+      logData.cyclingRisk = "LOW";
+      logData.stabilityInfo = `Temperature in stable range (${this.hvacOptions.heating.temperatureThresholds.indoorMin}°C - ${this.hvacOptions.heating.temperatureThresholds.indoorMax}°C)`;
+    } else if (reason.code === "heating_required") {
+      logData.hysteresisStatus = "HEATING_ACTIVE";
+      logData.cyclingRisk = "MONITORING";
+      logData.stabilityInfo = `Heating initiated below minimum threshold (${this.hvacOptions.heating.temperatureThresholds.indoorMin}°C)`;
+    }
+
     this.logger.info("🔍 HVAC Evaluation Result", {
       decision: reason.description,
-      ...(reason.getLogData?.(data) || { data }),
+      ...logData,
+      timestamp: new Date().toISOString(),
     });
 
     // Result construction
@@ -751,11 +783,29 @@ export function createHVACMachine(
             context.manualOverride?.temperature ??
             hvacOptions.heating.temperature;
 
+          // Record state change for cycling monitoring
+          if (context.indoorTemp) {
+            hvacStrategy.cyclingMonitor.recordStateChange(
+              "OFF",
+              "HEAT",
+              context.indoorTemp,
+            );
+          }
+
+          // Record state change for cycling monitoring
+          if (context.indoorTemp) {
+            hvacStrategy
+              .getCyclingMonitor()
+              .recordStateChange("OFF", "HEAT", context.indoorTemp);
+          }
+
           logger.info("🔥 Executing heating mode on entities", {
             targetTemp,
             presetMode,
             enabledEntities: enabledEntities.length,
             isManualOverride: !!context.manualOverride,
+            cyclingStatus:
+              "Heating cycle started - monitoring for rapid cycling",
           });
 
           for (const entity of enabledEntities) {
@@ -905,6 +955,7 @@ export function createHVACMachine(
             totalEntities: hvacOptions.hvacEntities.length,
             enabledEntities: enabledEntities.length,
             reason: "Turning off conditions met",
+            cyclingStatus: "Heating cycle ended - monitoring for rapid cycling",
           });
 
           for (const entity of enabledEntities) {
