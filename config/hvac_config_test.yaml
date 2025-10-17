@@ -43,27 +43,28 @@ hvacOptions:
     temperature: 21.5
     presetMode: "wind_free_sleep"
     temperatureThresholds:
-      indoorMin: 20.0
-      indoorMax: 23.0
+      indoorMin: 21.2
+      indoorMax: 21.8
       outdoorMin: -5.0
       outdoorMax: 15.0
     defrost:
+      enabled: true
       temperatureThreshold: 0.0
-      periodSeconds: 7200
-      durationSeconds: 300
+      periodSeconds: 7200 # 2 hours
+      durationSeconds: 300 # 5 minutes
 
   cooling:
-    temperature: 23.0
+    temperature: 24.3
     presetMode: "wind_free"
     temperatureThresholds:
-      indoorMin: 22.5
-      indoorMax: 23.5
-      outdoorMin: 20.0
-      outdoorMax: 45.0
+      indoorMin: 24
+      indoorMax: 24.5
+      outdoorMin: 23
+      outdoorMax: 55.0
 
   activeHours:
-    start: 5
-    startWeekday: 5
-    end: 23
+    start: 8
+    startWeekday: 8
+    end: 22
 
-  evaluationCacheMs: 50 # Faster cache for testing
+  evaluationCacheMs: 100

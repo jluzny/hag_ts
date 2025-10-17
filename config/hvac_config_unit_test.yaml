@@ -27,20 +27,20 @@ hvacOptions:
 
   heating:
     temperature: 21.5
-    presetMode: "comfort"
+    presetMode: "wind_free_sleep"
     temperatureThresholds:
-      indoorMin: 19.5
-      indoorMax: 22.5
-      outdoorMin: -10.0
+      indoorMin: 21.2
+      indoorMax: 21.8
+      outdoorMin: -5.0
       outdoorMax: 15.0
 
   cooling:
-    temperature: 24.0
-    presetMode: "eco"
+    temperature: 24.3
+    presetMode: "wind_free"
     temperatureThresholds:
-      indoorMin: 23.0
-      indoorMax: 26.0
-      outdoorMin: 10.0
-      outdoorMax: 45.0
+      indoorMin: 24
+      indoorMax: 24.5
+      outdoorMin: 23
+      outdoorMax: 55.0
 
-  evaluationCacheMs: 0 # No cache for unit tests
+  evaluationCacheMs: 100
