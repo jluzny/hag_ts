@@ -21,7 +21,6 @@ hvacOptions:
   tempSensor: "sensor.1st_floor_hall_multisensor_temperature"
   outdoorSensor: "sensor.openweathermap_temperature"
   systemMode: "auto" # auto, heat_only, cool_only, off
-
   temperatureCalibration:
     "sensor.1st_floor_hall_multisensor_temperature": +0.5 # Add 0.5°C to indoor sensor readings
 

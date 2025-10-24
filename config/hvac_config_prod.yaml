@@ -19,6 +19,8 @@ hvacOptions:
   tempSensor: "sensor.1st_floor_hall_multisensor_temperature"
   outdoorSensor: "sensor.openweathermap_temperature"
   systemMode: "auto"
+  temperatureCalibration:
+    "sensor.1st_floor_hall_multisensor_temperature": +0.5 # Add 0.5°C to indoor sensor readings
 
   hvacEntities:
     - entityId: "climate.living_room_ac"
@@ -38,7 +40,7 @@ hvacOptions:
       defrost: false
 
   heating:
-    temperature: 21.0
+    temperature: 21.3
     presetMode: "wind_free_sleep"
     temperatureThresholds:
       indoorMin: 20.7
