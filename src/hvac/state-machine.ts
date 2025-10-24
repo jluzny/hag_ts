@@ -128,19 +128,43 @@ export class HVACStrategy {
 
       if (shouldTurnOff) {
         // Determine specific turn-off reason
-        let turnOffReason = "unknown";
+        let turnOffReason = "comfortable temperature maintained";
+
         if (!this.isActiveHour(data.hour, data.isWeekday)) {
           turnOffReason = `outside active hours (${data.hour}:00)`;
+        } else if (this.hasReachedMaximumTemperature(data)) {
+          turnOffReason = `heating target reached (${data.currentTemp}°C >= ${this.hvacOptions.heating.temperatureThresholds.indoorMax}°C)`;
+        } else if (shouldCool && this.hasReachedMinimumCoolingTemperature(data)) {
+          // Only check cooling threshold if cooling was actually active
+          turnOffReason = `cooling target reached (${data.currentTemp}°C <= ${this.hvacOptions.cooling.temperatureThresholds.indoorMin}°C)`;
+        } else if (!shouldHeat && !shouldCool) {
+          // More specific reason based on current temperature vs thresholds
+          const heatingMin = this.hvacOptions.heating.temperatureThresholds.indoorMin;
+          const heatingMax = this.hvacOptions.heating.temperatureThresholds.indoorMax;
+          const coolingMin = this.hvacOptions.cooling.temperatureThresholds.indoorMin;
+          const coolingMax = this.hvacOptions.cooling.temperatureThresholds.indoorMax;
+
+          if (data.currentTemp >= heatingMin && data.currentTemp <= heatingMax) {
+            turnOffReason = `temperature within heating hysteresis band (${data.currentTemp}°C between ${heatingMin}°C - ${heatingMax}°C)`;
+          } else if (data.currentTemp >= coolingMin && data.currentTemp <= coolingMax) {
+            turnOffReason = `temperature within cooling hysteresis band (${data.currentTemp}°C between ${coolingMin}°C - ${coolingMax}°C)`;
+          } else if (data.currentTemp > heatingMax && data.currentTemp < coolingMin) {
+            turnOffReason = `temperature in comfortable range (${data.currentTemp}°C between heating max ${heatingMax}°C and cooling min ${coolingMin}°C)`;
+          } else {
+            turnOffReason = `temperature maintained - no heating or cooling needed (${data.currentTemp}°C)`;
+          }
         }
 
         return {
           code: "turning_off",
-          description: `Turning off required - conditions not met for operation`,
+          description: `Turning off required - ${turnOffReason}`,
           getLogData: () => ({
             ...baseLogData,
             mode: "OFF",
             turnOffReason,
             activeHours: this.hvacOptions.activeHours,
+            heatingRange: `${this.hvacOptions.heating.temperatureThresholds.indoorMin}°C - ${this.hvacOptions.heating.temperatureThresholds.indoorMax}°C`,
+            coolingRange: `${this.hvacOptions.cooling.temperatureThresholds.indoorMin}°C - ${this.hvacOptions.cooling.temperatureThresholds.indoorMax}°C`,
           }),
         };
       }
@@ -473,39 +497,59 @@ export class HVACStrategy {
       return true;
     }
 
-    // FIXED: Turn off if maximum temperature threshold has been reached (proper hysteresis)
+    // Turn off if maximum heating threshold reached (proper hysteresis)
     if (this.hasReachedMaximumTemperature(data)) {
       this.logger.debug("🎯 Turn off heating - maximum threshold reached", {
         currentTemp: `${data.currentTemp}°C`,
         maxThreshold: `${this.hvacOptions.heating.temperatureThresholds.indoorMax}°C`,
         targetTemp: `${this.hvacOptions.heating.temperature}°C`,
-        reason:
-          "Heating cycle completed - maximum threshold reached for anti-cycling",
+        reason: "Heating cycle completed - maximum threshold reached for anti-cycling",
       });
       return true;
     }
 
-    // Turn off if temperature is within comfortable range (neither heating nor cooling needed)
-    const needsHeating = this.shouldHeat(data);
-    const needsCooling = this.shouldCool(data);
-
-    // If neither heating nor cooling is needed, turn off
-    const shouldTurnOff = !needsHeating && !needsCooling;
-
-    if (shouldTurnOff) {
-      this.logger.debug(
-        "🔄 Turn off required - comfortable temperature maintained",
-        {
-          currentTemp: `${data.currentTemp}°C`,
-          targetTemp: `${this.hvacOptions.heating.temperature}°C`,
-          needsHeating,
-          needsCooling,
-          reason: "Temperature in comfortable range",
-        },
-      );
+    // Turn off if minimum cooling threshold reached (proper hysteresis)
+    // Only check if cooling is actually needed (system is in cooling mode)
+    if (this.shouldCool(data) && this.hasReachedMinimumCoolingTemperature(data)) {
+      this.logger.debug("🎯 Turn off cooling - minimum threshold reached", {
+        currentTemp: `${data.currentTemp}°C`,
+        minThreshold: `${this.hvacOptions.cooling.temperatureThresholds.indoorMin}°C`,
+        targetTemp: `${this.hvacOptions.cooling.temperature}°C`,
+        reason: "Cooling cycle completed - minimum threshold reached for anti-cycling",
+      });
+      return true;
     }
 
-    return shouldTurnOff;
+    // FIXED: Don't turn off when in comfortable range between thresholds
+    // This prevents rapid cycling at boundary conditions
+    this.logger.debug("🔄 Continue current operation - temperature within hysteresis range", {
+      currentTemp: `${data.currentTemp}°C`,
+      heatingRange: `${this.hvacOptions.heating.temperatureThresholds.indoorMin}°C - ${this.hvacOptions.heating.temperatureThresholds.indoorMax}°C`,
+      coolingRange: `${this.hvacOptions.cooling.temperatureThresholds.indoorMin}°C - ${this.hvacOptions.cooling.temperatureThresholds.indoorMax}°C`,
+      reason: "Temperature maintained within hysteresis bands - preventing rapid cycling",
+    });
+
+    return false;
+  }
+
+  /**
+   * Check if minimum cooling temperature threshold has been reached
+   */
+  private hasReachedMinimumCoolingTemperature(data: StateChangeData): boolean {
+    const minThreshold = this.hvacOptions.cooling.temperatureThresholds.indoorMin;
+    const hasReachedMin = data.currentTemp <= minThreshold;
+
+    if (hasReachedMin) {
+      this.logger.debug("🎯 Minimum cooling temperature reached - cooling cycle complete", {
+        currentTemp: `${data.currentTemp}°C`,
+        minThreshold: `${minThreshold}°C`,
+        targetTemp: `${this.hvacOptions.cooling.temperature}°C`,
+        difference: `${(minThreshold - data.currentTemp).toFixed(1)}°C below minimum threshold`,
+        hysteresisInfo: `Cooling started at ${this.hvacOptions.cooling.temperatureThresholds.indoorMax}°C, stopping at ${minThreshold}°C`,
+      });
+    }
+
+    return hasReachedMin;
   }
 }
 
@@ -996,18 +1040,13 @@ export function createHVACMachine(
         },
 
         /**
-         * Unified guard logic - evaluates all conditions using single strategy
+         * Simplified guards that delegate to strategy methods
+         * Complex logic stays in the strategy, not in guards
          */
 
         shouldAutoHeat: ({ context }) => {
-          // Check system mode is AUTO
-          if (context.systemMode !== SystemMode.AUTO) {
-            return false;
-          }
-
-          if (!context.indoorTemp || !context.outdoorTemp) {
-            return false;
-          }
+          if (context.systemMode !== SystemMode.AUTO) return false;
+          if (!context.indoorTemp || !context.outdoorTemp) return false;
 
           const evaluation = hvacStrategy.evaluateConditions({
             currentTemp: context.indoorTemp,
@@ -1019,7 +1058,6 @@ export function createHVACMachine(
           logger.debug("🔍 Auto heat guard evaluation", {
             allowed: evaluation.shouldHeat,
             systemMode: context.systemMode,
-            autoModeActive: context.systemMode === SystemMode.AUTO,
             reason: evaluation.shouldHeat
               ? "Auto heating approved"
               : "Auto heating denied",
@@ -1028,14 +1066,8 @@ export function createHVACMachine(
         },
 
         shouldAutoCool: ({ context }) => {
-          // Check system mode is AUTO
-          if (context.systemMode !== SystemMode.AUTO) {
-            return false;
-          }
-
-          if (!context.indoorTemp || !context.outdoorTemp) {
-            return false;
-          }
+          if (context.systemMode !== SystemMode.AUTO) return false;
+          if (!context.indoorTemp || !context.outdoorTemp) return false;
 
           const evaluation = hvacStrategy.evaluateConditions({
             currentTemp: context.indoorTemp,
@@ -1047,7 +1079,6 @@ export function createHVACMachine(
           logger.debug("🔍 Auto cool guard evaluation", {
             allowed: evaluation.shouldCool,
             systemMode: context.systemMode,
-            autoModeActive: context.systemMode === SystemMode.AUTO,
             reason: evaluation.shouldCool
               ? "Auto cooling approved"
               : "Auto cooling denied",
@@ -1056,9 +1087,7 @@ export function createHVACMachine(
         },
 
         canDefrost: ({ context }) => {
-          if (!context.indoorTemp || !context.outdoorTemp) {
-            return false;
-          }
+          if (!context.indoorTemp || !context.outdoorTemp) return false;
 
           const evaluation = hvacStrategy.evaluateConditions({
             currentTemp: context.indoorTemp,
@@ -1069,7 +1098,6 @@ export function createHVACMachine(
 
           logger.debug("🔍 Defrost guard evaluation", {
             required: evaluation.needsDefrost,
-            hasTemperatureData: !!(context.indoorTemp && context.outdoorTemp),
             reason: evaluation.needsDefrost
               ? "Defrost cycle required"
               : "Defrost not needed",
@@ -1078,9 +1106,17 @@ export function createHVACMachine(
         },
 
         shouldTurnOff: ({ context }) => {
-          if (!context.indoorTemp || !context.outdoorTemp) {
+          // Don't turn off if manual override is active
+          if (context.manualOverride) {
+            logger.debug("🔍 Turn off guard - manual override active", {
+              manualMode: context.manualOverride.mode,
+              manualTemp: context.manualOverride.temperature,
+              reason: "Manual override takes precedence",
+            });
             return false;
           }
+
+          if (!context.indoorTemp || !context.outdoorTemp) return false;
 
           const evaluation = hvacStrategy.evaluateConditions({
             currentTemp: context.indoorTemp,
@@ -1091,7 +1127,6 @@ export function createHVACMachine(
 
           logger.debug("🔍 Turn off guard evaluation", {
             required: evaluation.shouldTurnOff,
-            hasTemperatureData: !!(context.indoorTemp && context.outdoorTemp),
             reason: evaluation.shouldTurnOff
               ? "System shutdown required"
               : "System can continue operating",

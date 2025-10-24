@@ -22,6 +22,9 @@ hvacOptions:
   outdoorSensor: "sensor.openweathermap_temperature"
   systemMode: "auto" # auto, heat_only, cool_only, off
 
+  temperatureCalibration:
+    "sensor.1st_floor_hall_multisensor_temperature": +0.5 # Add 0.5°C to indoor sensor readings
+
   hvacEntities:
     - entityId: "climate.living_room_ac"
       enabled: true
@@ -36,15 +39,15 @@ hvacOptions:
       enabled: false
       defrost: false
     - entityId: "climate.radek_ac"
-      enabled: false
+      enabled: true
       defrost: false
 
   heating:
-    temperature: 21.5
+    temperature: 21.3
     presetMode: "wind_free_sleep"
     temperatureThresholds:
-      indoorMin: 21.2
-      indoorMax: 21.8
+      indoorMin: 20.7
+      indoorMax: 21.3
       outdoorMin: -5.0
       outdoorMax: 15.0
     defrost:
@@ -64,7 +67,7 @@ hvacOptions:
 
   activeHours:
     start: 8
-    startWeekday: 8
-    end: 22
+    startWeekday: 7
+    end: 21
 
   evaluationCacheMs: 100

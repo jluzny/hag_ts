@@ -32,6 +32,18 @@ export const HassOptionsSchema = z.object({
 });
 
 /**
+ * Temperature calibration configuration schema
+ */
+export const TemperatureCalibrationSchema = z.record(
+  z.string().describe("Sensor entity ID"),
+  z
+    .number()
+    .min(-5.0)
+    .max(5.0)
+    .describe("Temperature offset in Celsius (-5.0 to +5.0)"),
+).describe("Temperature calibration offsets for sensors");
+
+/**
  * Temperature threshold configuration schema
  */
 export const TemperatureThresholdsSchema = z
@@ -88,51 +100,29 @@ export const DefrostOptionsSchema = z.object({
 /**
  * Heating configuration schema
  */
-export const HeatingOptionsSchema = z
-  .object({
-    temperature: z
-      .number()
-      .min(10)
-      .max(35)
-      .describe("Target heating temperature"),
-    presetMode: z.string().describe("Heating preset mode"),
-    temperatureThresholds: TemperatureThresholdsSchema,
-    defrost: DefrostOptionsSchema.optional().describe("Defrost configuration"),
-  })
-  .refine(
-    (data) =>
-      data.temperature >= data.temperatureThresholds.indoorMin &&
-      data.temperature <= data.temperatureThresholds.indoorMax,
-    {
-      message:
-        "Target temperature must be between indoorMin and indoorMax thresholds for proper hysteresis",
-      path: ["temperature"],
-    },
-  );
+export const HeatingOptionsSchema = z.object({
+  temperature: z
+    .number()
+    .min(10)
+    .max(35)
+    .describe("Target heating temperature"),
+  presetMode: z.string().describe("Heating preset mode"),
+  temperatureThresholds: TemperatureThresholdsSchema,
+  defrost: DefrostOptionsSchema.optional().describe("Defrost configuration"),
+});
 
 /**
  * Cooling configuration schema
  */
-export const CoolingOptionsSchema = z
-  .object({
-    temperature: z
-      .number()
-      .min(15)
-      .max(35)
-      .describe("Target cooling temperature"),
-    presetMode: z.string().describe("Cooling preset mode"),
-    temperatureThresholds: TemperatureThresholdsSchema,
-  })
-  .refine(
-    (data) =>
-      data.temperature >= data.temperatureThresholds.indoorMin &&
-      data.temperature <= data.temperatureThresholds.indoorMax,
-    {
-      message:
-        "Target temperature must be between indoorMin and indoorMax thresholds for proper hysteresis",
-      path: ["temperature"],
-    },
-  );
+export const CoolingOptionsSchema = z.object({
+  temperature: z
+    .number()
+    .min(15)
+    .max(35)
+    .describe("Target cooling temperature"),
+  presetMode: z.string().describe("Cooling preset mode"),
+  temperatureThresholds: TemperatureThresholdsSchema,
+});
 
 /**
  * Active hours configuration schema
@@ -187,6 +177,9 @@ export const HvacOptionsSchema = z.object({
     .max(5000)
     .default(100)
     .describe("Cache duration for HVAC condition evaluations in milliseconds"),
+  temperatureCalibration: TemperatureCalibrationSchema.optional().describe(
+    "Temperature calibration offsets for sensors",
+  ),
 });
 
 /**

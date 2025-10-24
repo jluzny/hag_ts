@@ -358,16 +358,36 @@ export class HVACController {
 
       // Handle each sensor type individually
       if (entityId === this.hvacOptions.tempSensor) {
-        updatedData.indoorTemp = parseFloat(newState);
+        const rawTemp = parseFloat(newState);
+        updatedData.indoorTemp = this.applyCalibration(entityId, rawTemp);
         updateType = "indoor_temperature_change";
+
+        this.logger.debug("🌡️ Indoor sensor change with calibration", {
+          sensorId: entityId,
+          rawTemp: `${rawTemp.toFixed(1)}°C`,
+          calibratedTemp: `${updatedData.indoorTemp.toFixed(1)}°C`,
+          offset: this.hvacOptions.temperatureCalibration?.[entityId]
+            ? `${this.hvacOptions.temperatureCalibration[entityId] >= 0 ? '+' : ''}${this.hvacOptions.temperatureCalibration[entityId].toFixed(1)}°C`
+            : 'none'
+        });
 
         // Include current outdoor temp to maintain complete context
         if (currentContext.outdoorTemp !== undefined) {
           updatedData.outdoorTemp = currentContext.outdoorTemp;
         }
       } else if (entityId === this.hvacOptions.outdoorSensor) {
-        updatedData.outdoorTemp = parseFloat(newState);
+        const rawTemp = parseFloat(newState);
+        updatedData.outdoorTemp = this.applyCalibration(entityId, rawTemp);
         updateType = "outdoor_temperature_change";
+
+        this.logger.debug("🌡️ Outdoor sensor change with calibration", {
+          sensorId: entityId,
+          rawTemp: `${rawTemp.toFixed(1)}°C`,
+          calibratedTemp: `${updatedData.outdoorTemp.toFixed(1)}°C`,
+          offset: this.hvacOptions.temperatureCalibration?.[entityId]
+            ? `${this.hvacOptions.temperatureCalibration[entityId] >= 0 ? '+' : ''}${this.hvacOptions.temperatureCalibration[entityId].toFixed(1)}°C`
+            : 'none'
+        });
 
         // Include current indoor temp to maintain complete context
         if (currentContext.indoorTemp !== undefined) {
@@ -406,6 +426,28 @@ export class HVACController {
   }
 
   /**
+   * Apply temperature calibration offset to sensor reading
+   */
+  private applyCalibration(sensorId: string, rawTemp: number): number {
+    const calibration = this.hvacOptions.temperatureCalibration;
+    if (!calibration || !calibration[sensorId]) {
+      return rawTemp; // No calibration configured
+    }
+
+    const offset = calibration[sensorId];
+    const calibratedTemp = rawTemp + offset;
+
+    this.logger.debug("🌡️ Temperature calibration applied", {
+      sensorId,
+      rawTemp: `${rawTemp.toFixed(1)}°C`,
+      offset: `${offset >= 0 ? '+' : ''}${offset.toFixed(1)}°C`,
+      calibratedTemp: `${calibratedTemp.toFixed(1)}°C`,
+    });
+
+    return calibratedTemp;
+  }
+
+  /**
    * Get initial sensor readings at startup only
    */
   private async getInitialSensorReadings(): Promise<void> {
@@ -421,10 +463,19 @@ export class HVACController {
         sensorStates[sensorId] = state.state;
       }
 
-      // Parse temperatures and send directly to state machine
-      const indoorTemp = parseFloat(sensorStates[this.hvacOptions.tempSensor]);
-      const outdoorTemp = parseFloat(
+      // Parse temperatures and apply calibration
+      const rawIndoorTemp = parseFloat(sensorStates[this.hvacOptions.tempSensor]);
+      const rawOutdoorTemp = parseFloat(
         sensorStates[this.hvacOptions.outdoorSensor],
+      );
+
+      const indoorTemp = this.applyCalibration(
+        this.hvacOptions.tempSensor,
+        rawIndoorTemp,
+      );
+      const outdoorTemp = this.applyCalibration(
+        this.hvacOptions.outdoorSensor,
+        rawOutdoorTemp,
       );
 
       this.logger.info("🌡️ Initial conditions read", {
@@ -432,6 +483,22 @@ export class HVACController {
         outdoorTemp,
         indoorSensor: this.hvacOptions.tempSensor,
         outdoorSensor: this.hvacOptions.outdoorSensor,
+        calibration: {
+          indoor: {
+            raw: `${rawIndoorTemp.toFixed(1)}°C`,
+            calibrated: `${indoorTemp.toFixed(1)}°C`,
+            offset: this.hvacOptions.temperatureCalibration?.[this.hvacOptions.tempSensor]
+              ? `${this.hvacOptions.temperatureCalibration[this.hvacOptions.tempSensor] >= 0 ? '+' : ''}${this.hvacOptions.temperatureCalibration[this.hvacOptions.tempSensor].toFixed(1)}°C`
+              : 'none'
+          },
+          outdoor: {
+            raw: `${rawOutdoorTemp.toFixed(1)}°C`,
+            calibrated: `${outdoorTemp.toFixed(1)}°C`,
+            offset: this.hvacOptions.temperatureCalibration?.[this.hvacOptions.outdoorSensor]
+              ? `${this.hvacOptions.temperatureCalibration[this.hvacOptions.outdoorSensor] >= 0 ? '+' : ''}${this.hvacOptions.temperatureCalibration[this.hvacOptions.outdoorSensor].toFixed(1)}°C`
+              : 'none'
+          }
+        }
       });
 
       // Send initial conditions to state machine
