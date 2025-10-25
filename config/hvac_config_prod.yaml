@@ -20,7 +20,7 @@ hvacOptions:
   outdoorSensor: "sensor.openweathermap_temperature"
   systemMode: "auto"
   temperatureCalibration:
-    "sensor.1st_floor_hall_multisensor_temperature": +0.5 # Add 0.5°C to indoor sensor readings
+    "sensor.1st_floor_hall_multisensor_temperature": +0.8 # Add 0.5°C to indoor sensor readings
 
   hvacEntities:
     - entityId: "climate.living_room_ac"
