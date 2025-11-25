@@ -27,13 +27,13 @@ hvacOptions:
       enabled: true
       defrost: true
     - entityId: "climate.bedroom_ac"
-      enabled: true
+      enabled: false
       defrost: false
     - entityId: "climate.matej_ac"
-      enabled: true
+      enabled: false
       defrost: false
     - entityId: "climate.anicka_ac"
-      enabled: true
+      enabled: false
       defrost: false
     - entityId: "climate.radek_ac"
       enabled: true
