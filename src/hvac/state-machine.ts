@@ -854,17 +854,23 @@ export function createHVACMachine(
 
           for (const entity of enabledEntities) {
             try {
+              // Apply per-unit temperature correction if configured
+              const entityTargetTemp =
+                targetTemp + (entity.temperatureCorrection ?? 0);
+
               await controlHVACEntity(
                 haClient,
                 entity.entityId,
                 "heat",
-                targetTemp,
+                entityTargetTemp,
                 presetMode,
                 logger,
               );
               logger.debug("✅ Heating entity controlled", {
                 entityId: entity.entityId,
-                temperature: targetTemp,
+                baseTemp: targetTemp,
+                correction: entity.temperatureCorrection ?? 0,
+                targetTemp: entityTargetTemp,
                 presetMode,
               });
             } catch (error) {

@@ -145,6 +145,14 @@ export const HvacEntitySchema = z.object({
     .describe("Home Assistant entity ID"),
   enabled: z.boolean().describe("Whether entity is enabled"),
   defrost: z.boolean().describe("Whether entity supports defrost"),
+  temperatureCorrection: z
+    .number()
+    .min(-5.0)
+    .max(5.0)
+    .optional()
+    .describe(
+      "Temperature correction in Celsius applied to heating target (-5.0 to +5.0)",
+    ),
 });
 
 /**

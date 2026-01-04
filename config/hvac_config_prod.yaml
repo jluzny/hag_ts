@@ -26,21 +26,26 @@ hvacOptions:
     - entityId: "climate.living_room_ac"
       enabled: true
       defrost: true
+      temperatureCorrection: +0.5
     - entityId: "climate.bedroom_ac"
       enabled: true
       defrost: false
+      temperatureCorrection: -0.5
     - entityId: "climate.matej_ac"
       enabled: true
       defrost: false
+      temperatureCorrection: -0.5
     - entityId: "climate.anicka_ac"
       enabled: true
       defrost: false
+      temperatureCorrection: -0.5
     - entityId: "climate.radek_ac"
       enabled: true
       defrost: false
+      temperatureCorrection: -0.5
 
   heating:
-    temperature: 21.0
+    temperature: 21.5
     presetMode: "wind_free_sleep"
     temperatureThresholds:
       indoorMin: 21.2
