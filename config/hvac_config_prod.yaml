@@ -34,15 +34,15 @@ hvacOptions:
     - entityId: "climate.matej_ac"
       enabled: true
       defrost: false
-      temperatureCorrection: 1.0
+      temperatureCorrection: -1.0
     - entityId: "climate.anicka_ac"
       enabled: true
       defrost: false
-      temperatureCorrection: 1.0
+      temperatureCorrection: -1.0
     - entityId: "climate.radek_ac"
       enabled: true
       defrost: false
-      temperatureCorrection: 1.0
+      temperatureCorrection: -1.0
 
   heating:
     temperature: 21.0
