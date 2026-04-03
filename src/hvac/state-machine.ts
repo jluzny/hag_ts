@@ -563,6 +563,9 @@ export function createHVACMachine(
 ) {
   const hvacStrategy = new HVACStrategy(hvacOptions);
 
+
+
+
   return createMachine(
     {
       id: "hvac",
@@ -807,6 +810,7 @@ export function createHVACMachine(
           });
         },
 
+
         executeHeating: async ({ context }: { context: HVACContext }) => {
           if (!haClient) {
             logger.warning(
@@ -819,6 +823,31 @@ export function createHVACMachine(
             (e) => e.enabled,
           );
 
+          let heatingEntities = enabledEntities;
+          let matchedRule: any = null;
+
+          if (context.outdoorTemp !== undefined && hvacOptions.heating.rules?.length) {
+            for (const rule of hvacOptions.heating.rules) {
+              const cond = rule.conditions.outdoorTemp;
+              if (!cond) continue;
+
+              const { gt, gte, lt, lte } = cond;
+              let matches = true;
+              if (gt !== undefined && !(context.outdoorTemp > gt)) matches = false;
+              if (gte !== undefined && !(context.outdoorTemp >= gte)) matches = false;
+              if (lt !== undefined && !(context.outdoorTemp < lt)) matches = false;
+              if (lte !== undefined && !(context.outdoorTemp <= lte)) matches = false;
+
+              if (matches) {
+                const ruleEntityIds = new Set(rule.actions.includeUnits);
+                heatingEntities = enabledEntities.filter((e) =>
+                  ruleEntityIds.has(e.entityId),
+                );
+                matchedRule = rule;
+                break;
+              }
+            }
+          }
           // Use manual override preset mode if available, otherwise use config default
           const presetMode =
             context.manualOverride?.presetMode ??
@@ -836,7 +865,6 @@ export function createHVACMachine(
             );
           }
 
-          // Record state change for cycling monitoring
           if (context.indoorTemp) {
             hvacStrategy
               .getCyclingMonitor()
@@ -846,13 +874,16 @@ export function createHVACMachine(
           logger.info("🔥 Executing heating mode on entities", {
             targetTemp,
             presetMode,
-            enabledEntities: enabledEntities.length,
+            totalEntities: heatingEntities.length,
+            matchedRule: matchedRule
+              ? `rule-${hvacOptions.heating.rules.indexOf(matchedRule)}`
+              : "fallback (all enabled)",
             isManualOverride: !!context.manualOverride,
             cyclingStatus:
               "Heating cycle started - monitoring for rapid cycling",
           });
 
-          for (const entity of enabledEntities) {
+          for (const entity of heatingEntities) {
             try {
               // Apply per-unit temperature correction if configured
               const entityTargetTemp =

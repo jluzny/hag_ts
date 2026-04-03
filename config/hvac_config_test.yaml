@@ -21,8 +21,6 @@ hvacOptions:
   tempSensor: "sensor.1st_floor_hall_multisensor_temperature"
   outdoorSensor: "sensor.openweathermap_temperature"
   systemMode: "auto" # auto, heat_only, cool_only, off
-
-  # Temperature calibration settings
   temperatureCalibration:
     "sensor.1st_floor_hall_multisensor_temperature": +0.5 # Add 0.5°C to indoor sensor readings
 
@@ -56,6 +54,15 @@ hvacOptions:
       temperatureThreshold: 0.0
       periodSeconds: 7200 # 2 hours
       durationSeconds: 300 # 5 minutes
+    rules:
+      # When outdoor temp > 10°C, run only living room and radek
+      - conditions:
+          outdoorTemp:
+            gt: 10
+        actions:
+          includeUnits:
+            - "climate.living_room_ac"
+            - "climate.radek_ac"
 
   cooling:
     temperature: 24.3

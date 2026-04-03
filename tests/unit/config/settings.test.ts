@@ -202,6 +202,119 @@ describe("HvacOptionsSchema", () => {
   });
 });
 
+describe("Heating rules validation", () => {
+  test("should validate heating rules with outdoor temperature threshold", () => {
+    const configWithRules = {
+      tempSensor: "sensor.indoor_temperature",
+      outdoorSensor: "sensor.outdoor_temperature",
+      systemMode: SystemMode.AUTO,
+      hvacEntities: [
+        {
+          entityId: "climate.living_room_ac",
+          enabled: true,
+          defrost: false,
+        },
+        {
+          entityId: "climate.radek_ac",
+          enabled: true,
+          defrost: false,
+        },
+      ],
+      heating: {
+        temperature: 21.0,
+        presetMode: "comfort",
+        temperatureThresholds: {
+          indoorMin: 19.0,
+          indoorMax: 22.0,
+          outdoorMin: -10.0,
+          outdoorMax: 15.0,
+        },
+        rules: [
+          {
+            conditions: {
+              outdoorTemp: {
+                gt: 10,
+              },
+            },
+            actions: {
+              includeUnits: [
+                "climate.living_room_ac",
+                "climate.radek_ac",
+              ],
+            },
+          },
+        ],
+      },
+      cooling: {
+        temperature: 24.0,
+        presetMode: "eco",
+        temperatureThresholds: {
+          indoorMin: 23.0,
+          indoorMax: 26.0,
+          outdoorMin: 10.0,
+          outdoorMax: 45.0,
+        },
+      },
+    };
+
+    const result = HvacOptionsSchema.parse(configWithRules);
+    expect(result.heating.rules?.[0].conditions.outdoorTemp?.gt).toBe(10);
+    expect(result.heating.rules?.[0].actions.includeUnits).toEqual([
+      "climate.living_room_ac",
+      "climate.radek_ac",
+    ]);
+  });
+
+  test("should reject invalid entity IDs inside heating rules", () => {
+    const invalidConfig = {
+      tempSensor: "sensor.indoor_temperature",
+      outdoorSensor: "sensor.outdoor_temperature",
+      systemMode: SystemMode.AUTO,
+      hvacEntities: [
+        {
+          entityId: "climate.living_room_ac",
+          enabled: true,
+          defrost: false,
+        },
+      ],
+      heating: {
+        temperature: 21.0,
+        presetMode: "comfort",
+        temperatureThresholds: {
+          indoorMin: 19.0,
+          indoorMax: 22.0,
+          outdoorMin: -10.0,
+          outdoorMax: 15.0,
+        },
+        rules: [
+          {
+            conditions: {
+              outdoorTemp: {
+                gt: 10,
+              },
+            },
+            actions: {
+              includeUnits: ["invalid_format"],
+            },
+          },
+        ],
+      },
+      cooling: {
+        temperature: 24.0,
+        presetMode: "eco",
+        temperatureThresholds: {
+          indoorMin: 23.0,
+          indoorMax: 26.0,
+          outdoorMin: 10.0,
+          outdoorMax: 45.0,
+        },
+      },
+    };
+
+    expect(() => HvacOptionsSchema.parse(invalidConfig)).toThrow(ZodError);
+  });
+});
+
 describe("Temperature thresholds validation", () => {
   test("should enforce temperature ranges", () => {
     const invalidHeating = {

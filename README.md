@@ -329,6 +329,13 @@ hvacOptions:
     temperatureThresholds:
       indoorMin: 18
       indoorMax: 24
+    rules:
+      - conditions:
+          outdoorTemp:
+            gt: 10
+        actions:
+          includeUnits:
+            - "climate.main_hvac"
   cooling:
     temperature: 24
     presetMode: "comfort"

@@ -98,6 +98,39 @@ export const DefrostOptionsSchema = z.object({
 });
 
 /**
+ * Outdoor temperature condition schema for heating rules.
+ * All comparison fields are optional; absence means no constraint on that side.
+ */
+export const OutdoorTempConditionSchema = z.object({
+  gt: z.number().min(-50).max(60).optional().describe("Outdoor temp must be strictly greater than"),
+  gte: z.number().min(-50).max(60).optional().describe("Outdoor temp must be >="),
+  lt: z.number().min(-50).max(60).optional().describe("Outdoor temp must be strictly less than"),
+  lte: z.number().min(-50).max(60).optional().describe("Outdoor temp must be <="),
+});
+
+/**
+ * Actions to apply when a heating rule matches.
+ */
+export const HeatingRuleActionsSchema = z.object({
+  includeUnits: z
+    .array(z.string().refine((val) => val.includes("."), {
+      message: 'Entity ID must be in format "domain.entity"',
+    }))
+    .min(1)
+    .describe("Entity IDs to start when rule matches"),
+});
+
+/**
+ * Single heating rule: first matching rule wins.
+ */
+export const HeatingRuleSchema = z.object({
+  conditions: z.object({
+    outdoorTemp: OutdoorTempConditionSchema.optional(),
+  }).passthrough(),
+  actions: HeatingRuleActionsSchema,
+});
+
+/**
  * Heating configuration schema
  */
 export const HeatingOptionsSchema = z.object({
@@ -109,6 +142,12 @@ export const HeatingOptionsSchema = z.object({
   presetMode: z.string().describe("Heating preset mode"),
   temperatureThresholds: TemperatureThresholdsSchema,
   defrost: DefrostOptionsSchema.optional().describe("Defrost configuration"),
+  rules: z
+    .array(HeatingRuleSchema)
+    .optional()
+    .describe(
+      "Ordered rules — first rule whose conditions all match wins; no match = all enabled entities",
+    ),
 });
 
 /**
@@ -140,7 +179,7 @@ export const HvacEntitySchema = z.object({
   entityId: z
     .string()
     .refine((val) => val.includes("."), {
-      message: 'Entity ID must be in format \"domain.entity\"',
+      message: 'Entity ID must be in format "domain.entity"',
     })
     .describe("Home Assistant entity ID"),
   enabled: z.boolean().describe("Whether entity is enabled"),
@@ -252,3 +291,8 @@ export type HvacEntity = z.infer<typeof HvacEntitySchema>;
 export type HvacOptions = z.infer<typeof HvacOptionsSchema>;
 export type ApplicationOptions = z.infer<typeof ApplicationOptionsSchema>;
 export type Settings = z.infer<typeof SettingsSchema>;
+
+// Heating rules types
+export type OutdoorTempCondition = z.infer<typeof OutdoorTempConditionSchema>;
+export type HeatingRuleActions = z.infer<typeof HeatingRuleActionsSchema>;
+export type HeatingRule = z.infer<typeof HeatingRuleSchema>;
