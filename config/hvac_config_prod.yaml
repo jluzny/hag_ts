@@ -60,14 +60,13 @@ hvacOptions:
       periodSeconds: 7200 # 2 hours
       durationSeconds: 300 # 5 minutes
     rules:
-      # When outdoor temp > 10°C, run only living room and radek
+      # When outdoor temp > 10°C, run only living room
       - conditions:
           outdoorTemp:
             gt: 10
         actions:
           includeUnits:
             - "climate.living_room_ac"
-            - "climate.radek_ac"
 
   cooling:
     temperature: 24.3
