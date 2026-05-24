@@ -317,6 +317,8 @@ export class HVACController {
     });
 
     // Register event handler for sensor changes
+    // Pass monitored sensors so even same-value updates trigger re-evaluation
+    const monitoredSensorIds = new Set(sensors);
     this.haClient.onStateChanged((entityId, oldState, newState) => {
       if (sensors.includes(entityId)) {
         this.logger.debug("📊 Sensor event received", {
@@ -329,7 +331,7 @@ export class HVACController {
         // Handle sensor update
         this.handleSensorChange(entityId, newState);
       }
-    });
+    }, monitoredSensorIds);
 
     this.logger.info("✅ Event handlers registered for sensors", {
       sensors,

@@ -804,6 +804,7 @@ export class HomeAssistantClient {
    */
   onStateChanged(
     handler: (entityId: string, oldState: string, newState: string) => void,
+    monitoredSensors?: Set<string>,
   ): void {
     this.addEventHandler("state_changed", (event: HassEventImpl) => {
       const stateChangeData = event.getStateChangeData();
@@ -812,7 +813,12 @@ export class HomeAssistantClient {
         const oldState = stateChangeData.oldState?.state || "";
         const newState = stateChangeData.newState?.state || "";
 
-        if (oldState !== newState) {
+        // Always process events for monitored sensors, even if the state
+        // value hasn't changed — HA fires state_changed for attribute updates
+        // (battery, signal, last_updated) and we need to re-evaluate temps.
+        // For non-monitored entities, skip if value unchanged.
+        const isMonitored = monitoredSensors?.has(entityId);
+        if (oldState !== newState || isMonitored) {
           handler(entityId, oldState, newState);
         }
       }
