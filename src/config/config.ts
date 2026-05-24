@@ -227,6 +227,14 @@ export const HvacOptionsSchema = z.object({
   temperatureCalibration: TemperatureCalibrationSchema.optional().describe(
     "Temperature calibration offsets for sensors",
   ),
+  sensorStalenessMs: z
+    .number()
+    .int()
+    .min(0)
+    .default(30 * 60 * 1000)
+    .describe(
+      "Max age in ms for per-unit sensor readings. Readings older than this are considered stale and replaced by the hall sensor value.",
+    ),
 });
 
 /**

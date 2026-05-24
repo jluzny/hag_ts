@@ -934,12 +934,17 @@ export function createHVACMachine(
             systemIndoorTemp !== undefined &&
             systemIndoorTemp > hvacOptions.cooling.temperatureThresholds.indoorMin;
 
+          // Staleness threshold for per-unit sensor readings (default: 30 min)
+          const stalenessMs = hvacOptions.sensorStalenessMs ?? 30 * 60 * 1000;
+          const now = Date.now();
+
           logger.info("❄️ Executing cooling control on entities", {
             systemIndoorTemp: systemIndoorTemp ?? "unknown",
             shouldCoolSystem,
             targetTemp: hvacOptions.cooling.temperature,
             presetMode: hvacOptions.cooling.presetMode,
             enabledEntities: enabledEntities.length,
+            stalenessThresholdMs: stalenessMs,
             systemThresholds: {
               indoorMin: hvacOptions.cooling.temperatureThresholds.indoorMin,
               indoorMax: hvacOptions.cooling.temperatureThresholds.indoorMax,
@@ -951,29 +956,55 @@ export function createHVACMachine(
               // Derive temperature sensor for this unit
               const tempSensorId = deriveTemperatureSensor(entity.entityId);
 
-              // Get current room temperature
+              // Get current room temperature and check staleness
               const tempState = await haClient.getState(tempSensorId);
               const roomTemp = parseFloat(tempState.state);
 
+              // Check if the sensor reading is stale
+              const sensorAge = tempState.lastUpdated
+                ? now - tempState.lastUpdated.getTime()
+                : Infinity;
+              const isStale = sensorAge > stalenessMs;
+
+              // When stale, fall back to the system (hall) sensor temperature
+              const effectiveRoomTemp = isStale ? (systemIndoorTemp ?? roomTemp) : roomTemp;
+
               // Apply calibration if configured for this sensor
-              const calibratedRoomTemp =
-                hvacOptions.temperatureCalibration?.[tempSensorId]
-                  ? roomTemp + hvacOptions.temperatureCalibration[tempSensorId]
-                  : roomTemp;
+              const calibratedRoomTemp = isStale
+                ? effectiveRoomTemp // Hall sensor already calibrated in context
+                : (hvacOptions.temperatureCalibration?.[tempSensorId]
+                    ? effectiveRoomTemp + hvacOptions.temperatureCalibration[tempSensorId]
+                    : effectiveRoomTemp);
+
+              if (isStale) {
+                logger.info("🕰️ Stale sensor detected — using hall sensor fallback", {
+                  entityId: entity.entityId,
+                  tempSensorId,
+                  staleTemp: roomTemp,
+                  sensorAgeMs: sensorAge,
+                  stalenessThresholdMs: stalenessMs,
+                  fallbackTemp: effectiveRoomTemp,
+                  lastUpdated: tempState.lastUpdated?.toISOString(),
+                });
+              }
 
               logger.debug("🌡️ Room temperature check", {
                 entityId: entity.entityId,
                 tempSensorId,
                 roomTemp,
+                effectiveRoomTemp,
                 calibratedRoomTemp,
+                isStale,
+                sensorAgeMs: sensorAge,
               });
 
               // Decision logic:
               // 1. If system says cool (hall sensor above threshold), turn on
               //    units UNLESS the individual room is already comfortably cool
-              //    (below a safety floor of indoorMin - 2°C).
+              //    (below a safety floor of cooling.temperature - 2°C).
               // 2. If system says no cooling needed, turn off units that are running.
-              // 3. If room is in the hysteresis zone, maintain current state.
+              // Stale per-unit sensors are replaced by hall sensor readings so
+              // they don't falsely block cooling when units have been off.
 
               // Apply per-unit temperature correction if configured
               const entityTargetTemp =
@@ -993,8 +1024,10 @@ export function createHVACMachine(
                     {
                       entityId: entity.entityId,
                       roomTemp,
+                      effectiveRoomTemp,
                       calibratedRoomTemp,
                       safetyFloor: coolingSafetyFloor,
+                      isStale,
                       reason: `Room at ${calibratedRoomTemp}°C is below safety floor ${coolingSafetyFloor}°C`,
                     },
                   );
@@ -1011,8 +1044,10 @@ export function createHVACMachine(
                   logger.info("❄️ Unit turned ON for cooling", {
                     entityId: entity.entityId,
                     roomTemp,
+                    effectiveRoomTemp,
                     calibratedRoomTemp,
                     targetTemp: entityTargetTemp,
+                    isStale,
                   });
                 }
               } else {

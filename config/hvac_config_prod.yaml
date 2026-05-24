@@ -83,3 +83,4 @@ hvacOptions:
     end: 21
 
   evaluationCacheMs: 100 # Cache evaluations for 100ms
+  sensorStalenessMs: 1800000 # 30 minutes - per-unit sensors older than this are considered stale
