@@ -2,7 +2,7 @@
 # Production configuration with optimized settings for reliability and efficiency
 
 appOptions:
-  logLevel: "info"
+  logLevel: "debug"
   useAi: false
   aiModel: "gpt-3.5-turbo"
   aiTemperature: 0.1
