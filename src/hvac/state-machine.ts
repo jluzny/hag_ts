@@ -914,7 +914,7 @@ export function createHVACMachine(
           }
         },
 
-        executeCooling: async () => {
+        executeCooling: async ({ context }: { context: HVACContext }) => {
           if (!haClient) {
             logger.warning(
               "⚠️ No Home Assistant client available for cooling control",
@@ -926,12 +926,24 @@ export function createHVACMachine(
             (e) => e.enabled,
           );
 
-          logger.info("❄️ Executing individual cooling control on entities", {
+          // Use the calibrated indoor temperature (hall sensor) for the
+          // overall system decision — per-unit sensors are only used as a
+          // safety floor to avoid over-cooling already-cold rooms.
+          const systemIndoorTemp = context?.indoorTemp;
+          const shouldCoolSystem =
+            systemIndoorTemp !== undefined &&
+            systemIndoorTemp > hvacOptions.cooling.temperatureThresholds.indoorMin;
+
+          logger.info("❄️ Executing cooling control on entities", {
+            systemIndoorTemp: systemIndoorTemp ?? "unknown",
+            shouldCoolSystem,
             targetTemp: hvacOptions.cooling.temperature,
             presetMode: hvacOptions.cooling.presetMode,
             enabledEntities: enabledEntities.length,
-            indoorMax: hvacOptions.cooling.temperatureThresholds.indoorMax,
-            indoorMin: hvacOptions.cooling.temperatureThresholds.indoorMin,
+            systemThresholds: {
+              indoorMin: hvacOptions.cooling.temperatureThresholds.indoorMin,
+              indoorMax: hvacOptions.cooling.temperatureThresholds.indoorMax,
+            },
           });
 
           for (const entity of enabledEntities) {
@@ -943,41 +955,68 @@ export function createHVACMachine(
               const tempState = await haClient.getState(tempSensorId);
               const roomTemp = parseFloat(tempState.state);
 
+              // Apply calibration if configured for this sensor
+              const calibratedRoomTemp =
+                hvacOptions.temperatureCalibration?.[tempSensorId]
+                  ? roomTemp + hvacOptions.temperatureCalibration[tempSensorId]
+                  : roomTemp;
+
               logger.debug("🌡️ Room temperature check", {
                 entityId: entity.entityId,
                 tempSensorId,
                 roomTemp,
-                indoorMax: hvacOptions.cooling.temperatureThresholds.indoorMax,
-                indoorMin: hvacOptions.cooling.temperatureThresholds.indoorMin,
+                calibratedRoomTemp,
               });
 
-              // Individual unit decision logic
-              if (
-                roomTemp > hvacOptions.cooling.temperatureThresholds.indoorMax
-              ) {
-                // Turn ON cooling - room too hot
-                await controlHVACEntity(
-                  haClient,
-                  entity.entityId,
-                  "cool",
-                  hvacOptions.cooling.temperature,
-                  hvacOptions.cooling.presetMode,
-                  logger,
-                );
-                logger.info("❄️ Unit turned ON - room too hot", {
-                  entityId: entity.entityId,
-                  roomTemp,
-                  threshold:
-                    hvacOptions.cooling.temperatureThresholds.indoorMax,
-                  excess: (
-                    roomTemp -
-                    hvacOptions.cooling.temperatureThresholds.indoorMax
-                  ).toFixed(1),
-                });
-              } else if (
-                roomTemp < hvacOptions.cooling.temperatureThresholds.indoorMin
-              ) {
-                // Turn OFF cooling - room cool enough
+              // Decision logic:
+              // 1. If system says cool (hall sensor above threshold), turn on
+              //    units UNLESS the individual room is already comfortably cool
+              //    (below a safety floor of indoorMin - 2°C).
+              // 2. If system says no cooling needed, turn off units that are running.
+              // 3. If room is in the hysteresis zone, maintain current state.
+
+              // Apply per-unit temperature correction if configured
+              const entityTargetTemp =
+                hvacOptions.cooling.temperature +
+                (entity.temperatureCorrection ?? 0);
+
+              if (shouldCoolSystem) {
+                // System-wide decision is to cool (hall sensor above threshold)
+                // Check if this specific room is already too cold to warrant cooling
+                const coolingSafetyFloor =
+                  hvacOptions.cooling.temperature - 2; // e.g. 24.3 - 2 = 22.3°C
+
+                if (calibratedRoomTemp < coolingSafetyFloor) {
+                  // Room is already cool enough — skip cooling this unit
+                  logger.info(
+                    "⏭️ Unit skipped - room already cool enough",
+                    {
+                      entityId: entity.entityId,
+                      roomTemp,
+                      calibratedRoomTemp,
+                      safetyFloor: coolingSafetyFloor,
+                      reason: `Room at ${calibratedRoomTemp}°C is below safety floor ${coolingSafetyFloor}°C`,
+                    },
+                  );
+                } else {
+                  // Room is warm enough to warrant cooling
+                  await controlHVACEntity(
+                    haClient,
+                    entity.entityId,
+                    "cool",
+                    entityTargetTemp,
+                    hvacOptions.cooling.presetMode,
+                    logger,
+                  );
+                  logger.info("❄️ Unit turned ON for cooling", {
+                    entityId: entity.entityId,
+                    roomTemp,
+                    calibratedRoomTemp,
+                    targetTemp: entityTargetTemp,
+                  });
+                }
+              } else {
+                // System-wide: no cooling needed — turn off any running units
                 await controlHVACEntity(
                   haClient,
                   entity.entityId,
@@ -986,29 +1025,12 @@ export function createHVACMachine(
                   undefined,
                   logger,
                 );
-                logger.info("🔴 Unit turned OFF - room cool enough", {
+                logger.info("🔴 Unit turned OFF - system cooling not needed", {
                   entityId: entity.entityId,
-                  roomTemp,
+                  systemIndoorTemp,
                   threshold:
                     hvacOptions.cooling.temperatureThresholds.indoorMin,
-                  deficit: (
-                    hvacOptions.cooling.temperatureThresholds.indoorMin -
-                    roomTemp
-                  ).toFixed(1),
                 });
-              } else {
-                // Room temperature in acceptable range - maintain current state
-                logger.info(
-                  "✅ Unit state maintained - room temperature acceptable",
-                  {
-                    entityId: entity.entityId,
-                    roomTemp,
-                    minThreshold:
-                      hvacOptions.cooling.temperatureThresholds.indoorMin,
-                    maxThreshold:
-                      hvacOptions.cooling.temperatureThresholds.indoorMax,
-                  },
-                );
               }
             } catch (error) {
               logger.error(

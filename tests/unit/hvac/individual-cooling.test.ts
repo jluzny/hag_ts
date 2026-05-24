@@ -240,32 +240,36 @@ describe("Individual HVAC Unit Cooling Control", () => {
   });
 
   describe("Individual cooling control logic", () => {
-    test("should turn ON units in rooms above indoorMax threshold", async () => {
+    test("should turn ON units when system decides cooling and room is warm enough", async () => {
       mockLogger.clearLogs();
       mockHaClient.clearServiceCalls();
 
-      // Start state machine and trigger cooling by forcing transition to cooling state
+      // All room sensors above the safety floor (cooling.temperature - 2 = 22°C)
+      // so system cooling decision should turn them all ON
+      mockHaClient.setMockState("sensor.living_room_ac_temperature", "25.0");
+      mockHaClient.setMockState("sensor.bedroom_ac_temperature", "27.5");
+      mockHaClient.setMockState("sensor.office_ac_temperature", "24.0");
+
       stateMachine.start();
 
-      // Set global conditions that meet cooling requirements
+      // Set global conditions: hall sensor above cooling threshold (23°C min)
       stateMachine.send({
         type: "UPDATE_CONDITIONS",
         data: {
-          indoorTemp: 27.0, // Global temp high (satisfies cooling guard)
+          indoorTemp: 27.0, // Hall sensor high — system should decide to cool
           outdoorTemp: 30.0, // Within outdoor range
           currentHour: 14, // Active hours
           isWeekday: true,
         },
       });
 
-      // Force into cooling mode to test individual unit logic
+      // Force into cooling mode
       stateMachine.send({
         type: "MODE_CHANGE",
         mode: HVACMode.COOL,
         temperature: 24.0,
       });
 
-      // Allow some time for async operations
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       const serviceCalls = mockHaClient.getServiceCalls();
@@ -279,19 +283,19 @@ describe("Individual HVAC Unit Cooling Control", () => {
       stateMachine.stop();
     });
 
-    test("should maintain units with temperature in acceptable range", async () => {
-      // Set all temperatures in acceptable range (between 23.0 and 26.0)
-      mockHaClient.setMockState("sensor.living_room_ac_temperature", "24.5");
-      mockHaClient.setMockState("sensor.bedroom_ac_temperature", "25.0");
-      mockHaClient.setMockState("sensor.office_ac_temperature", "24.0");
+    test("should skip units with rooms below safety floor when system decides cooling", async () => {
+      // Set all temperatures below safety floor (cooling.temperature - 2 = 22°C)
+      mockHaClient.setMockState("sensor.living_room_ac_temperature", "20.0");
+      mockHaClient.setMockState("sensor.bedroom_ac_temperature", "21.0");
+      mockHaClient.setMockState("sensor.office_ac_temperature", "19.5");
 
       stateMachine.start();
 
-      // Force into cooling mode with acceptable room temperatures
+      // System decides cooling (hall sensor above threshold) but rooms are cold
       stateMachine.send({
         type: "UPDATE_CONDITIONS",
         data: {
-          indoorTemp: 25.0,
+          indoorTemp: 25.0, // Hall hot — system wants to cool
           outdoorTemp: 30.0,
           currentHour: 14,
           isWeekday: true,
@@ -312,17 +316,17 @@ describe("Individual HVAC Unit Cooling Control", () => {
       stateMachine.stop();
     });
 
-    test("should handle mixed room temperatures correctly", async () => {
-      // Set mixed temperatures: one hot, one cold, one acceptable
-      mockHaClient.setMockState("sensor.living_room_ac_temperature", "27.0"); // > 26.0 (turn ON)
-      mockHaClient.setMockState("sensor.bedroom_ac_temperature", "22.5"); // < 23.0 (turn OFF)
-      mockHaClient.setMockState("sensor.office_ac_temperature", "24.5"); // 23-26 range (maintain)
+    test("should handle mixed room temperatures: warm rooms cool, cold rooms skip", async () => {
+      // Mixed: one hot (above safety floor), one cold (below safety floor), one in between
+      mockHaClient.setMockState("sensor.living_room_ac_temperature", "27.0"); // Above 22 → cool
+      mockHaClient.setMockState("sensor.bedroom_ac_temperature", "20.5"); // Below 22 → skip
+      mockHaClient.setMockState("sensor.office_ac_temperature", "23.0"); // Above 22 → cool
 
       stateMachine.start();
       stateMachine.send({
         type: "UPDATE_CONDITIONS",
         data: {
-          indoorTemp: 25.0,
+          indoorTemp: 25.0, // System wants to cool
           outdoorTemp: 30.0,
           currentHour: 14,
           isWeekday: true,
