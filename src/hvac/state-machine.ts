@@ -132,7 +132,7 @@ export class HVACStrategy {
 
         if (!this.isActiveHour(data.hour, data.isWeekday)) {
           turnOffReason = `outside active hours (${data.hour}:00)`;
-        } else if (this.hasReachedMaximumTemperature(data)) {
+        } else if (this.hasReachedMaximumTemperature(data) && !shouldCool) {
           turnOffReason = `heating target reached (${data.currentTemp}°C >= ${this.hvacOptions.heating.temperatureThresholds.indoorMax}°C)`;
         } else if (shouldCool && this.hasReachedMinimumCoolingTemperature(data)) {
           // Only check cooling threshold if cooling was actually active
@@ -498,7 +498,9 @@ export class HVACStrategy {
     }
 
     // Turn off if maximum heating threshold reached (proper hysteresis)
-    if (this.hasReachedMaximumTemperature(data)) {
+    // But only if cooling is NOT needed — when it's hot enough to need cooling,
+    // reaching the heating max is irrelevant and should not block the cooling transition
+    if (this.hasReachedMaximumTemperature(data) && !this.shouldCool(data)) {
       this.logger.debug("🎯 Turn off heating - maximum threshold reached", {
         currentTemp: `${data.currentTemp}°C`,
         maxThreshold: `${this.hvacOptions.heating.temperatureThresholds.indoorMax}°C`,
