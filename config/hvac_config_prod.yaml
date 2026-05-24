@@ -72,7 +72,7 @@ hvacOptions:
     temperature: 24.3
     presetMode: "wind_free"
     temperatureThresholds:
-      indoorMin: 24
+      indoorMin: 23.7
       indoorMax: 24.5
       outdoorMin: 23
       outdoorMax: 55.0
