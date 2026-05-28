@@ -74,7 +74,7 @@ hvacOptions:
     temperatureThresholds:
       indoorMin: 23.7
       indoorMax: 24.5
-      outdoorMin: 23
+      outdoorMin: 15
       outdoorMax: 55.0
 
   activeHours:
