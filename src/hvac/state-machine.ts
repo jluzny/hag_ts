@@ -456,7 +456,7 @@ export class HVACStrategy {
     if (!activeHours) return true;
 
     const start = isWeekday ? activeHours.startWeekday : activeHours.start;
-    return hour >= start && hour <= activeHours.end;
+    return hour >= start && hour < activeHours.end;
   }
 
   /**
