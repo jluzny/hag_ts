@@ -36,7 +36,7 @@ hvacOptions:
       defrost: false
       temperatureCorrection: -1.0
     - entityId: "climate.anicka_ac"
-      enabled: true
+      enabled: false
       defrost: false
       temperatureCorrection: -1.0
     - entityId: "climate.radek_ac"
