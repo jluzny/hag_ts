@@ -24,23 +24,23 @@ hvacOptions:
 
   hvacEntities:
     - entityId: "climate.living_room_ac"
-      enabled: false
+      enabled: true
       defrost: true
       temperatureCorrection: +1.0
     - entityId: "climate.bedroom_ac"
-      enabled: false
+      enabled: true
       defrost: false
       temperatureCorrection: -1.0
     - entityId: "climate.matej_ac"
-      enabled: false
+      enabled: true
       defrost: false
       temperatureCorrection: -1.0
     - entityId: "climate.anicka_ac"
-      enabled: false
+      enabled: true
       defrost: false
       temperatureCorrection: -1.0
     - entityId: "climate.radek_ac"
-      enabled: false
+      enabled: true
       defrost: false
       temperatureCorrection: -1.0
 
