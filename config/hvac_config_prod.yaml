@@ -69,7 +69,7 @@ hvacOptions:
             - "climate.living_room_ac"
 
   cooling:
-    temperature: 24.0
+    temperature: 25.0
     presetMode: "wind_free"
     temperatureThresholds:
       indoorMin: 23.7
