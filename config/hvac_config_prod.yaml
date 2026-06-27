@@ -33,7 +33,7 @@ hvacOptions:
       enabled: true
       defrost: false
     - entityId: "climate.anicka_ac"
-      enabled: true
+      enabled: false
       defrost: false
     - entityId: "climate.radek_ac"
       enabled: true
