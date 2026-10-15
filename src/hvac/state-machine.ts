@@ -846,12 +846,16 @@ function raceAbandoned<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> 
 }
 
 /**
- * Command every enabled HVAC entity to a per-entity mode.
+ * Command HVAC entities to a per-entity mode.
  *
  * Used by the custom defrost cycle (defrost=true -> cool, defrost=false -> off,
  * completion/abort -> off) and by turnOff. Disabled/unmanaged entities are left
  * untouched. Commands are attempted independently: a failing command is logged
  * and reported to the caller, never silently swallowed.
+ *
+ * `entities` restricts the batch to the given units (default: every enabled
+ * entity) — room selection uses it to stop exactly the units the effective
+ * outdoor reading no longer selects (issue 3).
  *
  * Fail-safe `off` commands (completion, abort, stop, turn off) are retried a
  * bounded number of times: leaving a unit in forced cool (or heating) because a
@@ -877,6 +881,8 @@ async function commandHvacEntities(
   // HvacCommandQueue.abandonOutstanding): its `off` commands must not wait
   // behind a hung command, and a superseded command must not land after them.
   failSafeOff = false,
+  // Optional explicit target set (default: every enabled entity).
+  entities?: HvacEntity[],
 ): Promise<string[]> {
   const runBatch = async (signal: AbortSignal): Promise<string[]> => {
     if (!haClient) {
@@ -886,7 +892,8 @@ async function commandHvacEntities(
       return [];
     }
 
-    const enabledEntities = hvacOptions.hvacEntities.filter((e) => e.enabled);
+    const enabledEntities =
+      entities ?? hvacOptions.hvacEntities.filter((e) => e.enabled);
     const failedEntities: string[] = [];
 
     for (const entity of enabledEntities) {
@@ -977,6 +984,61 @@ async function commandHvacEntities(
 }
 
 /**
+ * Entity shape of the configured HVAC units (the config schema's inferred type,
+ * which carries the optional per-unit `temperatureCorrection`).
+ */
+type ConfiguredHvacEntity = HvacOptions["hvacEntities"][number];
+
+/**
+ * Units one heating evaluation selects (room selection).
+ *
+ * Enabled units are the base set; the first matching outdoor-temperature rule
+ * narrows it (production configuration: `gt: 10` selects the living room only,
+ * so −5 … 10 °C inclusive keeps every enabled unit and > 10 … 15 °C keeps the
+ * living room). With no outdoor reading, no rule or no matching rule every
+ * enabled unit stays selected — the pre-existing behaviour, unchanged.
+ * Disabled/unmanaged units are never part of any selection.
+ *
+ * Extracted from `executeHeating` unchanged so the start path and the
+ * room-selection reconciliation (issue 3) cannot drift apart.
+ */
+function selectHeatingEntities(
+  hvacOptions: HvacOptions,
+  context: HVACContext,
+): { entities: ConfiguredHvacEntity[]; matchedRule: any } {
+  const enabledEntities = hvacOptions.hvacEntities.filter((e) => e.enabled);
+  const rules = hvacOptions.heating.rules;
+
+  let heatingEntities = enabledEntities;
+  let matchedRule: any = null;
+
+  if (context.outdoorTemp !== undefined && rules?.length) {
+    for (const rule of rules) {
+      const cond = rule.conditions.outdoorTemp;
+      if (!cond) continue;
+
+      const { gt, gte, lt, lte } = cond;
+      let matches = true;
+      if (gt !== undefined && !(context.outdoorTemp > gt)) matches = false;
+      if (gte !== undefined && !(context.outdoorTemp >= gte)) matches = false;
+      if (lt !== undefined && !(context.outdoorTemp < lt)) matches = false;
+      if (lte !== undefined && !(context.outdoorTemp <= lte)) matches = false;
+
+      if (matches) {
+        const ruleEntityIds = new Set(rule.actions.includeUnits);
+        heatingEntities = enabledEntities.filter((e) =>
+          ruleEntityIds.has(e.entityId),
+        );
+        matchedRule = rule;
+        break;
+      }
+    }
+  }
+
+  return { entities: heatingEntities, matchedRule };
+}
+
+/**
  * Create HVAC state machine with XState
  */
 export function createHVACMachine(
@@ -989,6 +1051,106 @@ export function createHVACMachine(
   // controller stop/start in the same process).
   hvacStrategy: HVACStrategy = new HVACStrategy(hvacOptions),
 ) {
+  /**
+   * Room-selection ownership of the running heating cycle (issue 3), kept in
+   * memory only.
+   *
+   * The entity ids HAG has commanded to *heat* and has not successfully
+   * commanded off since — i.e. the units the current heating cycle is actually
+   * driving. Room selection must stop an owned unit that the effective outdoor
+   * reading no longer selects, and must never command a unit HAG did not start
+   * (no blanket shutdown of disabled or unmanaged units, and no repeated stop
+   * for a unit already stopped).
+   *
+   * This is outgoing *intent* only: it never claims a device state, and it dies
+   * with the process (no persistence layer).
+   */
+  const heatingOwnedEntities = new Set<string>();
+
+  /**
+   * Stop the previously started units the current evaluation no longer selects.
+   *
+   * Called from the ordinary heating start path and from the heating
+   * continuation, so an outdoor crossing above 10 °C stops the other rooms on
+   * the reevaluation that observed it, not after their cycle.
+   *
+   * Runs as its own serialized batch, reusing the fail-safe `off` path (bounded
+   * retries, failures reported, never claimed as success). It issues **only**
+   * stop commands: the retained targets of still-selected units are not
+   * rewritten here.
+   *
+   * @returns entity ids whose stop command failed after every allowed attempt
+   */
+  const stopExcludedHeatingUnits = async (
+    context: HVACContext,
+  ): Promise<string[]> => {
+    // No client, no command: ownership is left untouched rather than being
+    // claimed as released.
+    if (!haClient) return [];
+
+    const outdoorTemp = context.outdoorTemp;
+
+    // Room selection is a correction *inside* the approved operating range.
+    // An outdoor reading outside −5 … 15 °C (or an unreadable one) must not
+    // shut a running unit down — the separate running-unit policy owns that
+    // decision — so no selection change is applied here.
+    if (
+      !isFiniteNumber(outdoorTemp) ||
+      outdoorTemp < hvacOptions.heating.temperatureThresholds.outdoorMin ||
+      outdoorTemp > hvacOptions.heating.temperatureThresholds.outdoorMax
+    ) {
+      return [];
+    }
+
+    const selected = new Set(
+      selectHeatingEntities(hvacOptions, context).entities.map(
+        (entity) => entity.entityId,
+      ),
+    );
+    const excluded = hvacOptions.hvacEntities.filter(
+      (entity) =>
+        entity.enabled &&
+        heatingOwnedEntities.has(entity.entityId) &&
+        !selected.has(entity.entityId),
+    );
+
+    // Nothing HAG started is excluded (or nothing is owned): no command at all.
+    if (excluded.length === 0) return [];
+
+    logger.info(
+      "🚪 [HVAC] Room selection no longer selects running units - stopping them",
+      {
+        outdoorTemp: `${outdoorTemp}°C`,
+        selectedUnits: [...selected],
+        excludedUnits: excluded.map((entity) => entity.entityId),
+        reason:
+          "the effective outdoor reading excludes these rooms on this reevaluation; the running cycle must not keep them heating",
+      },
+    );
+
+    const failedEntities = await commandHvacEntities(
+      haClient,
+      hvacOptions,
+      logger,
+      () => "off",
+      "room_selection_exclusion",
+      commandQueue,
+      false,
+      excluded,
+    );
+
+    // Ownership is dropped only for the units the stop was delivered to: a
+    // failed fail-safe stop stays owned, so the next relevant evaluation
+    // retries it instead of silently leaving the unit heating.
+    for (const entity of excluded) {
+      if (!failedEntities.includes(entity.entityId)) {
+        heatingOwnedEntities.delete(entity.entityId);
+      }
+    }
+
+    return failedEntities;
+  };
+
   return createMachine(
     {
       id: "hvac",
@@ -1105,13 +1267,15 @@ export function createHVACMachine(
               // Continuation: a running heating cycle survives an evaluation
               // that no longer qualifies for a start (outdoor range exit,
               // indoor hysteresis band, temporarily unreadable sensor). This is
-              // an internal transition — no entry actions, no commands — so the
-              // running units keep their existing settings. Room-selection
-              // narrowing (issue 3) runs on the ordinary start-eligible path
-              // below, which stays unchanged.
+              // an internal transition — no entry actions, no settings are
+              // rewritten — so the running units keep their existing targets.
+              // Room-selection exclusions (issue 3) are still applied here: a
+              // room the effective outdoor reading excludes is stopped *on the
+              // reevaluation*, not after its cycle. Only stop commands are
+              // issued, and only for excluded units HAG started.
               {
                 guard: "heatingContinues",
-                actions: "logHeatingContinuation",
+                actions: ["reconcileRoomSelection", "logHeatingContinuation"],
               },
               {
                 target: "evaluating",
@@ -1311,6 +1475,11 @@ export function createHVACMachine(
               .map((e) => e.entityId),
             failedEntities,
           });
+
+          // Nothing is heating any more: room-selection ownership is dropped so
+          // the ordinary reevaluation after the cycle never issues a stop for a
+          // unit this cycle already switched off.
+          heatingOwnedEntities.clear();
         },
 
         completeDefrost: async ({ self }) => {
@@ -1333,6 +1502,9 @@ export function createHVACMachine(
             failedEntities,
             note: "ordinary evaluation now decides whether heating resumes",
           });
+
+          // Every managed unit was commanded off: no heating ownership remains.
+          heatingOwnedEntities.clear();
 
           // 3. Ordinary evaluation (with a freshly read wall clock) decides
           //    whether heat resumes — there is no unconditional return to heating.
@@ -1362,6 +1534,9 @@ export function createHVACMachine(
             commandQueue,
             true,
           );
+
+          // Every managed unit was commanded off: no heating ownership remains.
+          heatingOwnedEntities.clear();
         },
 
         cancelDefrostPeriod: cancel(DEFROST_PERIOD_SEND_ID),
@@ -1396,6 +1571,12 @@ export function createHVACMachine(
           );
         },
 
+        // Issue 3 on a continuation: only the exclusion runs — the running
+        // units keep their settings, nothing is re-asserted here.
+        reconcileRoomSelection: async ({ context }) => {
+          await stopExcludedHeatingUnits(context);
+        },
+
         // Continuation of a running heating cycle: deliberately no commands.
         // The units keep their existing targets/settings, so the cycle is not
         // held by rewriting them.
@@ -1410,11 +1591,16 @@ export function createHVACMachine(
         },
 
 
-        executeHeating: async ({ context }: { context: HVACContext }) =>
+        executeHeating: async ({ context }: { context: HVACContext }) => {
+          // Room selection (issue 3) is reconciled before the selected units are
+          // re-asserted: a unit the effective outdoor reading no longer selects
+          // is stopped on this same reevaluation.
+          await stopExcludedHeatingUnits(context);
+
           // Serialized: these commands must not overtake an earlier
           // batch (e.g. a defrost abort's off commands) and are dropped when a
           // fail-safe off batch supersedes them.
-          commandQueue.run(async (signal) => {
+          await commandQueue.run(async (signal) => {
             if (!haClient) {
               logger.warning(
                 "⚠️ No Home Assistant client available for heating control",
@@ -1428,35 +1614,9 @@ export function createHVACMachine(
               return;
             }
 
-            const enabledEntities = hvacOptions.hvacEntities.filter(
-              (e) => e.enabled,
-            );
+            const { entities: heatingEntities, matchedRule } =
+              selectHeatingEntities(hvacOptions, context);
 
-            let heatingEntities = enabledEntities;
-            let matchedRule: any = null;
-
-            if (context.outdoorTemp !== undefined && hvacOptions.heating.rules?.length) {
-              for (const rule of hvacOptions.heating.rules) {
-                const cond = rule.conditions.outdoorTemp;
-                if (!cond) continue;
-
-                const { gt, gte, lt, lte } = cond;
-                let matches = true;
-                if (gt !== undefined && !(context.outdoorTemp > gt)) matches = false;
-                if (gte !== undefined && !(context.outdoorTemp >= gte)) matches = false;
-                if (lt !== undefined && !(context.outdoorTemp < lt)) matches = false;
-                if (lte !== undefined && !(context.outdoorTemp <= lte)) matches = false;
-
-                if (matches) {
-                  const ruleEntityIds = new Set(rule.actions.includeUnits);
-                  heatingEntities = enabledEntities.filter((e) =>
-                    ruleEntityIds.has(e.entityId),
-                  );
-                  matchedRule = rule;
-                  break;
-                }
-              }
-            }
             // Use manual override preset mode if available, otherwise use config default
             const presetMode =
               context.manualOverride?.presetMode ??
@@ -1485,7 +1645,7 @@ export function createHVACMachine(
               presetMode,
               totalEntities: heatingEntities.length,
               matchedRule: matchedRule
-                ? `rule-${hvacOptions.heating.rules.indexOf(matchedRule)}`
+                ? `rule-${hvacOptions.heating.rules?.indexOf(matchedRule)}`
                 : "fallback (all enabled)",
               isManualOverride: !!context.manualOverride,
               cyclingStatus:
@@ -1521,7 +1681,19 @@ export function createHVACMachine(
                 });
               }
             }
-          }, undefined),
+
+            if (!signal.aborted) {
+              // The cycle drives these units now — outgoing intent only, in
+              // memory. Units whose fail-safe stop was not delivered stay owned
+              // (the reconcile above only released the delivered ones), so a
+              // later evaluation retries the stop instead of silently leaving
+              // them heating.
+              for (const entity of heatingEntities) {
+                heatingOwnedEntities.add(entity.entityId);
+              }
+            }
+          }, undefined);
+        },
 
         executeCooling: async ({ context }: { context: HVACContext }) =>
           // Serialized: these commands must not overtake an earlier
@@ -1733,6 +1905,10 @@ export function createHVACMachine(
             commandQueue,
             true,
           );
+
+          // Every managed unit was commanded off: no heating ownership remains,
+          // so the next heating cycle's room selection starts from scratch.
+          heatingOwnedEntities.clear();
         },
       },
       guards: {
