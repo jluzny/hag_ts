@@ -83,9 +83,31 @@ interface RecordedCall {
 }
 
 class FakeHomeAssistantClient extends HomeAssistantClient {
+  /** Service calls that reached the client successfully, in call order. */
   calls: RecordedCall[] = [];
   /** Entity ids whose commands must fail, to exercise command-failure handling. */
   failFor = new Set<string>();
+  /**
+   * Transient failures keyed `${entityId}::${service}`: the stored number is how
+   * many further attempts must fail before that command succeeds.
+   */
+  failNext = new Map<string, number>();
+  /** Every command attempt (successful or failed) in attempt order. */
+  attempts: { entityId: string; service: string }[] = [];
+  /**
+   * Service calls in the order they actually reached the wire (i.e. after the
+   * client's own pre-checks) — this is what determines the device's final mode.
+   */
+  wire: { entityId: string; service: string }[] = [];
+
+  /**
+   * Mirrors the production client's ordering hazard: when true, `getState`
+   * blocks until `releaseGetState()`, exactly like the REST round-trip that
+   * `HomeAssistantClient.controlEntity` performs before it sends its service
+   * call (while `climate.turn_off` goes straight to `callService`).
+   */
+  deferGetState = false;
+  private gates = new Map<string, () => void>();
 
   override async connect(): Promise<void> {}
   override async disconnect(): Promise<void> {}
@@ -98,7 +120,34 @@ class FakeHomeAssistantClient extends HomeAssistantClient {
   override onStateChanged(): void {}
 
   override async getState(entityId: string): Promise<HassStateImpl> {
+    if (this.deferGetState) {
+      await new Promise<void>((resolve) => {
+        this.gates.set(entityId, resolve);
+      });
+    }
     return new HassStateImpl(entityId, "21.0", {}, new Date(), new Date());
+  }
+
+  /** Unblock every deferred `getState` call and stop deferring further ones. */
+  releaseGetState(): void {
+    this.deferGetState = false;
+    const pending = [...this.gates.values()];
+    this.gates.clear();
+    for (const resolve of pending) resolve();
+  }
+
+  /** Number of `getState` calls currently blocked. */
+  pendingGetState(): number {
+    return this.gates.size;
+  }
+
+  private shouldFail(entityId: string, service: string): boolean {
+    if (this.failFor.has(entityId)) return true;
+    const key = `${entityId}::${service}`;
+    const remaining = this.failNext.get(key) ?? 0;
+    if (remaining <= 0) return false;
+    this.failNext.set(key, remaining - 1);
+    return true;
   }
 
   override async controlEntity(
@@ -108,14 +157,21 @@ class FakeHomeAssistantClient extends HomeAssistantClient {
     valueType: { type: string; key: string },
     value: unknown,
   ): Promise<void> {
-    if (this.failFor.has(entityId)) {
+    const serviceName = `${domain}.${service}`;
+    // The real client reads the entity state (a network round-trip) before it
+    // decides to send the service call: that pause is where command ordering
+    // can invert, so the fake reproduces it.
+    await this.getState(entityId);
+    this.attempts.push({ entityId, service: serviceName });
+    if (this.shouldFail(entityId, serviceName)) {
       throw new Error(`simulated HA failure for ${entityId}`);
     }
     this.calls.push({
       entityId,
-      service: `${domain}.${service}`,
+      service: serviceName,
       data: { [valueType.key]: value },
     });
+    this.wire.push({ entityId, service: serviceName });
   }
 
   override async callService(serviceCall: HassServiceCallImpl): Promise<void> {
@@ -124,14 +180,17 @@ class FakeHomeAssistantClient extends HomeAssistantClient {
       (serviceCall.target?.entityId as string) ??
       (serviceCall.serviceData?.entity_id as string) ??
       "unknown";
-    if (this.failFor.has(entityId)) {
+    const serviceName = `${serviceCall.domain}.${serviceCall.service}`;
+    this.attempts.push({ entityId, service: serviceName });
+    if (this.shouldFail(entityId, serviceName)) {
       throw new Error(`simulated HA failure for ${entityId}`);
     }
     this.calls.push({
       entityId,
-      service: `${serviceCall.domain}.${serviceCall.service}`,
+      service: serviceName,
       data: serviceCall.serviceData,
     });
+    this.wire.push({ entityId, service: serviceName });
   }
 
   callsFor(entityId: string): RecordedCall[] {
@@ -142,8 +201,24 @@ class FakeHomeAssistantClient extends HomeAssistantClient {
     return this.callsFor(entityId).map((call) => call.service);
   }
 
+  /** Services in the order they reached the wire for one entity. */
+  wireFor(entityId: string): string[] {
+    return this.wire
+      .filter((call) => call.entityId === entityId)
+      .map((call) => call.service);
+  }
+
+  /** How many times a service was attempted for one entity (failures included). */
+  attemptsFor(entityId: string, service: string): number {
+    return this.attempts.filter(
+      (attempt) => attempt.entityId === entityId && attempt.service === service,
+    ).length;
+  }
+
   reset(): void {
     this.calls = [];
+    this.wire = [];
+    this.attempts = [];
   }
 }
 
@@ -247,6 +322,23 @@ const flush = async (): Promise<void> => {
   for (let i = 0; i < 5; i++) {
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
+};
+
+/**
+ * Poll `predicate()` with real timers until it is true (bounded retries and
+ * deferred client promises use real timers, so the pinned wall clock must not
+ * be used for the deadline).
+ */
+const waitUntil = async (
+  predicate: () => boolean,
+  attempts = 200,
+  intervalMs = 5,
+): Promise<void> => {
+  for (let i = 0; i < attempts; i++) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  throw new Error("waitUntil: condition not reached in time");
 };
 
 let active: Harness | undefined;
@@ -686,7 +778,7 @@ describe("Custom defrost - command failures", () => {
     expect(h.ha.callsFor(LIVING_ROOM)).toEqual([]); // command failed, no fabricated success
   });
 
-  test("a failing unit is attempted once per event and the cycle still completes", async () => {
+  test("a persistently failing unit does not block the cycle or the other units", async () => {
     const h = harness();
     h.ha.failFor.add(LIVING_ROOM);
     h.sendConditions(20.5, -3.0);
@@ -694,12 +786,13 @@ describe("Custom defrost - command failures", () => {
     expect(h.state).toBe("defrosting");
 
     h.advance(DURATION_MS);
+    await waitUntil(() => h.ha.attemptsFor(LIVING_ROOM, "climate.turn_off") >= 3);
     await flush();
-
-    // no infinite retry loop, no crash; the machine leaves the defrost state and
-    // the remaining units still receive their off command
+    // the retry is bounded (no infinite loop, no crash): the machine still leaves
+    // the defrost state and the remaining unit still receives its off command
     expect(h.state).not.toBe("defrosting");
     expect(h.ha.servicesFor(BEDROOM)).toContain("climate.turn_off");
+    expect(h.ha.attemptsFor(LIVING_ROOM, "climate.turn_off")).toBe(3);
   });
 });
 
@@ -739,5 +832,284 @@ describe("Custom defrost - eligibility rules", () => {
     delete noDefrost.heating.defrost;
     const strategy = new HVACStrategy(noDefrost);
     expect(strategy.isDefrostEntryEligible(data(), true)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// HA command ordering (review round 1, F1)
+//
+// The production HA client awaits a `getState` round-trip inside `controlEntity`
+// before it sends the service call, while `turn_off` goes straight to
+// `callService`. Without per-machine serialization an abort issued during an
+// in-flight defrost-entry command can therefore reach the device *before* that
+// command, leaving the unit in forced COOL.
+// ---------------------------------------------------------------------------
+
+describe("Custom defrost - HA command ordering", () => {
+  test("an abort during an in-flight entry command never leaves the unit in forced cool", async () => {
+    const h = harness();
+    h.ha.deferGetState = true; // hold the entry command at the client's getState pre-check
+    h.sendConditions(20.5, -3.0);
+    await flush();
+
+    expect(h.state).toBe("defrosting");
+    expect(h.ha.pendingGetState()).toBe(1); // one command is in flight...
+    expect(h.ha.wire).toEqual([]); // ...and nothing has reached the wire yet
+
+    h.actor.send({ type: "OFF" } as never); // abort while it is still in flight
+    await flush();
+    expect(h.state).toBe("idle");
+
+    h.ha.releaseGetState();
+    await waitUntil(() => h.ha.attemptsFor(LIVING_ROOM, "climate.turn_off") === 1);
+
+    // Wire order must follow transition order: the entry cool first, the abort
+    // off last — the unit ends OFF, never forced COOL.
+    expect(h.ha.wireFor(LIVING_ROOM)).toEqual([
+      "climate.set_hvac_mode",
+      "climate.turn_off",
+    ]);
+    expect(h.ha.wireFor(BEDROOM)).toEqual(["climate.turn_off", "climate.turn_off"]);
+  });
+
+  test("stop() during an in-flight entry command leaves the unit off, never cool", async () => {
+    setSystemTime(BASE_DATE);
+    const ha = new FakeHomeAssistantClient();
+    ha.deferGetState = true; // hold the entry cool at the client's getState pre-check
+    const stateMachine = new HVACStateMachine(makeOptions(), ha);
+    stateMachine.start();
+    stateMachine.send({
+      type: "UPDATE_CONDITIONS",
+      data: { indoorTemp: 20.5, outdoorTemp: -3.0, currentHour: 10, isWeekday: true },
+    });
+    await flush();
+    expect(stateMachine.getCurrentState()).toBe("defrosting");
+    expect(ha.pendingGetState()).toBe(1);
+
+    const stopping = stateMachine.stop(); // off commands queue behind the in-flight cool
+    await flush();
+    expect(ha.wire).toEqual([]);
+
+    ha.releaseGetState();
+    await stopping;
+
+    expect(ha.wireFor(LIVING_ROOM)).toEqual([
+      "climate.set_hvac_mode",
+      "climate.turn_off",
+    ]);
+    expect(stateMachine.getCurrentState()).toBe("stopped");
+  });
+
+  test("a failing off command does not overtake a later successful one", async () => {
+    const h = harness();
+    h.sendConditions(20.5, -3.0);
+    await flush();
+    expect(h.state).toBe("defrosting");
+    h.ha.reset();
+    h.ha.failNext.set(`${LIVING_ROOM}::climate.turn_off`, 1);
+
+    h.actor.send({ type: "OFF" } as never);
+    await waitUntil(() => h.ha.wireFor(LIVING_ROOM).includes("climate.turn_off"));
+
+    expect(h.ha.wireFor(LIVING_ROOM)).toEqual(["climate.turn_off"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Aborted cycles end the cycle for the period gate (review round 1, F2)
+// ---------------------------------------------------------------------------
+
+describe("Custom defrost - aborted cycle period gate", () => {
+  test("an aborted cycle still blocks re-entry until periodSeconds after the abort", async () => {
+    const h = harness();
+    h.sendConditions(20.5, -3.0);
+    await flush();
+    expect(h.state).toBe("defrosting");
+
+    // manual off aborts the cycle; legacy ends every cycle through stop_defrost,
+    // so the last-defrost timestamp is recorded here too
+    h.actor.send({ type: "MANUAL_OVERRIDE", mode: "off" } as never);
+    await flush();
+    expect(h.state).toBe("idle");
+    h.ha.reset();
+
+    h.actor.send({ type: "MANUAL_OVERRIDE", mode: "heat" } as never);
+    await flush();
+    expect(h.state).toBe("heating");
+
+    // 10 s after the abort, one ordinary sensor event must not restart defrosting
+    h.advance(10 * 1000);
+    h.sendConditions(20.0, -3.0);
+    await flush();
+    expect(h.state).toBe("heating");
+    // ordinary heating only: no unit is driven back into cool mode
+    expect(h.ha.calls.filter((c) => c.data?.hvac_mode === "cool")).toEqual([]);
+
+    // once the period measured from the abort has elapsed, defrost is eligible again
+    h.advance(PERIOD_MS);
+    h.sendConditions(20.0, -3.0);
+    await flush();
+    expect(h.state).toBe("defrosting");
+  });
+
+  test("an OFF-aborted cycle also records the cycle end", async () => {
+    const h = harness();
+    h.sendConditions(20.5, -3.0);
+    await flush();
+    expect(h.state).toBe("defrosting");
+
+    h.actor.send({ type: "OFF" } as never);
+    await flush();
+    expect(h.state).toBe("idle");
+    h.ha.reset();
+
+    // immediately back into heating and evaluated again: still inside the period
+    h.actor.send({ type: "MANUAL_OVERRIDE", mode: "heat" } as never);
+    await flush();
+    expect(h.state).toBe("heating");
+
+    h.sendConditions(20.0, -3.0);
+    await flush();
+    expect(h.state).toBe("heating");
+  });
+
+  test("stop() during a cycle closes the cycle, so a restart in the same process is gated", async () => {
+    setSystemTime(BASE_DATE);
+    const ha = new FakeHomeAssistantClient();
+    const stateMachine = new HVACStateMachine(makeOptions(), ha);
+    stateMachine.start();
+    const conditions = {
+      indoorTemp: 20.5,
+      outdoorTemp: -3.0,
+      currentHour: 10,
+      isWeekday: true,
+    };
+    stateMachine.send({ type: "UPDATE_CONDITIONS", data: conditions });
+    await flush();
+    expect(stateMachine.getCurrentState()).toBe("defrosting");
+    ha.reset();
+
+    await stateMachine.stop();
+    expect(ha.servicesFor(LIVING_ROOM)).toEqual(["climate.turn_off"]);
+    ha.reset();
+
+    // controller restart in the same process: the aborted cycle still gates the
+    // next one, so ordinary heating runs instead of an immediate new defrost
+    stateMachine.start();
+    stateMachine.send({ type: "UPDATE_CONDITIONS", data: conditions });
+    await flush();
+
+    expect(stateMachine.getCurrentState()).not.toBe("defrosting");
+    expect(stateMachine.getCurrentState()).toBe("heating");
+    expect(ha.calls.filter((c) => c.data?.hvac_mode === "cool")).toEqual([]);
+
+    await stateMachine.stop();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bounded retry for the fail-safe off commands (review round 1, F3)
+// ---------------------------------------------------------------------------
+
+describe("Custom defrost - safety off command retry", () => {
+  test("a permanently failing off command is retried a bounded number of times", async () => {
+    const h = harness();
+    h.ha.failFor.add(LIVING_ROOM);
+    h.sendConditions(20.5, -3.0);
+    await flush();
+    expect(h.state).toBe("defrosting");
+    // only the fail-safe off direction is retried: the entry cool is tried once
+    expect(h.ha.attemptsFor(LIVING_ROOM, "climate.set_hvac_mode")).toBe(1);
+    h.ha.reset();
+
+    h.actor.send({ type: "OFF" } as never); // abort -> off commands
+    await waitUntil(() => h.ha.attemptsFor(LIVING_ROOM, "climate.turn_off") >= 3);
+    await flush();
+
+    expect(h.ha.attemptsFor(LIVING_ROOM, "climate.turn_off")).toBe(3); // bounded
+    expect(h.state).toBe("idle");
+    expect(h.ha.wireFor(BEDROOM)).toEqual(["climate.turn_off"]);
+  });
+
+  test("a transient off failure is retried until it succeeds", async () => {
+    const h = harness();
+    h.sendConditions(20.5, -3.0);
+    await flush();
+    h.ha.reset();
+    h.ha.failNext.set(`${LIVING_ROOM}::climate.turn_off`, 2); // fail twice, then succeed
+
+    h.actor.send({ type: "OFF" } as never);
+    await waitUntil(() => h.ha.wireFor(LIVING_ROOM).includes("climate.turn_off"));
+
+    expect(h.ha.attemptsFor(LIVING_ROOM, "climate.turn_off")).toBe(3);
+    expect(h.ha.wireFor(LIVING_ROOM)).toEqual(["climate.turn_off"]); // recovered
+  });
+
+  test("completion retries the safety off before ordinary evaluation resumes heating", async () => {
+    const h = harness();
+    h.sendConditions(20.5, -3.0);
+    await flush();
+    h.ha.reset();
+    h.ha.failNext.set(`${LIVING_ROOM}::climate.turn_off`, 1);
+
+    h.advance(DURATION_MS);
+    await waitUntil(() => h.ha.wireFor(LIVING_ROOM).includes("climate.turn_off"));
+    await waitUntil(() => h.state === "heating");
+
+    expect(h.ha.attemptsFor(LIVING_ROOM, "climate.turn_off")).toBe(2);
+    const wire = h.ha.wireFor(LIVING_ROOM);
+    expect(wire[0]).toBe("climate.turn_off"); // off lands before the resumed heat
+    expect(h.state).toBe("heating");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Manual overrides issued during the cycle (review round 1, N3)
+// ---------------------------------------------------------------------------
+
+describe("Custom defrost - manual overrides during the cycle", () => {
+  test("manual heat during the cycle ends in heating, never in a forced cool", async () => {
+    const h = harness();
+    h.sendConditions(20.5, -3.0);
+    await flush();
+    expect(h.state).toBe("defrosting");
+    h.ha.reset();
+
+    h.actor.send({ type: "MANUAL_OVERRIDE", mode: "heat" } as never);
+    await flush();
+
+    expect(h.state).toBe("heating");
+    const wire = h.ha.wireFor(LIVING_ROOM);
+    expect(wire).toContain("climate.turn_off"); // the abort left the forced cool
+    expect(wire.indexOf("climate.turn_off")).toBeLessThan(
+      wire.lastIndexOf("climate.set_hvac_mode"),
+    );
+    const hvacModeCalls = h.ha
+      .callsFor(LIVING_ROOM)
+      .filter((call) => call.service === "climate.set_hvac_mode");
+    expect(hvacModeCalls.at(-1)!.data).toEqual({ hvac_mode: "heat" });
+    expect(wire.at(-1)).not.toBe("climate.turn_off");
+    expect(h.clock.pending()).toBe(0); // no stale defrost timer survives the abort
+  });
+
+  test("manual cool during the cycle aborts the forced cool and issues no fresh cool", async () => {
+    const h = harness();
+    h.sendConditions(20.5, -3.0);
+    await flush();
+    expect(h.state).toBe("defrosting");
+    h.ha.reset();
+
+    h.actor.send({ type: "MANUAL_OVERRIDE", mode: "cool" } as never);
+    await flush();
+
+    expect(h.state).toBe("cooling");
+    // the abort switches the unit off; ordinary (manual) cooling evaluation then
+    // decides cooling is not needed at 20.5 °C (below the cooling threshold)
+    expect(h.ha.servicesFor(LIVING_ROOM)).toEqual([
+      "climate.turn_off",
+      "climate.turn_off",
+    ]);
+    expect(h.ha.wireFor(LIVING_ROOM).at(-1)).toBe("climate.turn_off");
+    expect(h.clock.pending()).toBe(0);
   });
 });

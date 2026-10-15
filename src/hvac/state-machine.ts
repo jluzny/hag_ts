@@ -529,6 +529,26 @@ export class HVACStrategy {
   }
 
   /**
+   * Ending a defrost cycle early (abort: manual off, explicit stop, schedule or
+   * operating constraint violated).
+   *
+   * Legacy has no abort path — `Defrosting` only exits through `stop_defrost` —
+   * so a cycle always recorded `defrost_last` when it ended. Recording it here
+   * preserves that invariant: an aborted cycle must not allow the next cycle to
+   * start immediately, and the next cycle's minimum interval is measured from
+   * this end either way.
+   */
+  abortDefrostCycle(): void {
+    this.lastDefrost = new Date();
+    this.evaluationCache = undefined;
+
+    this.logger.info("⏹️ Defrost cycle ended early", {
+      endedAt: this.lastDefrost.toISOString(),
+      nextEligibleInSeconds: this.hvacOptions.heating.defrost?.periodSeconds,
+    });
+  }
+
+  /**
    * Unified validation logic for temperature and time conditions
    */
   private isValidCondition(
@@ -656,8 +676,44 @@ export class HVACStrategy {
   }
 }
 
-/** Send id of the cancellable one-shot defrost period timer. */
+/**
+ * Send id of the cancellable one-shot defrost period timer.
+ */
 const DEFROST_PERIOD_SEND_ID = "defrost-period";
+
+/** Attempts for a fail-safe "off" command (initial attempt + retries). */
+const OFF_COMMAND_MAX_ATTEMPTS = 3;
+/** Pause between fail-safe "off" attempts. */
+const OFF_COMMAND_RETRY_DELAY_MS = 100;
+
+/**
+ * Per-machine command serializer.
+ *
+ * The Home Assistant client's `controlEntity` awaits a `getState` round-trip
+ * (and the "off" path awaits a dynamic import) before its service call reaches
+ * the wire, while other paths do not. Without serialization two commands issued
+ * by different transitions can therefore reach the device out of order — e.g. a
+ * defrost abort's `off` arriving before an in-flight entry `cool` would leave
+ * the unit in forced COOL, and a manual heat arriving before the abort's `off`
+ * would leave the unit OFF.
+ *
+ * Every HVAC command batch of one machine goes through one FIFO chain, so wire
+ * order always matches transition order.
+ */
+export class HvacCommandQueue {
+  private tail: Promise<unknown> = Promise.resolve();
+
+  /** Run `task` after every previously enqueued task has settled. */
+  run<T>(task: () => Promise<T>): Promise<T> {
+    const result = this.tail.then(task, task);
+    // Keep the chain alive whatever the batch outcome.
+    this.tail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
+}
 
 /**
  * True only for present, finite numbers. Zero is a legitimate temperature, so
@@ -673,10 +729,20 @@ function isFiniteNumber(value: unknown): value is number {
  * Used by the custom defrost cycle (defrost=true -> cool, defrost=false -> off,
  * completion/abort -> off) and by turnOff. Disabled/unmanaged entities are left
  * untouched. Commands are attempted independently: a failing command is logged
- * and reported to the caller, never silently swallowed, and no automatic
- * recovery or retry is attempted.
+ * and reported to the caller, never silently swallowed.
  *
- * @returns entity ids whose command failed
+ * Fail-safe `off` commands (completion, abort, stop, turn off) are retried a
+ * bounded number of times: leaving a unit in forced cool (or heating) because a
+ * single command was lost is the failure mode this guards against. Only the
+ * fail-safe direction is retried — a failed `cool`/`heat` simply leaves the unit
+ * as it was. After the bounded retries the failure is reported to the caller and
+ * logged; no automatic recovery is claimed.
+ *
+ * All work runs inside the machine's command queue so that the order in which
+ * commands reach the device matches the order in which transitions requested
+ * them.
+ *
+ * @returns entity ids whose command failed after every allowed attempt
  */
 async function commandHvacEntities(
   haClient: HomeAssistantClient | undefined,
@@ -684,51 +750,81 @@ async function commandHvacEntities(
   logger: LoggerService,
   resolveMode: (entity: HvacEntity) => "cool" | "off",
   reason: string,
+  queue?: HvacCommandQueue,
 ): Promise<string[]> {
-  if (!haClient) {
-    logger.warning("⚠️ No Home Assistant client available for HVAC commands", {
-      reason,
-    });
-    return [];
-  }
-
-  const enabledEntities = hvacOptions.hvacEntities.filter((e) => e.enabled);
-  const failedEntities: string[] = [];
-
-  for (const entity of enabledEntities) {
-    const mode = resolveMode(entity);
-    try {
-      await controlHVACEntity(
-        haClient,
-        entity.entityId,
-        mode,
-        undefined,
-        undefined,
-        logger,
-      );
-      logger.debug("✅ HVAC entity commanded", {
-        entityId: entity.entityId,
-        mode,
+  const runBatch = async (): Promise<string[]> => {
+    if (!haClient) {
+      logger.warning("⚠️ No Home Assistant client available for HVAC commands", {
         reason,
       });
-    } catch (error) {
-      failedEntities.push(entity.entityId);
-      logger.error("❌ Failed to command HVAC entity", error, {
-        entityId: entity.entityId,
-        mode,
-        reason,
-      });
+      return [];
     }
-  }
 
-  if (failedEntities.length > 0) {
-    logger.warning(
-      "⚠️ HVAC commands failed - no automatic recovery is attempted; the affected unit may not reflect the requested mode until a later successful command",
-      { reason, failedEntities },
-    );
-  }
+    const enabledEntities = hvacOptions.hvacEntities.filter((e) => e.enabled);
+    const failedEntities: string[] = [];
 
-  return failedEntities;
+    for (const entity of enabledEntities) {
+      const mode = resolveMode(entity);
+      const maxAttempts = mode === "off" ? OFF_COMMAND_MAX_ATTEMPTS : 1;
+      let lastError: unknown;
+      let commanded = false;
+
+      for (let attempt = 1; attempt <= maxAttempts && !commanded; attempt++) {
+        try {
+          await controlHVACEntity(
+            haClient,
+            entity.entityId,
+            mode,
+            undefined,
+            undefined,
+            logger,
+          );
+          commanded = true;
+        } catch (error) {
+          lastError = error;
+          if (attempt < maxAttempts) {
+            logger.warning("⚠️ Retrying failed HVAC command", {
+              entityId: entity.entityId,
+              mode,
+              attempt,
+              maxAttempts,
+              reason,
+            });
+            await new Promise((resolve) =>
+              setTimeout(resolve, OFF_COMMAND_RETRY_DELAY_MS),
+            );
+          }
+        }
+      }
+
+      if (commanded) {
+        logger.debug("✅ HVAC entity commanded", {
+          entityId: entity.entityId,
+          mode,
+          reason,
+        });
+      } else {
+        failedEntities.push(entity.entityId);
+        logger.error("❌ Failed to command HVAC entity", lastError, {
+          entityId: entity.entityId,
+          mode,
+          attempts: maxAttempts,
+          reason,
+        });
+      }
+    }
+
+    if (failedEntities.length > 0) {
+      logger.warning(
+        "⚠️ HVAC commands failed - no automatic recovery is attempted; the affected unit may not reflect the requested mode until a later successful command",
+        { reason, failedEntities, attemptsPerCommand: OFF_COMMAND_MAX_ATTEMPTS },
+      );
+    }
+
+    return failedEntities;
+  };
+
+  return queue ? queue.run(runBatch) : runBatch();
 }
 
 /**
@@ -738,12 +834,12 @@ export function createHVACMachine(
   hvacOptions: HvacOptions,
   logger: LoggerService,
   haClient?: HomeAssistantClient,
+  commandQueue: HvacCommandQueue = new HvacCommandQueue(),
+  // Shared with HVACStateMachine so that stop() can close an in-flight cycle
+  // for the defrost period gate (the machine and its strategy survive a
+  // controller stop/start in the same process).
+  hvacStrategy: HVACStrategy = new HVACStrategy(hvacOptions),
 ) {
-  const hvacStrategy = new HVACStrategy(hvacOptions);
-
-
-
-
   return createMachine(
     {
       id: "hvac",
@@ -1041,6 +1137,7 @@ export function createHVACMachine(
             logger,
             (entity) => (entity.defrost ? "cool" : "off"),
             "defrost_start",
+            commandQueue,
           );
 
           logger.info(`❄️ [HVAC] Defrost cycle started`, {
@@ -1068,6 +1165,7 @@ export function createHVACMachine(
             logger,
             () => "off",
             "defrost_complete",
+            commandQueue,
           );
 
           logger.info(`✅ [HVAC] Defrost cycle completed`, {
@@ -1081,6 +1179,10 @@ export function createHVACMachine(
         },
 
         abortDefrost: async ({ event }) => {
+          // A cycle that ends early is still a cycle end (legacy invariant):
+          // record it so the next cycle cannot start before the period elapses.
+          hvacStrategy.abortDefrostCycle();
+
           logger.warning(
             "⚠️ [HVAC] Defrost cycle aborted - switching enabled units off",
             {
@@ -1096,6 +1198,7 @@ export function createHVACMachine(
             logger,
             () => "off",
             "defrost_abort",
+            commandQueue,
           );
         },
 
@@ -1132,271 +1235,277 @@ export function createHVACMachine(
         },
 
 
-        executeHeating: async ({ context }: { context: HVACContext }) => {
-          if (!haClient) {
-            logger.warning(
-              "⚠️ No Home Assistant client available for heating control",
+        executeHeating: async ({ context }: { context: HVACContext }) =>
+          // Serialized: these commands must not overtake an earlier
+          // batch (e.g. a defrost abort's off commands).
+          commandQueue.run(async () => {
+            if (!haClient) {
+              logger.warning(
+                "⚠️ No Home Assistant client available for heating control",
+              );
+              return;
+            }
+
+            const enabledEntities = hvacOptions.hvacEntities.filter(
+              (e) => e.enabled,
             );
-            return;
-          }
 
-          const enabledEntities = hvacOptions.hvacEntities.filter(
-            (e) => e.enabled,
-          );
+            let heatingEntities = enabledEntities;
+            let matchedRule: any = null;
 
-          let heatingEntities = enabledEntities;
-          let matchedRule: any = null;
+            if (context.outdoorTemp !== undefined && hvacOptions.heating.rules?.length) {
+              for (const rule of hvacOptions.heating.rules) {
+                const cond = rule.conditions.outdoorTemp;
+                if (!cond) continue;
 
-          if (context.outdoorTemp !== undefined && hvacOptions.heating.rules?.length) {
-            for (const rule of hvacOptions.heating.rules) {
-              const cond = rule.conditions.outdoorTemp;
-              if (!cond) continue;
+                const { gt, gte, lt, lte } = cond;
+                let matches = true;
+                if (gt !== undefined && !(context.outdoorTemp > gt)) matches = false;
+                if (gte !== undefined && !(context.outdoorTemp >= gte)) matches = false;
+                if (lt !== undefined && !(context.outdoorTemp < lt)) matches = false;
+                if (lte !== undefined && !(context.outdoorTemp <= lte)) matches = false;
 
-              const { gt, gte, lt, lte } = cond;
-              let matches = true;
-              if (gt !== undefined && !(context.outdoorTemp > gt)) matches = false;
-              if (gte !== undefined && !(context.outdoorTemp >= gte)) matches = false;
-              if (lt !== undefined && !(context.outdoorTemp < lt)) matches = false;
-              if (lte !== undefined && !(context.outdoorTemp <= lte)) matches = false;
-
-              if (matches) {
-                const ruleEntityIds = new Set(rule.actions.includeUnits);
-                heatingEntities = enabledEntities.filter((e) =>
-                  ruleEntityIds.has(e.entityId),
-                );
-                matchedRule = rule;
-                break;
+                if (matches) {
+                  const ruleEntityIds = new Set(rule.actions.includeUnits);
+                  heatingEntities = enabledEntities.filter((e) =>
+                    ruleEntityIds.has(e.entityId),
+                  );
+                  matchedRule = rule;
+                  break;
+                }
               }
             }
-          }
-          // Use manual override preset mode if available, otherwise use config default
-          const presetMode =
-            context.manualOverride?.presetMode ??
-            hvacOptions.heating.presetMode;
-          const targetTemp =
-            context.manualOverride?.temperature ??
-            hvacOptions.heating.temperature;
+            // Use manual override preset mode if available, otherwise use config default
+            const presetMode =
+              context.manualOverride?.presetMode ??
+              hvacOptions.heating.presetMode;
+            const targetTemp =
+              context.manualOverride?.temperature ??
+              hvacOptions.heating.temperature;
 
-          // Record state change for cycling monitoring
-          if (context.indoorTemp) {
-            hvacStrategy.cyclingMonitor.recordStateChange(
-              "OFF",
-              "HEAT",
-              context.indoorTemp,
-            );
-          }
-
-          if (context.indoorTemp) {
-            hvacStrategy
-              .getCyclingMonitor()
-              .recordStateChange("OFF", "HEAT", context.indoorTemp);
-          }
-
-          logger.info("🔥 Executing heating mode on entities", {
-            targetTemp,
-            presetMode,
-            totalEntities: heatingEntities.length,
-            matchedRule: matchedRule
-              ? `rule-${hvacOptions.heating.rules.indexOf(matchedRule)}`
-              : "fallback (all enabled)",
-            isManualOverride: !!context.manualOverride,
-            cyclingStatus:
-              "Heating cycle started - monitoring for rapid cycling",
-          });
-
-          for (const entity of heatingEntities) {
-            try {
-              // Apply per-unit temperature correction if configured
-              const entityTargetTemp =
-                targetTemp + (entity.temperatureCorrection ?? 0);
-
-              await controlHVACEntity(
-                haClient,
-                entity.entityId,
-                "heat",
-                entityTargetTemp,
-                presetMode,
-                logger,
+            // Record state change for cycling monitoring
+            if (context.indoorTemp) {
+              hvacStrategy.cyclingMonitor.recordStateChange(
+                "OFF",
+                "HEAT",
+                context.indoorTemp,
               );
-              logger.debug("✅ Heating entity controlled", {
-                entityId: entity.entityId,
-                baseTemp: targetTemp,
-                correction: entity.temperatureCorrection ?? 0,
-                targetTemp: entityTargetTemp,
-                presetMode,
-              });
-            } catch (error) {
-              logger.error("❌ Failed to control heating entity", error, {
-                entityId: entity.entityId,
-              });
             }
-          }
-        },
 
-        executeCooling: async ({ context }: { context: HVACContext }) => {
-          if (!haClient) {
-            logger.warning(
-              "⚠️ No Home Assistant client available for cooling control",
-            );
-            return;
-          }
+            if (context.indoorTemp) {
+              hvacStrategy
+                .getCyclingMonitor()
+                .recordStateChange("OFF", "HEAT", context.indoorTemp);
+            }
 
-          const enabledEntities = hvacOptions.hvacEntities.filter(
-            (e) => e.enabled,
-          );
+            logger.info("🔥 Executing heating mode on entities", {
+              targetTemp,
+              presetMode,
+              totalEntities: heatingEntities.length,
+              matchedRule: matchedRule
+                ? `rule-${hvacOptions.heating.rules.indexOf(matchedRule)}`
+                : "fallback (all enabled)",
+              isManualOverride: !!context.manualOverride,
+              cyclingStatus:
+                "Heating cycle started - monitoring for rapid cycling",
+            });
 
-          // Use the calibrated indoor temperature (hall sensor) for the
-          // overall system decision — per-unit sensors are only used as a
-          // safety floor to avoid over-cooling already-cold rooms.
-          const systemIndoorTemp = context?.indoorTemp;
-          const shouldCoolSystem =
-            systemIndoorTemp !== undefined &&
-            systemIndoorTemp > hvacOptions.cooling.temperatureThresholds.indoorMin;
+            for (const entity of heatingEntities) {
+              try {
+                // Apply per-unit temperature correction if configured
+                const entityTargetTemp =
+                  targetTemp + (entity.temperatureCorrection ?? 0);
 
-          // Staleness threshold for per-unit sensor readings (default: 30 min)
-          const stalenessMs = hvacOptions.sensorStalenessMs ?? 30 * 60 * 1000;
-          const now = Date.now();
-
-          logger.info("❄️ Executing cooling control on entities", {
-            systemIndoorTemp: systemIndoorTemp ?? "unknown",
-            shouldCoolSystem,
-            targetTemp: hvacOptions.cooling.temperature,
-            presetMode: hvacOptions.cooling.presetMode,
-            enabledEntities: enabledEntities.length,
-            stalenessThresholdMs: stalenessMs,
-            systemThresholds: {
-              indoorMin: hvacOptions.cooling.temperatureThresholds.indoorMin,
-              indoorMax: hvacOptions.cooling.temperatureThresholds.indoorMax,
-            },
-          });
-
-          for (const entity of enabledEntities) {
-            try {
-              // Derive temperature sensor for this unit
-              const tempSensorId = deriveTemperatureSensor(entity.entityId);
-
-              // Get current room temperature and check staleness
-              const tempState = await haClient.getState(tempSensorId);
-              const roomTemp = parseFloat(tempState.state);
-
-              // Check if the sensor reading is stale
-              const sensorAge = tempState.lastUpdated
-                ? now - tempState.lastUpdated.getTime()
-                : Infinity;
-              const isStale = sensorAge > stalenessMs;
-
-              // When stale, fall back to the system (hall) sensor temperature
-              const effectiveRoomTemp = isStale ? (systemIndoorTemp ?? roomTemp) : roomTemp;
-
-              // Apply calibration if configured for this sensor
-              const calibratedRoomTemp = isStale
-                ? effectiveRoomTemp // Hall sensor already calibrated in context
-                : (hvacOptions.temperatureCalibration?.[tempSensorId]
-                    ? effectiveRoomTemp + hvacOptions.temperatureCalibration[tempSensorId]
-                    : effectiveRoomTemp);
-
-              if (isStale) {
-                logger.info("🕰️ Stale sensor detected — using hall sensor fallback", {
+                await controlHVACEntity(
+                  haClient,
+                  entity.entityId,
+                  "heat",
+                  entityTargetTemp,
+                  presetMode,
+                  logger,
+                );
+                logger.debug("✅ Heating entity controlled", {
                   entityId: entity.entityId,
-                  tempSensorId,
-                  staleTemp: roomTemp,
-                  sensorAgeMs: sensorAge,
-                  stalenessThresholdMs: stalenessMs,
-                  fallbackTemp: effectiveRoomTemp,
-                  lastUpdated: tempState.lastUpdated?.toISOString(),
+                  baseTemp: targetTemp,
+                  correction: entity.temperatureCorrection ?? 0,
+                  targetTemp: entityTargetTemp,
+                  presetMode,
+                });
+              } catch (error) {
+                logger.error("❌ Failed to control heating entity", error, {
+                  entityId: entity.entityId,
                 });
               }
+            }
+          }),
 
-              logger.debug("🌡️ Room temperature check", {
-                entityId: entity.entityId,
-                tempSensorId,
-                roomTemp,
-                effectiveRoomTemp,
-                calibratedRoomTemp,
-                isStale,
-                sensorAgeMs: sensorAge,
-              });
+        executeCooling: async ({ context }: { context: HVACContext }) =>
+          // Serialized: these commands must not overtake an earlier
+          // batch (e.g. a defrost abort's off commands).
+          commandQueue.run(async () => {
+            if (!haClient) {
+              logger.warning(
+                "⚠️ No Home Assistant client available for cooling control",
+              );
+              return;
+            }
 
-              // Decision logic:
-              // 1. If system says cool (hall sensor above threshold), turn on
-              //    units UNLESS the individual room is already comfortably cool
-              //    (below a safety floor of cooling.temperature - 2°C).
-              // 2. If system says no cooling needed, turn off units that are running.
-              // Stale per-unit sensors are replaced by hall sensor readings so
-              // they don't falsely block cooling when units have been off.
+            const enabledEntities = hvacOptions.hvacEntities.filter(
+              (e) => e.enabled,
+            );
 
-              // Apply per-unit temperature correction if configured
-              const entityTargetTemp =
-                hvacOptions.cooling.temperature +
-                (entity.temperatureCorrection ?? 0);
+            // Use the calibrated indoor temperature (hall sensor) for the
+            // overall system decision — per-unit sensors are only used as a
+            // safety floor to avoid over-cooling already-cold rooms.
+            const systemIndoorTemp = context?.indoorTemp;
+            const shouldCoolSystem =
+              systemIndoorTemp !== undefined &&
+              systemIndoorTemp > hvacOptions.cooling.temperatureThresholds.indoorMin;
 
-              if (shouldCoolSystem) {
-                // System-wide decision is to cool (hall sensor above threshold)
-                // Check if this specific room is already too cold to warrant cooling
-                const coolingSafetyFloor =
-                  hvacOptions.cooling.temperature - 2; // e.g. 24.3 - 2 = 22.3°C
+            // Staleness threshold for per-unit sensor readings (default: 30 min)
+            const stalenessMs = hvacOptions.sensorStalenessMs ?? 30 * 60 * 1000;
+            const now = Date.now();
 
-                if (calibratedRoomTemp < coolingSafetyFloor) {
-                  // Room is already cool enough — skip cooling this unit
-                  logger.info(
-                    "⏭️ Unit skipped - room already cool enough",
-                    {
+            logger.info("❄️ Executing cooling control on entities", {
+              systemIndoorTemp: systemIndoorTemp ?? "unknown",
+              shouldCoolSystem,
+              targetTemp: hvacOptions.cooling.temperature,
+              presetMode: hvacOptions.cooling.presetMode,
+              enabledEntities: enabledEntities.length,
+              stalenessThresholdMs: stalenessMs,
+              systemThresholds: {
+                indoorMin: hvacOptions.cooling.temperatureThresholds.indoorMin,
+                indoorMax: hvacOptions.cooling.temperatureThresholds.indoorMax,
+              },
+            });
+
+            for (const entity of enabledEntities) {
+              try {
+                // Derive temperature sensor for this unit
+                const tempSensorId = deriveTemperatureSensor(entity.entityId);
+
+                // Get current room temperature and check staleness
+                const tempState = await haClient.getState(tempSensorId);
+                const roomTemp = parseFloat(tempState.state);
+
+                // Check if the sensor reading is stale
+                const sensorAge = tempState.lastUpdated
+                  ? now - tempState.lastUpdated.getTime()
+                  : Infinity;
+                const isStale = sensorAge > stalenessMs;
+
+                // When stale, fall back to the system (hall) sensor temperature
+                const effectiveRoomTemp = isStale ? (systemIndoorTemp ?? roomTemp) : roomTemp;
+
+                // Apply calibration if configured for this sensor
+                const calibratedRoomTemp = isStale
+                  ? effectiveRoomTemp // Hall sensor already calibrated in context
+                  : (hvacOptions.temperatureCalibration?.[tempSensorId]
+                      ? effectiveRoomTemp + hvacOptions.temperatureCalibration[tempSensorId]
+                      : effectiveRoomTemp);
+
+                if (isStale) {
+                  logger.info("🕰️ Stale sensor detected — using hall sensor fallback", {
+                    entityId: entity.entityId,
+                    tempSensorId,
+                    staleTemp: roomTemp,
+                    sensorAgeMs: sensorAge,
+                    stalenessThresholdMs: stalenessMs,
+                    fallbackTemp: effectiveRoomTemp,
+                    lastUpdated: tempState.lastUpdated?.toISOString(),
+                  });
+                }
+
+                logger.debug("🌡️ Room temperature check", {
+                  entityId: entity.entityId,
+                  tempSensorId,
+                  roomTemp,
+                  effectiveRoomTemp,
+                  calibratedRoomTemp,
+                  isStale,
+                  sensorAgeMs: sensorAge,
+                });
+
+                // Decision logic:
+                // 1. If system says cool (hall sensor above threshold), turn on
+                //    units UNLESS the individual room is already comfortably cool
+                //    (below a safety floor of cooling.temperature - 2°C).
+                // 2. If system says no cooling needed, turn off units that are running.
+                // Stale per-unit sensors are replaced by hall sensor readings so
+                // they don't falsely block cooling when units have been off.
+
+                // Apply per-unit temperature correction if configured
+                const entityTargetTemp =
+                  hvacOptions.cooling.temperature +
+                  (entity.temperatureCorrection ?? 0);
+
+                if (shouldCoolSystem) {
+                  // System-wide decision is to cool (hall sensor above threshold)
+                  // Check if this specific room is already too cold to warrant cooling
+                  const coolingSafetyFloor =
+                    hvacOptions.cooling.temperature - 2; // e.g. 24.3 - 2 = 22.3°C
+
+                  if (calibratedRoomTemp < coolingSafetyFloor) {
+                    // Room is already cool enough — skip cooling this unit
+                    logger.info(
+                      "⏭️ Unit skipped - room already cool enough",
+                      {
+                        entityId: entity.entityId,
+                        roomTemp,
+                        effectiveRoomTemp,
+                        calibratedRoomTemp,
+                        safetyFloor: coolingSafetyFloor,
+                        isStale,
+                        reason: `Room at ${calibratedRoomTemp}°C is below safety floor ${coolingSafetyFloor}°C`,
+                      },
+                    );
+                  } else {
+                    // Room is warm enough to warrant cooling
+                    await controlHVACEntity(
+                      haClient,
+                      entity.entityId,
+                      "cool",
+                      entityTargetTemp,
+                      hvacOptions.cooling.presetMode,
+                      logger,
+                    );
+                    logger.info("❄️ Unit turned ON for cooling", {
                       entityId: entity.entityId,
                       roomTemp,
                       effectiveRoomTemp,
                       calibratedRoomTemp,
-                      safetyFloor: coolingSafetyFloor,
+                      targetTemp: entityTargetTemp,
                       isStale,
-                      reason: `Room at ${calibratedRoomTemp}°C is below safety floor ${coolingSafetyFloor}°C`,
-                    },
-                  );
+                    });
+                  }
                 } else {
-                  // Room is warm enough to warrant cooling
+                  // System-wide: no cooling needed — turn off any running units
                   await controlHVACEntity(
                     haClient,
                     entity.entityId,
-                    "cool",
-                    entityTargetTemp,
-                    hvacOptions.cooling.presetMode,
+                    "off",
+                    undefined,
+                    undefined,
                     logger,
                   );
-                  logger.info("❄️ Unit turned ON for cooling", {
+                  logger.info("🔴 Unit turned OFF - system cooling not needed", {
                     entityId: entity.entityId,
-                    roomTemp,
-                    effectiveRoomTemp,
-                    calibratedRoomTemp,
-                    targetTemp: entityTargetTemp,
-                    isStale,
+                    systemIndoorTemp,
+                    threshold:
+                      hvacOptions.cooling.temperatureThresholds.indoorMin,
                   });
                 }
-              } else {
-                // System-wide: no cooling needed — turn off any running units
-                await controlHVACEntity(
-                  haClient,
-                  entity.entityId,
-                  "off",
-                  undefined,
-                  undefined,
-                  logger,
+              } catch (error) {
+                logger.error(
+                  "❌ Failed to control cooling entity individually",
+                  error,
+                  {
+                    entityId: entity.entityId,
+                  },
                 );
-                logger.info("🔴 Unit turned OFF - system cooling not needed", {
-                  entityId: entity.entityId,
-                  systemIndoorTemp,
-                  threshold:
-                    hvacOptions.cooling.temperatureThresholds.indoorMin,
-                });
               }
-            } catch (error) {
-              logger.error(
-                "❌ Failed to control cooling entity individually",
-                error,
-                {
-                  entityId: entity.entityId,
-                },
-              );
             }
-          }
-        },
+          }),
 
         turnOff: async () => {
           if (!haClient) {
@@ -1423,6 +1532,7 @@ export function createHVACMachine(
             logger,
             () => "off",
             "turn_off",
+            commandQueue,
           );
         },
       },
@@ -1556,6 +1666,11 @@ export function createHVACMachine(
          * During an active defrost cycle: only the schedule window (and, through
          * MANUAL_OVERRIDE/OFF, an explicit stop) can abort it. The duration
          * timer — not spontaneous sensor events — completes the cycle.
+         *
+         * Only the active-hours window is checked here, matching the legacy
+         * runtime behaviour (legacy `continue_defrost` leaves the outdoor
+         * operating range unenforced for a running cycle; only entry requires
+         * it).
          */
         defrostCanContinue: ({ context }) =>
           hvacStrategy.isActiveHour(context.currentHour, context.isWeekday),
@@ -1667,12 +1782,32 @@ export class HVACStateMachine {
   private logger: LoggerService;
   private hvacOptions?: HvacOptions;
   private haClient?: HomeAssistantClient;
+  /**
+   * One command queue per state-machine instance: every HVAC command of this
+   * machine (including the ones `stop()` issues) is serialized through it, so
+   * the order of commands on the wire matches the order transitions requested
+   * them.
+   */
+  private commandQueue = new HvacCommandQueue();
+  /**
+   * Shared with the machine so `stop()` can close an in-flight defrost cycle
+   * for the period gate: this instance (and its last-defrost timestamp) is
+   * reused across a controller stop/start in the same process.
+   */
+  private strategy: HVACStrategy;
 
   constructor(hvacOptions?: HvacOptions, haClient?: HomeAssistantClient) {
     this.logger = new LoggerService("HAG.hvac.state-machine");
     this.hvacOptions = hvacOptions;
     this.haClient = haClient;
-    this.machine = createHVACMachine(hvacOptions!, this.logger, haClient);
+    this.strategy = new HVACStrategy(hvacOptions!);
+    this.machine = createHVACMachine(
+      hvacOptions!,
+      this.logger,
+      haClient,
+      this.commandQueue,
+      this.strategy,
+    );
   }
 
   /**
@@ -1743,13 +1878,20 @@ export class HVACStateMachine {
               "controller stop must not leave a unit in forced cool mode",
           },
         );
+        // Queued behind any in-flight defrost command, so the off commands are
+        // the last thing that reaches the device for these units.
         await commandHvacEntities(
           this.haClient,
           this.hvacOptions,
           this.logger,
           () => "off",
           "state_machine_stop",
+          this.commandQueue,
         );
+        // Stopping ends the cycle: record it so a restart in this process cannot
+        // start the next defrost before the period elapses (same invariant as
+        // the in-machine abort paths).
+        this.strategy.abortDefrostCycle();
       }
 
       this.actor.stop();
