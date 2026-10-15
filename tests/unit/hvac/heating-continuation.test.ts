@@ -90,6 +90,10 @@ const turnOffCalls = (h: Harness): string[] =>
     .filter((call) => call.service === "climate.turn_off")
     .map((call) => call.entityId);
 
+/** Every command that is not a stop command (i.e. a start/setting write). */
+const heatWrites = (h: Harness) =>
+  h.ha.calls.filter((call) => call.service !== "climate.turn_off");
+
 // ---------------------------------------------------------------------------
 // An existing cycle survives an outdoor range exit
 // ---------------------------------------------------------------------------
@@ -232,6 +236,55 @@ describe("Heating continuation - schedule cutoff", () => {
     expect(turnOffCalls(h)).toEqual([LIVING_ROOM, BEDROOM]);
     expect(h.ha.callsFor(DISABLED)).toEqual([]);
   });
+
+  test("a failed hall reading does not postpone the cutoff: the units are still told to stop", async () => {
+    const h = harness(
+      heatingOptions({ activeHours: { start: 9, startWeekday: 9, end: 22 } }),
+    );
+    h.sendConditions(21.0, 14.0);
+    await flush();
+    h.sendConditions(21.0, 16.0); // continues outside the start range
+    await flush();
+    expect(h.state).toBe("heating");
+    const writesBeforeCutoff = heatWrites(h).length;
+
+    setSystemTime(new Date(2026, 0, 15, 22, 3, 0)); // past the cutoff
+    h.sendConditions(NaN, 16.0); // the hall sensor fails at/after the cutoff
+    await flush();
+
+    // Enforcement is a time-only decision: a failed sensor must not keep the
+    // units heating past the schedule window.
+    expect(h.state).toBe("idle");
+    expect(turnOffCalls(h)).toEqual([LIVING_ROOM, BEDROOM]);
+    // Stop intent only: no unit is restarted and no setting is rewritten.
+    expect(heatWrites(h).length).toBe(writesBeforeCutoff);
+    expect(heatWrites(h)).toEqual([
+      ...heatBatch(LIVING_ROOM, 21.0),
+      ...heatBatch(BEDROOM, 21.0),
+    ]);
+    expect(h.ha.callsFor(DISABLED)).toEqual([]);
+  });
+
+  test("a failed outdoor reading does not postpone the cutoff either", async () => {
+    const h = harness(
+      heatingOptions({ activeHours: { start: 9, startWeekday: 9, end: 22 } }),
+    );
+    h.sendConditions(21.0, 14.0);
+    await flush();
+    h.sendConditions(21.0, 16.0); // continues outside the start range
+    await flush();
+    expect(h.state).toBe("heating");
+    const writesBeforeCutoff = heatWrites(h).length;
+
+    setSystemTime(new Date(2026, 0, 15, 22, 3, 0)); // past the cutoff
+    h.sendConditions(21.0, NaN); // the outdoor sensor fails at/after the cutoff
+    await flush();
+
+    expect(h.state).toBe("idle");
+    expect(turnOffCalls(h)).toEqual([LIVING_ROOM, BEDROOM]);
+    expect(heatWrites(h).length).toBe(writesBeforeCutoff);
+    expect(h.ha.callsFor(DISABLED)).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -313,9 +366,22 @@ describe("Heating continuation - strategy semantics", () => {
   });
 
   test("yields when cooling demand takes precedence", () => {
-    expect(
-      strategy.shouldContinueHeating(data({ currentTemp: 24.0, weatherTemp: 20.0 })),
-    ).toBe(false);
+    // Under production thresholds this clause is unreachable (cooling indoorMin
+    // 23.7 °C > heating indoorMax 21.8 °C), so exercise it with a test-local
+    // cooling threshold below indoorMax: 21.6 °C is neither a heating start
+    // (< indoorMin 21.2) nor the indoor stop threshold (< indoorMax) and the
+    // hour is inside the window — the cooling clause is the only reason to yield.
+    const coolingFirstOptions = heatingOptions();
+    coolingFirstOptions.cooling.temperatureThresholds.indoorMin = 21.5;
+    const coolingFirst = new HVACStrategy(coolingFirstOptions);
+    const inBand = data({ currentTemp: 21.6, weatherTemp: 20.0 });
+
+    expect(coolingFirst.shouldContinueHeating(inBand)).toBe(false);
+    // Same evaluation with the production cooling threshold: no cooling demand,
+    // so the cycle continues (this is why 24.0 °C used to pass for the wrong
+    // reason: it tripped the indoorMax clause first).
+    expect(strategy.shouldContinueHeating(inBand)).toBe(true);
+    expect(strategy.shouldContinueHeating(data({ currentTemp: 21.6 }))).toBe(true);
   });
 
   test("defers a start-eligible evaluation to the ordinary heating path", () => {
@@ -325,6 +391,28 @@ describe("Heating continuation - strategy semantics", () => {
     expect(
       strategy.shouldContinueHeating(data({ currentTemp: 21.0, weatherTemp: -5.0 })),
     ).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Defrost precedence (review F3): a defrost-eligible evaluation wins over
+// continuation — that is what the defrost branch's position in the heating
+// state's AUTO_EVALUATE array buys, and the new suite strips the defrost layer.
+// ---------------------------------------------------------------------------
+
+describe("Heating continuation - defrost precedence", () => {
+  test("a defrost-eligible evaluation preempts a continuing heating cycle", async () => {
+    const h = harness(makeOptions()); // defrost layer present
+    h.sendConditions(21.0, 5.0); // cold start inside the outdoor range
+    await flush();
+    expect(h.state).toBe("heating");
+
+    // In-band hall reading (continuation would hold the cycle) plus an outdoor
+    // reading at/below the defrost threshold: defrost takes precedence.
+    h.sendConditions(21.4, -1.0);
+    await flush();
+
+    expect(h.state).toBe("defrosting");
   });
 });
 

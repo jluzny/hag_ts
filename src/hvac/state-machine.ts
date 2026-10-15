@@ -1924,6 +1924,23 @@ export function createHVACMachine(
             return false;
           }
 
+          // Schedule window closed: enforcement is a time-only decision, so it
+          // precedes the finiteness gate below. Keeping the units heating past
+          // the cutoff because a sensor failed is the orphaned-heating defect
+          // this card removes (approved decisions Issue 4: "enforce the current
+          // schedule even with failed sensor input"). Mirrors the clause order
+          // of HVACStrategy.shouldTurnOff, which checks the active hours first.
+          if (!hvacStrategy.isActiveHour(context.currentHour, context.isWeekday)) {
+            logger.debug("🕐 Turn off guard - outside active hours", {
+              currentHour: context.currentHour,
+              isWeekday: context.isWeekday,
+              indoorTemp: context.indoorTemp,
+              outdoorTemp: context.outdoorTemp,
+              reason: "Outside active hours - schedule enforced without sensor input",
+            });
+            return true;
+          }
+
           // Zero is a valid temperature: only missing/non-finite readings block
           // evaluation (full zero-validity handling is issue 1's scope).
           if (!isFiniteNumber(context.indoorTemp) || !isFiniteNumber(context.outdoorTemp)) {
