@@ -20,8 +20,9 @@
  * network or device is contacted.
  */
 
-import { afterEach, describe, expect, test, setSystemTime } from "bun:test";
+import { afterEach, describe, expect, test, setSystemTime, spyOn } from "bun:test";
 import { type HvacOptions } from "../../../src/config/config.ts";
+import { CyclingMonitor } from "../../../src/hvac/cycling-monitor.ts";
 import {
   BASE_DATE,
   BEDROOM,
@@ -33,6 +34,9 @@ import {
 } from "./harness.ts";
 
 let active: Harness | undefined;
+
+/** Captured before any spy is installed, so the spy can delegate to the real method. */
+const originalRecordStateChange = CyclingMonitor.prototype.recordStateChange;
 
 const harness = (options?: HvacOptions): Harness => {
   setSystemTime(BASE_DATE); // Thursday 2026-01-15 10:00, inside active hours
@@ -236,6 +240,58 @@ describe("Issue 1 - auto-cool guard treats a finite zero as present input", () =
     expect(
       h.ha.calls.filter((call) => call.data?.hvac_mode === "cool"),
     ).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The heating path feeds a valid zero reading to the cycling monitor
+// ---------------------------------------------------------------------------
+
+describe("Issue 1 - the heating path records a finite zero reading", () => {
+  /**
+   * `executeHeating` records the hall reading in the cycling monitor with
+   * `if (isFiniteNumber(context.indoorTemp))`. The guard is only observable
+   * through the monitor itself: a truthiness check silently drops a finite
+   * 0 °C reading, leaving every other observable behaviour (actor state,
+   * outgoing commands) unchanged. Spy on the monitor method so a revert of
+   * those two lines is caught.
+   */
+  test("records the valid 0.0 °C hall reading when heating starts", async () => {
+    const records: {
+      fromState: string;
+      toState: string;
+      temperature: number;
+    }[] = [];
+    const spy = spyOn(CyclingMonitor.prototype, "recordStateChange");
+    spy.mockImplementation(function (
+      this: CyclingMonitor,
+      fromState: string,
+      toState: string,
+      temperature: number,
+    ) {
+      records.push({ fromState, toState, temperature });
+      return originalRecordStateChange.call(this, fromState, toState, temperature);
+    });
+
+    try {
+      const h = harness(heatingOptions());
+      h.sendConditions(0.0, 0.0); // indoor 0.0 is below indoorMin: heat is due
+      await flush();
+
+      // The reading is decision-relevant and produces real device intent ...
+      expect(h.state).toBe("heating");
+      expect(h.ha.servicesFor(LIVING_ROOM)).toContain("climate.set_hvac_mode");
+
+      // ... and the cycle is recorded with the actual 0.0 °C reading. The
+      // duplicated pair is the pre-existing production recording (unchanged
+      // by this card): a truthiness check would record nothing at all.
+      expect(records).toEqual([
+        { fromState: "OFF", toState: "HEAT", temperature: 0 },
+        { fromState: "OFF", toState: "HEAT", temperature: 0 },
+      ]);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 
