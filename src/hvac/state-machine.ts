@@ -699,19 +699,54 @@ const OFF_COMMAND_RETRY_DELAY_MS = 100;
  *
  * Every HVAC command batch of one machine goes through one FIFO chain, so wire
  * order always matches transition order.
+ *
+ * A queued batch can also be *abandoned* (`abandonOutstanding`): a fail-safe
+ * `off` batch marks every batch enqueued before it as superseded, so a command
+ * stuck in a hung state read stops there instead of delaying the `off` commands
+ * (or landing after them, which would leave the unit in the superseded mode).
  */
 export class HvacCommandQueue {
   private tail: Promise<unknown> = Promise.resolve();
+  /** Batches enqueued and not finished yet (running and waiting). */
+  private outstanding = new Set<AbortController>();
 
-  /** Run `task` after every previously enqueued task has settled. */
-  run<T>(task: () => Promise<T>): Promise<T> {
-    const result = this.tail.then(task, task);
+  /**
+   * Run `task` after every previously enqueued task has settled.
+   *
+   * `task` receives the batch's abort signal and must pass it to the client
+   * calls it makes. `abandoned` is the value returned when the batch was
+   * abandoned before it even started — nothing is sent to the device in that
+   * case.
+   */
+  run<T>(task: (signal: AbortSignal) => Promise<T>, abandoned: T): Promise<T> {
+    const controller = new AbortController();
+    this.outstanding.add(controller);
+
+    const entry = async (): Promise<T> => {
+      if (controller.signal.aborted) return abandoned;
+      return task(controller.signal);
+    };
+
+    const result = this.tail.then(entry, entry);
     // Keep the chain alive whatever the batch outcome.
-    this.tail = result.then(
-      () => undefined,
-      () => undefined,
-    );
+    const release = (): void => {
+      this.outstanding.delete(controller);
+    };
+    this.tail = result.then(release, release);
     return result;
+  }
+
+  /**
+   * Abandon every batch enqueued so far (running and waiting).
+   *
+   * Called by a fail-safe `off` batch before it enqueues itself: the `off`
+   * commands must not wait behind a hung command, and a superseded command must
+   * not reach the device after them.
+   */
+  abandonOutstanding(): void {
+    for (const controller of [...this.outstanding]) {
+      controller.abort();
+    }
   }
 }
 
@@ -721,6 +756,39 @@ export class HvacCommandQueue {
  */
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
+}
+
+/**
+ * Settle with `promise`, but stop as soon as `signal` aborts.
+ *
+ * Mirrors the client's own abandoned-batch handling for the state reads a
+ * command batch performs directly: the batch must not hold the machine's command
+ * queue (and any fail-safe `off` behind it) until a transport answers. Late
+ * settlement is swallowed — the caller has already moved on.
+ */
+function raceAbandoned<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => reject(new Error("command batch abandoned"));
+    if (signal.aborted) {
+      promise.then(
+        () => {},
+        () => {},
+      );
+      onAbort();
+      return;
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
 }
 
 /**
@@ -751,8 +819,12 @@ async function commandHvacEntities(
   resolveMode: (entity: HvacEntity) => "cool" | "off",
   reason: string,
   queue?: HvacCommandQueue,
+  // A fail-safe `off` batch supersedes the batches enqueued before it (see
+  // HvacCommandQueue.abandonOutstanding): its `off` commands must not wait
+  // behind a hung command, and a superseded command must not land after them.
+  failSafeOff = false,
 ): Promise<string[]> {
-  const runBatch = async (): Promise<string[]> => {
+  const runBatch = async (signal: AbortSignal): Promise<string[]> => {
     if (!haClient) {
       logger.warning("⚠️ No Home Assistant client available for HVAC commands", {
         reason,
@@ -764,12 +836,15 @@ async function commandHvacEntities(
     const failedEntities: string[] = [];
 
     for (const entity of enabledEntities) {
+      if (signal.aborted) break;
+
       const mode = resolveMode(entity);
       const maxAttempts = mode === "off" ? OFF_COMMAND_MAX_ATTEMPTS : 1;
       let lastError: unknown;
       let commanded = false;
 
       for (let attempt = 1; attempt <= maxAttempts && !commanded; attempt++) {
+        if (signal.aborted) break;
         try {
           await controlHVACEntity(
             haClient,
@@ -778,7 +853,11 @@ async function commandHvacEntities(
             undefined,
             undefined,
             logger,
+            signal,
           );
+          // The client returns without sending when the batch was abandoned
+          // during its state read: that is not a successful command.
+          if (signal.aborted) break;
           commanded = true;
         } catch (error) {
           lastError = error;
@@ -797,6 +876,8 @@ async function commandHvacEntities(
         }
       }
 
+      if (signal.aborted) break;
+
       if (commanded) {
         logger.debug("✅ HVAC entity commanded", {
           entityId: entity.entityId,
@@ -814,6 +895,17 @@ async function commandHvacEntities(
       }
     }
 
+    if (signal.aborted) {
+      // Superseded by a later fail-safe batch: whatever is still unsent is
+      // deliberately dropped, and the batch that superseded this one commands
+      // every enabled unit itself.
+      logger.warning(
+        "⏹️ HVAC command batch abandoned - superseded by a fail-safe batch; unsent commands dropped",
+        { reason, failedBeforeAbandon: failedEntities },
+      );
+      return failedEntities;
+    }
+
     if (failedEntities.length > 0) {
       logger.warning(
         "⚠️ HVAC commands failed - no automatic recovery is attempted; the affected unit may not reflect the requested mode until a later successful command",
@@ -824,7 +916,10 @@ async function commandHvacEntities(
     return failedEntities;
   };
 
-  return queue ? queue.run(runBatch) : runBatch();
+  if (failSafeOff) queue?.abandonOutstanding();
+  return queue
+    ? queue.run(runBatch, [])
+    : runBatch(new AbortController().signal);
 }
 
 /**
@@ -1166,6 +1261,7 @@ export function createHVACMachine(
             () => "off",
             "defrost_complete",
             commandQueue,
+            true,
           );
 
           logger.info(`✅ [HVAC] Defrost cycle completed`, {
@@ -1199,6 +1295,7 @@ export function createHVACMachine(
             () => "off",
             "defrost_abort",
             commandQueue,
+            true,
           );
         },
 
@@ -1237,11 +1334,18 @@ export function createHVACMachine(
 
         executeHeating: async ({ context }: { context: HVACContext }) =>
           // Serialized: these commands must not overtake an earlier
-          // batch (e.g. a defrost abort's off commands).
-          commandQueue.run(async () => {
+          // batch (e.g. a defrost abort's off commands) and are dropped when a
+          // fail-safe off batch supersedes them.
+          commandQueue.run(async (signal) => {
             if (!haClient) {
               logger.warning(
                 "⚠️ No Home Assistant client available for heating control",
+              );
+              return;
+            }
+            if (signal.aborted) {
+              logger.warning(
+                "⏹️ Heating command batch abandoned before it ran - superseded by a fail-safe batch",
               );
               return;
             }
@@ -1311,6 +1415,7 @@ export function createHVACMachine(
             });
 
             for (const entity of heatingEntities) {
+              if (signal.aborted) break;
               try {
                 // Apply per-unit temperature correction if configured
                 const entityTargetTemp =
@@ -1323,6 +1428,7 @@ export function createHVACMachine(
                   entityTargetTemp,
                   presetMode,
                   logger,
+                  signal,
                 );
                 logger.debug("✅ Heating entity controlled", {
                   entityId: entity.entityId,
@@ -1337,15 +1443,22 @@ export function createHVACMachine(
                 });
               }
             }
-          }),
+          }, undefined),
 
         executeCooling: async ({ context }: { context: HVACContext }) =>
           // Serialized: these commands must not overtake an earlier
-          // batch (e.g. a defrost abort's off commands).
-          commandQueue.run(async () => {
+          // batch (e.g. a defrost abort's off commands) and are dropped when a
+          // fail-safe off batch supersedes them.
+          commandQueue.run(async (signal) => {
             if (!haClient) {
               logger.warning(
                 "⚠️ No Home Assistant client available for cooling control",
+              );
+              return;
+            }
+            if (signal.aborted) {
+              logger.warning(
+                "⏹️ Cooling command batch abandoned before it ran - superseded by a fail-safe batch",
               );
               return;
             }
@@ -1380,12 +1493,17 @@ export function createHVACMachine(
             });
 
             for (const entity of enabledEntities) {
+              if (signal.aborted) break;
               try {
                 // Derive temperature sensor for this unit
                 const tempSensorId = deriveTemperatureSensor(entity.entityId);
 
                 // Get current room temperature and check staleness
-                const tempState = await haClient.getState(tempSensorId);
+                const tempState = await raceAbandoned(
+                  haClient.getState(tempSensorId, signal),
+                  signal,
+                );
+                if (signal.aborted) break;
                 const roomTemp = parseFloat(tempState.state);
 
                 // Check if the sensor reading is stale
@@ -1468,6 +1586,7 @@ export function createHVACMachine(
                       entityTargetTemp,
                       hvacOptions.cooling.presetMode,
                       logger,
+                      signal,
                     );
                     logger.info("❄️ Unit turned ON for cooling", {
                       entityId: entity.entityId,
@@ -1487,6 +1606,7 @@ export function createHVACMachine(
                     undefined,
                     undefined,
                     logger,
+                    signal,
                   );
                   logger.info("🔴 Unit turned OFF - system cooling not needed", {
                     entityId: entity.entityId,
@@ -1505,7 +1625,7 @@ export function createHVACMachine(
                 );
               }
             }
-          }),
+          }, undefined),
 
         turnOff: async () => {
           if (!haClient) {
@@ -1533,6 +1653,7 @@ export function createHVACMachine(
             () => "off",
             "turn_off",
             commandQueue,
+            true,
           );
         },
       },
@@ -1722,15 +1843,25 @@ async function controlHVACEntity(
   targetTemp?: number,
   presetMode?: string,
   logger?: LoggerService,
+  // Batch signal: when the batch that requested this command was abandoned
+  // (superseded by a fail-safe batch), nothing further may reach the device.
+  signal?: AbortSignal,
 ): Promise<void> {
   if (!haClient) return;
+  if (signal?.aborted) {
+    logger?.debug("⏭️ HVAC entity control skipped - batch abandoned", {
+      entityId,
+      mode,
+    });
+    return;
+  }
 
   if (mode === "off") {
     // Turn off entity - turn_off service doesn't need additional parameters
     // Import HassServiceCallImpl dynamically to avoid circular dependency
     const { HassServiceCallImpl } = await import("../home-assistant/models.ts");
     const offCall = HassServiceCallImpl.climate("turn_off", entityId, {});
-    await haClient.callService(offCall);
+    await haClient.callService(offCall, signal);
   } else {
     // Set HVAC mode (heat, cool, etc.)
     await haClient.controlEntity(
@@ -1739,6 +1870,7 @@ async function controlHVACEntity(
       "set_hvac_mode",
       { type: "state", key: "hvac_mode" },
       mode,
+      signal,
     );
 
     // Set temperature if provided
@@ -1749,6 +1881,7 @@ async function controlHVACEntity(
         "set_temperature",
         { type: "attribute", key: "temperature" },
         targetTemp,
+        signal,
       );
     }
 
@@ -1760,6 +1893,7 @@ async function controlHVACEntity(
         "set_preset_mode",
         { type: "attribute", key: "preset_mode" },
         presetMode,
+        signal,
       );
     }
   }
@@ -1887,6 +2021,7 @@ export class HVACStateMachine {
           () => "off",
           "state_machine_stop",
           this.commandQueue,
+          true,
         );
         // Stopping ends the cycle: record it so a restart in this process cannot
         // start the next defrost before the period elapses (same invariant as

@@ -29,6 +29,14 @@ export const HassOptionsSchema = z.object({
     .int()
     .positive()
     .describe("State check interval in milliseconds"),
+  stateRequestTimeoutMs: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      "Optional bound in milliseconds for a single REST state read (default 5000). A hung state read must not block HVAC command batches.",
+    ),
 });
 
 /**

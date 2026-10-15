@@ -15,7 +15,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { setSystemTime } from "bun:test";
 import { createActor } from "xstate";
 import { createHVACMachine, HVACStateMachine, HVACStrategy } from "../../../src/hvac/state-machine.ts";
-import { type HvacOptions } from "../../../src/config/config.ts";
+import { type HassOptions, type HvacOptions } from "../../../src/config/config.ts";
 import { SystemMode } from "../../../src/types/common.ts";
 import { LoggerService } from "../../../src/core/logging.ts";
 import { HomeAssistantClient } from "../../../src/home-assistant/client.ts";
@@ -82,6 +82,40 @@ interface RecordedCall {
   data?: Record<string, unknown>;
 }
 
+/**
+ * Test-side mirror of the production client's abandoned-batch handling: settle
+ * with `promise`, but stop as soon as `signal` aborts (the production client
+ * does this around its REST state read).
+ */
+const raceSignal = <T>(
+  promise: Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> => {
+  if (!signal) return promise;
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => reject(new Error("batch abandoned"));
+    if (signal.aborted) {
+      promise.then(
+        () => {},
+        () => {},
+      );
+      onAbort();
+      return;
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
+};
+
 class FakeHomeAssistantClient extends HomeAssistantClient {
   /** Service calls that reached the client successfully, in call order. */
   calls: RecordedCall[] = [];
@@ -119,10 +153,23 @@ class FakeHomeAssistantClient extends HomeAssistantClient {
   override removeEventHandler(): void {}
   override onStateChanged(): void {}
 
-  override async getState(entityId: string): Promise<HassStateImpl> {
+  override async getState(
+    entityId: string,
+    signal?: AbortSignal,
+  ): Promise<HassStateImpl> {
+    if (signal?.aborted) {
+      throw new Error(`abandoned state read for ${entityId}`);
+    }
     if (this.deferGetState) {
-      await new Promise<void>((resolve) => {
+      await new Promise<void>((resolve, reject) => {
         this.gates.set(entityId, resolve);
+        // Mirrors the production client: an abandoned batch ends its state read
+        // (there the REST fetch is aborted) instead of holding the queue.
+        signal?.addEventListener(
+          "abort",
+          () => reject(new Error(`abandoned state read for ${entityId}`)),
+          { once: true },
+        );
       });
     }
     return new HassStateImpl(entityId, "21.0", {}, new Date(), new Date());
@@ -156,12 +203,16 @@ class FakeHomeAssistantClient extends HomeAssistantClient {
     service: string,
     valueType: { type: string; key: string },
     value: unknown,
+    signal?: AbortSignal,
   ): Promise<void> {
     const serviceName = `${domain}.${service}`;
+    // Mirrors the production client: an abandoned batch sends nothing.
+    if (signal?.aborted) return;
     // The real client reads the entity state (a network round-trip) before it
     // decides to send the service call: that pause is where command ordering
     // can invert, so the fake reproduces it.
-    await this.getState(entityId);
+    await raceSignal(this.getState(entityId, signal), signal);
+    if (signal?.aborted) return;
     this.attempts.push({ entityId, service: serviceName });
     if (this.shouldFail(entityId, serviceName)) {
       throw new Error(`simulated HA failure for ${entityId}`);
@@ -174,7 +225,11 @@ class FakeHomeAssistantClient extends HomeAssistantClient {
     this.wire.push({ entityId, service: serviceName });
   }
 
-  override async callService(serviceCall: HassServiceCallImpl): Promise<void> {
+  override async callService(
+    serviceCall: HassServiceCallImpl,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    if (signal?.aborted) return;
     // HassServiceCallImpl.climate() carries the entity id in serviceData.
     const entityId =
       (serviceCall.target?.entityId as string) ??
@@ -860,16 +915,18 @@ describe("Custom defrost - HA command ordering", () => {
     await flush();
     expect(h.state).toBe("idle");
 
-    h.ha.releaseGetState();
+    // The abort's fail-safe batch supersedes the in-flight entry batch: its
+    // command is dropped, so the entry cool never reaches the device at all and
+    // the off is the last (here: only) command for these units.
     await waitUntil(() => h.ha.attemptsFor(LIVING_ROOM, "climate.turn_off") === 1);
+    expect(h.ha.wireFor(LIVING_ROOM)).toEqual(["climate.turn_off"]);
+    expect(h.ha.wireFor(BEDROOM)).toEqual(["climate.turn_off"]);
 
-    // Wire order must follow transition order: the entry cool first, the abort
-    // off last — the unit ends OFF, never forced COOL.
-    expect(h.ha.wireFor(LIVING_ROOM)).toEqual([
-      "climate.set_hvac_mode",
-      "climate.turn_off",
-    ]);
-    expect(h.ha.wireFor(BEDROOM)).toEqual(["climate.turn_off", "climate.turn_off"]);
+    // A state read that answers late cannot resurrect the superseded command.
+    h.ha.releaseGetState();
+    await flush();
+    expect(h.ha.wireFor(LIVING_ROOM)).toEqual(["climate.turn_off"]);
+    expect(h.ha.calls.filter((c) => c.data?.hvac_mode === "cool")).toEqual([]);
   });
 
   test("stop() during an in-flight entry command leaves the unit off, never cool", async () => {
@@ -886,17 +943,14 @@ describe("Custom defrost - HA command ordering", () => {
     expect(stateMachine.getCurrentState()).toBe("defrosting");
     expect(ha.pendingGetState()).toBe(1);
 
-    const stopping = stateMachine.stop(); // off commands queue behind the in-flight cool
-    await flush();
-    expect(ha.wire).toEqual([]);
+    const stopping = stateMachine.stop(); // off commands supersede the in-flight cool
+    await waitUntil(() => ha.wireFor(LIVING_ROOM).includes("climate.turn_off"));
+    expect(ha.wireFor(LIVING_ROOM)).toEqual(["climate.turn_off"]);
 
     ha.releaseGetState();
     await stopping;
 
-    expect(ha.wireFor(LIVING_ROOM)).toEqual([
-      "climate.set_hvac_mode",
-      "climate.turn_off",
-    ]);
+    expect(ha.wireFor(LIVING_ROOM)).toEqual(["climate.turn_off"]);
     expect(stateMachine.getCurrentState()).toBe("stopped");
   });
 
@@ -1111,5 +1165,326 @@ describe("Custom defrost - manual overrides during the cycle", () => {
     ]);
     expect(h.ha.wireFor(LIVING_ROOM).at(-1)).toBe("climate.turn_off");
     expect(h.clock.pending()).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A hung REST state read must not block (or be overtaken by) the fail-safe off
+// (review round 2, F4)
+//
+// Every command batch reads the entity state over REST before it sends its
+// service call, and that read used to be unbounded. A round-trip that never
+// answered therefore held the whole per-machine command queue, so an abort's
+// fail-safe `off` never reached a unit that was already in forced cool (measured
+// hazard, round-2 review T3).
+//
+// These regressions drive the REAL HomeAssistantClient: only the WebSocket sink
+// (`sendMessage`) and the global `fetch` are replaced, so the real
+// `controlEntity`/`callService`/`getState` code paths run — including the
+// state-request bound and the abandoned-batch handling. Offline: no socket, no
+// network, no device.
+// ---------------------------------------------------------------------------
+
+/** Healthy REST payload for one entity state read. */
+const HA_STATE_PAYLOAD = {
+  entity_id: "climate.living_room_ac",
+  state: "heat",
+  attributes: {},
+  last_changed: new Date(0).toISOString(),
+  last_updated: new Date(0).toISOString(),
+};
+
+const jsonResponse = (): Response =>
+  new Response(JSON.stringify(HA_STATE_PAYLOAD), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+
+let restoreFetch: (() => void) | undefined;
+
+/** Init object of a fetch call (the DOM lib type is not an eslint global). */
+type FetchInit = NonNullable<Parameters<typeof fetch>[1]>;
+
+/**
+ * Replace global fetch; `handler` receives the 1-based call number and the
+ * requested URL. Returns a counter for asserting that a read is in flight.
+ */
+const installFetch = (
+  handler: (call: number, url: string, init?: FetchInit) => Promise<Response>,
+): { calls: () => number } => {
+  const original = globalThis.fetch;
+  let calls = 0;
+  restoreFetch = () => {
+    globalThis.fetch = original;
+  };
+  globalThis.fetch = ((url: string, init?: FetchInit) =>
+    handler(++calls, url, init)) as typeof fetch;
+  return { calls: () => calls };
+};
+
+/**
+ * Real client transport: `getState`/`controlEntity`/`callService` stay real, and
+ * only the private WebSocket sink is replaced by a recorder.
+ */
+class RealTransportClient extends HomeAssistantClient {
+  wire: { entityId: string; service: string }[] = [];
+  attempts: { entityId: string; service: string }[] = [];
+
+  constructor(options: Partial<HassOptions> = {}) {
+    super(
+      {
+        wsUrl: "ws://127.0.0.1:9/api/websocket",
+        restUrl: "http://127.0.0.1:9",
+        token: "offline-test-token",
+        maxRetries: 1,
+        retryDelayMs: 1,
+        stateCheckInterval: 1000,
+        ...options,
+      } as HassOptions,
+      new LoggerService("test.defrost.real-client"),
+    );
+
+    (
+      this as unknown as {
+        sendMessage: (message: {
+          domain: string;
+          service: string;
+          service_data?: Record<string, unknown>;
+          target?: { entity_id?: string };
+        }) => Promise<void>;
+      }
+    ).sendMessage = async (message) => {
+      const entityId =
+        (message.target?.entity_id as string) ??
+        (message.service_data?.entity_id as string) ??
+        "unknown";
+      const service = `${message.domain}.${message.service}`;
+      this.attempts.push({ entityId, service });
+      this.wire.push({ entityId, service });
+    };
+  }
+
+  override async connect(): Promise<void> {}
+  override async disconnect(): Promise<void> {}
+  override get connected(): boolean {
+    return true;
+  }
+  override async subscribeEvents(): Promise<void> {}
+  override addEventHandler(): void {}
+  override removeEventHandler(): void {}
+  override onStateChanged(): void {}
+
+  wireFor(entityId: string): string[] {
+    return this.wire
+      .filter((call) => call.entityId === entityId)
+      .map((call) => call.service);
+  }
+
+  servicesWithMode(mode: string): string[] {
+    return this.wire
+      .filter((call) => call.service === `climate.set_hvac_mode:${mode}`)
+      .map((call) => call.entityId);
+  }
+
+  reset(): void {
+    this.wire = [];
+    this.attempts = [];
+  }
+}
+
+describe("Custom defrost - hung REST state read (review round 2, F4)", () => {
+  const realActors: { stop: () => void }[] = [];
+
+  /** Start a machine on the real transport with the pinned wall clock. */
+  const boot = (ha: RealTransportClient, options = makeOptions()) => {
+    setSystemTime(BASE_DATE);
+    const machine = createHVACMachine(
+      options,
+      new LoggerService("test.defrost.real-client"),
+      ha,
+    );
+    const actor = createActor(machine as any, { clock: new FakeClock() as any });
+    actor.start();
+    realActors.push(actor as unknown as { stop: () => void });
+    const conditions = (indoorTemp: number, outdoorTemp: number) => {
+      const now = new Date();
+      actor.send({
+        type: "UPDATE_CONDITIONS",
+        data: {
+          indoorTemp,
+          outdoorTemp,
+          currentHour: now.getHours(),
+          isWeekday: now.getDay() >= 1 && now.getDay() <= 5,
+        },
+      } as never);
+    };
+    return {
+      actor,
+      conditions,
+      state: () => (actor.getSnapshot() as { value: string }).value,
+    };
+  };
+
+  afterEach(() => {
+    for (const actor of realActors.splice(0)) actor.stop();
+    restoreFetch?.();
+    restoreFetch = undefined;
+    setSystemTime();
+  });
+
+  test("a state read that never answers cannot delay the abort's off, and cannot land after it", async () => {
+    const ha = new RealTransportClient();
+    let releaseHang: (() => void) | undefined;
+    installFetch((call, _url, init) => {
+      // First read (the first defrost unit) answers...
+      if (call === 1) return Promise.resolve(jsonResponse());
+      // ...every later read hangs forever, ignoring even the abort signal: the
+      // strongest form of a transport that never answers.
+      void init;
+      return new Promise<Response>((resolve) => {
+        releaseHang = () => resolve(jsonResponse());
+      });
+    });
+
+    // Two defrost units: the first one reaches forced cool, the second one is
+    // still waiting for its state read when the cycle is aborted.
+    const twoDefrostUnits = makeOptions({
+      hvacEntities: [
+        { entityId: LIVING_ROOM, enabled: true, defrost: true },
+        { entityId: BEDROOM, enabled: true, defrost: true },
+        { entityId: DISABLED, enabled: false, defrost: true },
+      ],
+    });
+    const h = boot(ha, twoDefrostUnits);
+    h.conditions(20.5, -3.0);
+    await waitUntil(() =>
+      ha.wireFor(LIVING_ROOM).includes("climate.set_hvac_mode"),
+    );
+    expect(h.state()).toBe("defrosting");
+    expect(ha.wireFor(BEDROOM)).toEqual([]); // stuck in the hung state read
+    ha.reset();
+
+    h.actor.send({ type: "OFF" } as never); // abort
+
+    // Bounded: the fail-safe off must not wait for the hung read (the old code
+    // waited forever), and it must land on every cycle-controlled unit.
+    await waitUntil(
+      () =>
+        ha.wireFor(LIVING_ROOM).includes("climate.turn_off") &&
+        ha.wireFor(BEDROOM).includes("climate.turn_off"),
+      100,
+      10,
+    );
+    expect(ha.wireFor(LIVING_ROOM)).toEqual(["climate.turn_off"]);
+    expect(ha.wireFor(BEDROOM)).toEqual(["climate.turn_off"]);
+    expect(h.state()).toBe("idle");
+
+    // The superseded cool cannot land after the off, even when the hung read
+    // finally answers.
+    releaseHang?.();
+    await flush();
+    expect(ha.wireFor(LIVING_ROOM)).toEqual(["climate.turn_off"]);
+    expect(ha.wireFor(BEDROOM)).toEqual(["climate.turn_off"]);
+    expect(ha.wire).not.toContainEqual({
+      entityId: LIVING_ROOM,
+      service: "climate.set_hvac_mode",
+    });
+  });
+
+  test("an abandoned cooling batch held at a unit state read cannot hold the off", async () => {
+    // Cooling path: the batch reads a per-unit sensor over REST and then the
+    // unit state, so a hung read there could equally block an abort's off.
+    const ha = new RealTransportClient();
+    const fetchMock = installFetch((_call, url) => {
+      if (typeof url === "string" && url.includes("/states/climate.")) {
+        return new Promise<Response>(() => {}); // hung unit read, ignores abort
+      }
+      return Promise.resolve(jsonResponse()); // sensor reads answer
+    });
+
+    const h = boot(ha);
+    h.conditions(25.0, 20.0); // indoor above the cooling minimum, outdoor in range
+    await flush();
+    h.actor.send({ type: "MODE_CHANGE", mode: "cool" } as never);
+
+    // The cooling batch is in flight and held at the unit's state read.
+    await waitUntil(() => fetchMock.calls() >= 2);
+    expect(h.state()).toBe("cooling");
+    ha.reset();
+
+    // Ordinary evaluation decides the temperature is comfortable (22.5 °C) and
+    // commands the units off: that fail-safe batch must not wait for the hung
+    // cooling command, and the hung command must not land after it.
+    h.conditions(22.5, 20.0);
+    await waitUntil(
+      () => ha.wireFor(LIVING_ROOM).includes("climate.turn_off"),
+      100,
+      10,
+    );
+
+    expect(ha.wireFor(LIVING_ROOM)).toEqual(["climate.turn_off"]);
+    expect(h.state()).toBe("idle");
+  });
+
+  test("an abandoned cooling batch held at a per-unit sensor read cannot hold the off", async () => {
+    const ha = new RealTransportClient();
+    const fetchMock = installFetch((_call, url) => {
+      if (typeof url === "string" && url.includes("sensor.")) {
+        return new Promise<Response>(() => {}); // hung sensor read, ignores abort
+      }
+      return Promise.resolve(jsonResponse());
+    });
+
+    const h = boot(ha);
+    h.conditions(25.0, 20.0);
+    await flush();
+    h.actor.send({ type: "MODE_CHANGE", mode: "cool" } as never);
+
+    await waitUntil(() => fetchMock.calls() >= 1);
+    expect(h.state()).toBe("cooling");
+    ha.reset();
+
+    h.conditions(22.5, 20.0);
+    await waitUntil(
+      () => ha.wireFor(LIVING_ROOM).includes("climate.turn_off"),
+      100,
+      10,
+    );
+
+    expect(ha.wireFor(LIVING_ROOM)).toEqual(["climate.turn_off"]);
+    expect(h.state()).toBe("idle");
+  });
+
+  test("the REST state read is bounded, and a command still reaches the device after the bound", async () => {
+    // A read that does not answer is bounded (not the 5 s default here) and
+    // `controlEntity` keeps its existing "could not get current state,
+    // proceeding with service call" behaviour, so the entry cool still lands.
+    const ha = new RealTransportClient({ stateRequestTimeoutMs: 50 });
+    installFetch((_call, _url, init) =>
+      new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal;
+        if (signal?.aborted) {
+          reject(signal.reason);
+          return;
+        }
+        signal?.addEventListener("abort", () => reject(signal.reason), {
+          once: true,
+        });
+      }),
+    );
+
+    const h = boot(ha);
+    const started = Date.now();
+    h.conditions(20.5, -3.0);
+    await waitUntil(
+      () => ha.wireFor(LIVING_ROOM).includes("climate.set_hvac_mode"),
+      200,
+      10,
+    );
+    const elapsed = Date.now() - started;
+
+    expect(elapsed).toBeLessThan(1000); // bounded by the configured 50 ms, not an unbounded read
+    expect(ha.wireFor(BEDROOM)).toEqual(["climate.turn_off"]); // defrost=false unit off
+    expect(h.state()).toBe("defrosting");
   });
 });

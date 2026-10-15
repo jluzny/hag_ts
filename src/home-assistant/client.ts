@@ -37,6 +37,70 @@ export interface ValueType {
   key: string; // For state: the service parameter name, for attribute: the attribute name
 }
 
+/**
+ * Bound for one REST state read (`getState`).
+ *
+ * A command batch reads the entity state before it sends its service call. A
+ * REST round-trip that never answers would otherwise hold that batch, and — with
+ * the per-machine command queue — every command queued behind it, including a
+ * defrost abort's fail-safe `off`. The read is therefore bounded; `controlEntity`
+ * keeps its existing "could not get current state, proceeding with service call"
+ * behaviour when the bound is reached, so a slow state read never suppresses a
+ * command.
+ */
+const DEFAULT_STATE_REQUEST_TIMEOUT_MS = 5000;
+
+/**
+ * Signal for one REST state read: bounded by `timeoutMs` and additionally
+ * aborted as soon as `signal` (an abandoned command batch) aborts.
+ */
+function createStateRequestSignal(
+  signal: AbortSignal | undefined,
+  timeoutMs: number,
+): AbortSignal {
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  return signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
+}
+
+/**
+ * Settle with `promise`, but reject as soon as `signal` aborts.
+ *
+ * Used so an abandoned command batch stops at its next await instead of holding
+ * the machine's command queue (and any fail-safe command queued behind it)
+ * hostage until a hung transport answers. The late settlement of `promise` is
+ * swallowed: the caller has already moved on and nothing may reach the device
+ * afterwards.
+ */
+function raceWithSignal<T>(
+  promise: Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  if (!signal) return promise;
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void =>
+      reject(new ConnectionError("Command batch abandoned"));
+    if (signal.aborted) {
+      promise.then(
+        () => {},
+        () => {},
+      );
+      onAbort();
+      return;
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
 // Define state values as const for type safety
 const HAClientStates = {
   disconnected: "disconnected",
@@ -390,6 +454,13 @@ export class HomeAssistantClient {
   private config: HassOptions;
   private logger: LoggerService;
 
+  /** Bound for one REST state read; see DEFAULT_STATE_REQUEST_TIMEOUT_MS. */
+  private get stateRequestTimeoutMs(): number {
+    return (
+      this.config?.stateRequestTimeoutMs ?? DEFAULT_STATE_REQUEST_TIMEOUT_MS
+    );
+  }
+
   constructor(
     config?: HassOptions,
     logger?: LoggerService,
@@ -545,9 +616,15 @@ export class HomeAssistantClient {
   }
 
   /**
-   * Get entity state
+   * Get entity state.
+   *
+   * `signal` (an abandoned command batch) aborts the read early; otherwise the
+   * read is bounded by the configured state-request timeout.
    */
-  async getState(entityId: string): Promise<HassStateImpl> {
+  async getState(
+    entityId: string,
+    signal?: AbortSignal,
+  ): Promise<HassStateImpl> {
     this.logger.debug("🔍 Getting entity state", { entityId });
 
     if (!this.connected) {
@@ -566,6 +643,9 @@ export class HomeAssistantClient {
           Authorization: `Bearer ${this.config.token}`,
           "Content-Type": "application/json",
         },
+        // Bounded REST read; also aborted early when the command batch that
+        // requested it was abandoned (see DEFAULT_STATE_REQUEST_TIMEOUT_MS).
+        signal: createStateRequestSignal(signal, this.stateRequestTimeoutMs),
       });
 
       if (!response.ok) {
@@ -607,9 +687,27 @@ export class HomeAssistantClient {
   }
 
   /**
-   * Call Home Assistant service
+   * Call Home Assistant service.
+   *
+   * `signal` aborts the call when the command batch that requested it was
+   * abandoned (superseded by a later fail-safe batch), so a stale command can
+   * never reach the device after the batch that replaced it.
    */
-  async callService(serviceCall: HassServiceCallImpl): Promise<void> {
+  async callService(
+    serviceCall: HassServiceCallImpl,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    if (signal?.aborted) {
+      this.logger.debug(
+        "⏭️ Service call skipped - command batch was abandoned",
+        {
+          domain: serviceCall.domain,
+          service: serviceCall.service,
+        },
+      );
+      return;
+    }
+
     this.logger.debug("🔧 Calling Home Assistant service", {
       domain: serviceCall.domain,
       service: serviceCall.service,
@@ -640,6 +738,11 @@ export class HomeAssistantClient {
   /**
    * Generic entity control with state checking to prevent unnecessary calls
    * Based on the Rust HAG implementation pattern
+   *
+   * `signal` marks the command batch that requested this call as abandoned
+   * (a later fail-safe batch superseded it). An abandoned batch stops at its
+   * current await and sends nothing: it can neither delay the fail-safe
+   * commands queued behind it nor land after them.
    */
   async controlEntity(
     entityId: string,
@@ -647,16 +750,38 @@ export class HomeAssistantClient {
     service: string,
     valueType: ValueType,
     value: any,
+    signal?: AbortSignal,
   ): Promise<void> {
     if (!this.connected) {
       throw new ConnectionError("Not connected to Home Assistant");
     }
 
+    if (signal?.aborted) {
+      this.logger.debug(
+        "⏭️ Entity control skipped - command batch was abandoned",
+        { entityId, service: `${domain}.${service}` },
+      );
+      return;
+    }
+
     // Get current entity state to check if changes are needed
     let currentState: HassStateImpl | undefined;
     try {
-      currentState = await this.getState(entityId);
+      currentState = await raceWithSignal(this.getState(entityId, signal), signal);
     } catch (error) {
+      if (signal?.aborted) {
+        // Superseded while the state read was in flight: a command issued now
+        // would reach the device after the commands that replaced this batch.
+        this.logger.warning(
+          "⏭️ Entity control abandoned during the state read - service call not sent",
+          {
+            entityId,
+            service: `${domain}.${service}`,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        );
+        return;
+      }
       this.logger.warning(
         "⚠️ Could not get current state, proceeding with service call",
         {
@@ -721,7 +846,7 @@ export class HomeAssistantClient {
         });
       }
 
-      await this.callService(serviceCall);
+      await this.callService(serviceCall, signal);
 
       this.logger.debug("🔄 Applied entity change", {
         entityId,
