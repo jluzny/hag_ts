@@ -126,7 +126,7 @@ export class HVACController {
 
     // Stop state machine
     this.logger.debug("⚙️ Stopping HVAC state machine");
-    this.stateMachine.stop();
+    await this.stateMachine.stop();
     this.logger.debug("✅ HVAC state machine stopped");
 
     // Disconnect from Home Assistant

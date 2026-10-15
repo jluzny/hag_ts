@@ -4,7 +4,7 @@
  * XState-powered state machine with heating/cooling strategies.
  */
 
-import { ActorRefFrom, assign, createActor, createMachine } from "xstate";
+import { ActorRefFrom, assign, cancel, createActor, createMachine, sendTo } from "xstate";
 import { injectable } from "@needle-di/core";
 import { type HvacOptions } from "../config/config.ts";
 import {
@@ -12,6 +12,7 @@ import {
   HVACMode,
   StateChangeData,
   SystemMode,
+  type HvacEntity,
 } from "../types/common.ts";
 import { StateError } from "../core/exceptions.ts";
 import { LoggerService } from "../core/logging.ts";
@@ -34,6 +35,8 @@ export type HVACEvent =
   | { type: "AUTO_EVALUATE" }
   | { type: "DEFROST_NEEDED" }
   | { type: "DEFROST_COMPLETE" }
+  /** One-shot defrost reevaluation (post-completion and after the configured period). */
+  | { type: "DEFROST_REEVALUATE" }
   | { type: "OFF" }
   | {
       type: "UPDATE_CONDITIONS";
@@ -399,12 +402,18 @@ export class HVACStrategy {
       return false;
     }
 
-    // Check temperature threshold
+    // A missing/non-finite outdoor reading is never a defrost signal
+    // (zero and negative finite values are valid readings).
+    if (!Number.isFinite(data.weatherTemp)) {
+      return false;
+    }
+
+    // Check temperature threshold (at/below is defrost territory)
     if (data.weatherTemp > defrost.temperatureThreshold) {
       return false;
     }
 
-    // Check time since last defrost
+    // Check time since last defrost (recorded at cycle completion, as legacy)
     if (this.lastDefrost) {
       const timeSinceDefrost = Date.now() - this.lastDefrost.getTime();
       const periodMs = defrost.periodSeconds * 1000;
@@ -417,14 +426,105 @@ export class HVACStrategy {
     return true;
   }
 
+  /**
+   * Defrost entry eligibility (restored legacy Kameo behaviour).
+   *
+   * Legacy `need_defrost_cycle` + `can_operate` gating:
+   * - from an off/idle evaluation (`fromHeating === false`) heating demand is
+   *   required as well (legacy `is_temp_too_low`);
+   * - from an actively heating system only the operating conditions apply.
+   *
+   * Operating conditions are the active-hours window and a valid outdoor
+   * reading inside the heating outdoor range — legacy `can_operate`. The
+   * outdoor temperature must additionally be at/below the defrost threshold and
+   * the configured period must have elapsed since the last completion.
+   */
+  public isDefrostEntryEligible(
+    data: StateChangeData,
+    fromHeating: boolean,
+  ): boolean {
+    const defrost = this.hvacOptions.heating.defrost;
+    if (!defrost) {
+      return false;
+    }
+
+    const reasons: string[] = [];
+    const eligible = ((): boolean => {
+      if (!Number.isFinite(data.weatherTemp)) {
+        reasons.push("outdoor reading not finite");
+        return false;
+      }
+      if (!this.isActiveHour(data.hour, data.isWeekday)) {
+        reasons.push(`outside active hours (${data.hour}:00)`);
+        return false;
+      }
+      if (
+        !this.isWithinTemperatureRange(
+          data,
+          this.hvacOptions.heating.temperatureThresholds,
+        )
+      ) {
+        reasons.push(
+          `outdoor ${data.weatherTemp}°C outside operating range ${this.hvacOptions.heating.temperatureThresholds.outdoorMin}°C - ${this.hvacOptions.heating.temperatureThresholds.outdoorMax}°C`,
+        );
+        return false;
+      }
+      if (!this.needsDefrost(data)) {
+        reasons.push(
+          `outdoor ${data.weatherTemp}°C above threshold ${defrost.temperatureThreshold}°C or cycle period not elapsed`,
+        );
+        return false;
+      }
+      if (!fromHeating && !this.shouldHeat(data)) {
+        reasons.push("no heating demand from off/idle");
+        return false;
+      }
+      return true;
+    })();
+
+    this.logger.debug("🔍 Defrost eligibility check", {
+      eligible,
+      fromHeating,
+      origin: fromHeating ? "active heating" : "off/idle",
+      indoorTemp: `${data.currentTemp}°C`,
+      outdoorTemp: `${data.weatherTemp}°C`,
+      hour: data.hour,
+      isWeekday: data.isWeekday,
+      threshold: `${defrost.temperatureThreshold}°C`,
+      periodSeconds: defrost.periodSeconds,
+      lastDefrost: this.lastDefrost?.toISOString() ?? "never",
+      reason: eligible ? "defrost cycle eligible" : reasons.join("; "),
+    });
+
+    return eligible;
+  }
+
+  /**
+   * Entering a defrost cycle. The last-defrost timestamp is deliberately NOT
+   * recorded here: legacy records it when the cycle completes, so the next
+   * cycle's minimum interval is measured from completion.
+   */
   startDefrost(): void {
-    this.lastDefrost = new Date();
     // Clear evaluation cache since internal state changed
     this.evaluationCache = undefined;
 
     this.logger.info("❄️ Defrost cycle started", {
-      startTime: this.lastDefrost.toISOString(),
-      durationSeconds: this.hvacOptions.heating.defrost?.durationSeconds || 300,
+      durationSeconds: this.hvacOptions.heating.defrost?.durationSeconds ?? 300,
+    });
+  }
+
+  /**
+   * Completing a defrost cycle: this is where the last-defrost timestamp is
+   * recorded (legacy `stop_defrost`).
+   */
+  completeDefrost(): void {
+    this.lastDefrost = new Date();
+    // Clear evaluation cache since internal state changed
+    this.evaluationCache = undefined;
+
+    this.logger.info("✅ Defrost cycle completed", {
+      completedAt: this.lastDefrost.toISOString(),
+      nextEligibleInSeconds: this.hvacOptions.heating.defrost?.periodSeconds,
     });
   }
 
@@ -451,7 +551,8 @@ export class HVACStrategy {
     );
   }
 
-  private isActiveHour(hour: number, isWeekday: boolean): boolean {
+  /** Public so machine guards can enforce the schedule window (e.g. during defrost). */
+  public isActiveHour(hour: number, isWeekday: boolean): boolean {
     const activeHours = this.hvacOptions.activeHours;
     if (!activeHours) return true;
 
@@ -555,6 +656,81 @@ export class HVACStrategy {
   }
 }
 
+/** Send id of the cancellable one-shot defrost period timer. */
+const DEFROST_PERIOD_SEND_ID = "defrost-period";
+
+/**
+ * True only for present, finite numbers. Zero is a legitimate temperature, so
+ * falsy checks (`!value`) must not be used for temperature validity.
+ */
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+/**
+ * Command every enabled HVAC entity to a per-entity mode.
+ *
+ * Used by the custom defrost cycle (defrost=true -> cool, defrost=false -> off,
+ * completion/abort -> off) and by turnOff. Disabled/unmanaged entities are left
+ * untouched. Commands are attempted independently: a failing command is logged
+ * and reported to the caller, never silently swallowed, and no automatic
+ * recovery or retry is attempted.
+ *
+ * @returns entity ids whose command failed
+ */
+async function commandHvacEntities(
+  haClient: HomeAssistantClient | undefined,
+  hvacOptions: HvacOptions,
+  logger: LoggerService,
+  resolveMode: (entity: HvacEntity) => "cool" | "off",
+  reason: string,
+): Promise<string[]> {
+  if (!haClient) {
+    logger.warning("⚠️ No Home Assistant client available for HVAC commands", {
+      reason,
+    });
+    return [];
+  }
+
+  const enabledEntities = hvacOptions.hvacEntities.filter((e) => e.enabled);
+  const failedEntities: string[] = [];
+
+  for (const entity of enabledEntities) {
+    const mode = resolveMode(entity);
+    try {
+      await controlHVACEntity(
+        haClient,
+        entity.entityId,
+        mode,
+        undefined,
+        undefined,
+        logger,
+      );
+      logger.debug("✅ HVAC entity commanded", {
+        entityId: entity.entityId,
+        mode,
+        reason,
+      });
+    } catch (error) {
+      failedEntities.push(entity.entityId);
+      logger.error("❌ Failed to command HVAC entity", error, {
+        entityId: entity.entityId,
+        mode,
+        reason,
+      });
+    }
+  }
+
+  if (failedEntities.length > 0) {
+    logger.warning(
+      "⚠️ HVAC commands failed - no automatic recovery is attempted; the affected unit may not reflect the requested mode until a later successful command",
+      { reason, failedEntities },
+    );
+  }
+
+  return failedEntities;
+}
+
 /**
  * Create HVAC state machine with XState
  */
@@ -606,6 +782,10 @@ export function createHVACMachine(
             AUTO_EVALUATE: {
               target: "evaluating",
             },
+            // One-shot defrost event: refresh the wall clock, then ordinary evaluation
+            DEFROST_REEVALUATE: {
+              actions: ["refreshClock", "eventAutoEvaluate"],
+            },
             UPDATE_CONDITIONS: {
               actions: ["updateConditions", "eventAutoEvaluate"],
             },
@@ -635,6 +815,11 @@ export function createHVACMachine(
               target: "cooling",
               guard: "isManualCool",
             },
+            // Legacy: from Off requires heating demand as well
+            {
+              target: "defrosting",
+              guard: "shouldAutoDefrost",
+            },
             {
               target: "heating",
               guard: "shouldAutoHeat",
@@ -651,6 +836,11 @@ export function createHVACMachine(
             UPDATE_CONDITIONS: {
               actions: "updateConditions",
             },
+            // Self-transition re-runs the always transitions with fresh context
+            DEFROST_REEVALUATE: {
+              target: "evaluating",
+              actions: "refreshClock",
+            },
           },
         },
         heating: {
@@ -661,11 +851,22 @@ export function createHVACMachine(
               target: "defrosting",
               guard: "canDefrost",
             },
+            AUTO_EVALUATE: [
+              // Legacy: from active heating only operating conditions apply
+              {
+                target: "defrosting",
+                guard: "canDefrost",
+              },
+              {
+                target: "evaluating",
+              },
+            ],
+            // One-shot defrost event: refresh the wall clock first, then evaluate
+            DEFROST_REEVALUATE: {
+              actions: ["refreshClock", "eventAutoEvaluate"],
+            },
             UPDATE_CONDITIONS: {
               actions: ["updateConditions", "eventAutoEvaluate"],
-            },
-            AUTO_EVALUATE: {
-              target: "evaluating",
             },
             MANUAL_OVERRIDE: {
               target: "evaluating",
@@ -677,6 +878,9 @@ export function createHVACMachine(
           entry: ["init", "executeCooling"],
           on: {
             OFF: "idle",
+            DEFROST_REEVALUATE: {
+              actions: ["refreshClock", "eventAutoEvaluate"],
+            },
             UPDATE_CONDITIONS: {
               actions: ["updateConditions", "eventAutoEvaluate"],
             },
@@ -690,20 +894,45 @@ export function createHVACMachine(
           },
         },
         defrosting: {
-          entry: ["init", "startDefrost"],
+          entry: ["init", "cancelDefrostPeriod", "startDefrost"],
           on: {
-            OFF: "idle",
-            DEFROST_COMPLETE: "heating",
+            // Explicit stop: units must not stay in the forced cool mode
+            OFF: {
+              target: "idle",
+              actions: "abortDefrost",
+            },
+            // Explicit one-shot completion (the duration timer normally fires it)
+            DEFROST_COMPLETE: {
+              target: "idle",
+              actions: ["cancelDefrostPeriod", "completeDefrost", "scheduleDefrostPeriod"],
+            },
+            // Manual off/heat/cool during the cycle: leave the forced cool mode
+            // and let ordinary (manual) evaluation decide, never a stale cycle
             MANUAL_OVERRIDE: {
               target: "evaluating",
-              actions: "processManualOverride",
+              actions: ["abortDefrost", "processManualOverride"],
             },
+            UPDATE_CONDITIONS: {
+              actions: ["updateConditions", "eventDefrostReevaluate"],
+            },
+            DEFROST_REEVALUATE: [
+              // Spontaneous events never restart or duplicate the cycle
+              {
+                guard: "defrostCanContinue",
+                actions: "continueDefrost",
+              },
+              // Schedule/operating constraint violated: abort and leave units off
+              {
+                target: "idle",
+                actions: "abortDefrost",
+              },
+            ],
           },
           after: {
-            // Defrost duration from configuration
+            // One-shot completion event after durationSeconds, independent of sensors
             [`${hvacOptions.heating.defrost?.durationSeconds ?? 300}000`]: {
-              target: "heating",
-              actions: "completeDefrost",
+              target: "idle",
+              actions: ["cancelDefrostPeriod", "completeDefrost", "scheduleDefrostPeriod"],
             },
           },
         },
@@ -798,18 +1027,108 @@ export function createHVACMachine(
           self.send({ type: "AUTO_EVALUATE" });
         },
 
-        startDefrost: () => {
+        startDefrost: async () => {
           hvacStrategy.startDefrost();
+
+          // Legacy start_defrost: every enabled unit gets a mode command —
+          // defrost=true -> cool, defrost=false -> off. No temperature/preset.
+          // (Off is issued through the existing climate.turn_off path, the same
+          // service the rest of hag_ts uses for "off"; legacy set_hvac_mode
+          // with value "off" is equivalent in Home Assistant.)
+          const failedEntities = await commandHvacEntities(
+            haClient,
+            hvacOptions,
+            logger,
+            (entity) => (entity.defrost ? "cool" : "off"),
+            "defrost_start",
+          );
+
           logger.info(`❄️ [HVAC] Defrost cycle started`, {
             durationSeconds:
               hvacOptions.heating.defrost?.durationSeconds || 300,
+            defrostUnits: hvacOptions.hvacEntities
+              .filter((e) => e.enabled && e.defrost)
+              .map((e) => e.entityId),
+            switchedOffUnits: hvacOptions.hvacEntities
+              .filter((e) => e.enabled && !e.defrost)
+              .map((e) => e.entityId),
+            failedEntities,
           });
         },
 
-        completeDefrost: () => {
+        completeDefrost: async ({ self }) => {
+          // 1. Record completion here (not at start): the next cycle's minimum
+          //    interval is measured from completion, as in legacy stop_defrost.
+          hvacStrategy.completeDefrost();
+
+          // 2. Cycle-controlled enabled units are commanded off.
+          const failedEntities = await commandHvacEntities(
+            haClient,
+            hvacOptions,
+            logger,
+            () => "off",
+            "defrost_complete",
+          );
+
           logger.info(`✅ [HVAC] Defrost cycle completed`, {
-            nextState: "heating",
+            failedEntities,
+            note: "ordinary evaluation now decides whether heating resumes",
           });
+
+          // 3. Ordinary evaluation (with a freshly read wall clock) decides
+          //    whether heat resumes — there is no unconditional return to heating.
+          self.send({ type: "DEFROST_REEVALUATE" });
+        },
+
+        abortDefrost: async ({ event }) => {
+          logger.warning(
+            "⚠️ [HVAC] Defrost cycle aborted - switching enabled units off",
+            {
+              abortingEvent: (event as { type?: string })?.type,
+              reason:
+                "abort/stop/manual-off must not leave a unit in forced cool mode",
+            },
+          );
+
+          await commandHvacEntities(
+            haClient,
+            hvacOptions,
+            logger,
+            () => "off",
+            "defrost_abort",
+          );
+        },
+
+        cancelDefrostPeriod: cancel(DEFROST_PERIOD_SEND_ID),
+
+        // One-shot next eligibility evaluation after periodSeconds (legacy
+        // schedules a state publication after the configured period).
+        scheduleDefrostPeriod: sendTo(
+          ({ self }) => self,
+          { type: "DEFROST_REEVALUATE" },
+          {
+            id: DEFROST_PERIOD_SEND_ID,
+            delay: (hvacOptions.heating.defrost?.periodSeconds ?? 7200) * 1000,
+          },
+        ),
+
+        refreshClock: assign(({ context }) => {
+          const now = new Date();
+          return {
+            ...context,
+            currentHour: now.getHours(),
+            isWeekday: now.getDay() >= 1 && now.getDay() <= 5,
+          };
+        }),
+
+        eventDefrostReevaluate: ({ self }) => {
+          self.send({ type: "DEFROST_REEVALUATE" });
+        },
+
+        continueDefrost: () => {
+          logger.debug(
+            "❄️ [HVAC] Defrost cycle continues - schedule/operating constraints still satisfied",
+          );
         },
 
 
@@ -1098,25 +1417,13 @@ export function createHVACMachine(
             cyclingStatus: "Heating cycle ended - monitoring for rapid cycling",
           });
 
-          for (const entity of enabledEntities) {
-            try {
-              await controlHVACEntity(
-                haClient,
-                entity.entityId,
-                "off",
-                undefined,
-                undefined,
-                logger,
-              );
-              logger.debug("✅ Entity turned off", {
-                entityId: entity.entityId,
-              });
-            } catch (error) {
-              logger.error("❌ Failed to turn off entity", error, {
-                entityId: entity.entityId,
-              });
-            }
-          }
+          await commandHvacEntities(
+            haClient,
+            hvacOptions,
+            logger,
+            () => "off",
+            "turn_off",
+          );
         },
       },
       guards: {
@@ -1142,7 +1449,11 @@ export function createHVACMachine(
 
         shouldAutoHeat: ({ context }) => {
           if (context.systemMode !== SystemMode.AUTO) return false;
-          if (!context.indoorTemp || !context.outdoorTemp) return false;
+          // Zero is a valid temperature: only missing/non-finite readings block
+          // evaluation (full zero-validity handling is issue 1's scope).
+          if (!isFiniteNumber(context.indoorTemp) || !isFiniteNumber(context.outdoorTemp)) {
+            return false;
+          }
 
           const evaluation = hvacStrategy.evaluateConditions({
             currentTemp: context.indoorTemp,
@@ -1182,24 +1493,72 @@ export function createHVACMachine(
           return evaluation.shouldCool;
         },
 
-        canDefrost: ({ context }) => {
-          if (!context.indoorTemp || !context.outdoorTemp) return false;
+        /** Defrost entry from an off/idle evaluation (legacy: Off requires heating demand). */
+        shouldAutoDefrost: ({ context }) => {
+          if (context.systemMode !== SystemMode.AUTO) return false;
+          if (!isFiniteNumber(context.indoorTemp) || !isFiniteNumber(context.outdoorTemp)) {
+            return false;
+          }
 
-          const evaluation = hvacStrategy.evaluateConditions({
-            currentTemp: context.indoorTemp,
-            weatherTemp: context.outdoorTemp,
-            hour: context.currentHour,
-            isWeekday: context.isWeekday,
+          const eligible = hvacStrategy.isDefrostEntryEligible(
+            {
+              currentTemp: context.indoorTemp,
+              weatherTemp: context.outdoorTemp,
+              hour: context.currentHour,
+              isWeekday: context.isWeekday,
+            },
+            false,
+          );
+
+          logger.debug("🔍 Auto defrost guard evaluation", {
+            eligible,
+            origin: "off/idle",
+            systemMode: context.systemMode,
+            reason: eligible ? "Auto defrost approved" : "Auto defrost denied",
           });
+          return eligible;
+        },
+
+        /**
+         * Defrost entry while the machine is in active heating. Legacy:
+         * `can_operate && need_defrost_cycle`, no additional demand check.
+         */
+        canDefrost: ({ context }) => {
+          if (
+            context.systemMode === SystemMode.COOL_ONLY ||
+            context.systemMode === SystemMode.OFF
+          ) {
+            return false;
+          }
+          if (!isFiniteNumber(context.indoorTemp) || !isFiniteNumber(context.outdoorTemp)) {
+            return false;
+          }
+
+          const eligible = hvacStrategy.isDefrostEntryEligible(
+            {
+              currentTemp: context.indoorTemp,
+              weatherTemp: context.outdoorTemp,
+              hour: context.currentHour,
+              isWeekday: context.isWeekday,
+            },
+            true,
+          );
 
           logger.debug("🔍 Defrost guard evaluation", {
-            required: evaluation.needsDefrost,
-            reason: evaluation.needsDefrost
-              ? "Defrost cycle required"
-              : "Defrost not needed",
+            eligible,
+            origin: "active heating",
+            reason: eligible ? "Defrost cycle required" : "Defrost not needed",
           });
-          return evaluation.needsDefrost;
+          return eligible;
         },
+
+        /**
+         * During an active defrost cycle: only the schedule window (and, through
+         * MANUAL_OVERRIDE/OFF, an explicit stop) can abort it. The duration
+         * timer — not spontaneous sensor events — completes the cycle.
+         */
+        defrostCanContinue: ({ context }) =>
+          hvacStrategy.isActiveHour(context.currentHour, context.isWeekday),
 
         shouldTurnOff: ({ context }) => {
           // Don't turn off if manual override is active
@@ -1212,7 +1571,11 @@ export function createHVACMachine(
             return false;
           }
 
-          if (!context.indoorTemp || !context.outdoorTemp) return false;
+          // Zero is a valid temperature: only missing/non-finite readings block
+          // evaluation (full zero-validity handling is issue 1's scope).
+          if (!isFiniteNumber(context.indoorTemp) || !isFiniteNumber(context.outdoorTemp)) {
+            return false;
+          }
 
           const evaluation = hvacStrategy.evaluateConditions({
             currentTemp: context.indoorTemp,
@@ -1302,9 +1665,13 @@ export class HVACStateMachine {
   private machine: HVACMachine;
   private actor?: HVACMachineActor;
   private logger: LoggerService;
+  private hvacOptions?: HvacOptions;
+  private haClient?: HomeAssistantClient;
 
   constructor(hvacOptions?: HvacOptions, haClient?: HomeAssistantClient) {
     this.logger = new LoggerService("HAG.hvac.state-machine");
+    this.hvacOptions = hvacOptions;
+    this.haClient = haClient;
     this.machine = createHVACMachine(hvacOptions!, this.logger, haClient);
   }
 
@@ -1347,9 +1714,13 @@ export class HVACStateMachine {
   }
 
   /**
-   * Stop the state machine
+   * Stop the state machine.
+   *
+   * Stopping during a defrost cycle switches the managed units off first: the
+   * cycle leaves units in a forced cool mode and the actor (with its timers)
+   * is about to disappear, so nothing else would correct them.
    */
-  stop(): void {
+  async stop(): Promise<void> {
     this.logger.info("🛑 Stopping HVAC state machine", {
       currentState: this.actor?.getSnapshot().value || "not_running",
       isRunning: !!this.actor,
@@ -1363,6 +1734,23 @@ export class HVACStateMachine {
         finalContext: finalSnapshot.context,
         machineStatus: finalSnapshot.status,
       });
+
+      if (finalSnapshot.value === "defrosting" && this.hvacOptions) {
+        this.logger.warning(
+          "⚠️ Stopping during a defrost cycle - switching enabled units off",
+          {
+            reason:
+              "controller stop must not leave a unit in forced cool mode",
+          },
+        );
+        await commandHvacEntities(
+          this.haClient,
+          this.hvacOptions,
+          this.logger,
+          () => "off",
+          "state_machine_stop",
+        );
+      }
 
       this.actor.stop();
       this.actor = undefined;

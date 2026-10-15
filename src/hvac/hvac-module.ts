@@ -94,7 +94,7 @@ export class HvacModule extends BaseModule {
       await this.controller.stop();
     }
     if (this.stateMachine) {
-      this.stateMachine.stop();
+      await this.stateMachine.stop();
     }
     await super.dispose();
   }

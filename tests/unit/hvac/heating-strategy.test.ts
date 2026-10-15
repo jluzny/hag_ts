@@ -308,14 +308,14 @@ describe("Heating Strategy - Defrost Logic", () => {
     expect(evaluation.needsDefrost).toBe(false);
   });
 
-  test("should not need defrost immediately after previous defrost", () => {
+  test("should not need defrost immediately after previous cycle completed", () => {
     const data = createStateChangeData({
       currentTemp: 18.0,
       weatherTemp: -5.0, // Below defrost threshold
     });
 
-    // Start defrost cycle
-    strategy.startDefrost();
+    // Complete a defrost cycle (legacy records the timestamp at completion)
+    strategy.completeDefrost();
 
     // Should not need another defrost immediately
     const evaluation = strategy.evaluateConditions(data);
@@ -335,8 +335,8 @@ describe("Heating Strategy - Defrost Logic", () => {
     try {
       Date.now = () => mockTime;
 
-      // Start defrost
-      strategy.startDefrost();
+      // Complete a defrost cycle
+      strategy.completeDefrost();
 
       // Immediately after, should not need defrost
       const evaluation = strategy.evaluateConditions(data);
@@ -355,7 +355,11 @@ describe("Heating Strategy - Defrost Logic", () => {
   });
 
   test("should handle options without defrost configuration", () => {
-    const noDefrostOptions = { ...baseHvacOptions };
+    // Deep copy: the nested heating object must not be mutated for other tests
+    const noDefrostOptions = {
+      ...baseHvacOptions,
+      heating: { ...baseHvacOptions.heating },
+    };
     delete noDefrostOptions.heating.defrost;
 
     const strategyNoDefrost = new HVACStrategy(noDefrostOptions);
@@ -369,17 +373,21 @@ describe("Heating Strategy - Defrost Logic", () => {
     expect(evaluation.needsDefrost).toBe(false);
   });
 
-  test("should start defrost and update timestamp", () => {
-    strategy.startDefrost();
-
-    // Verify defrost was started by checking it prevents immediate defrost
+  test("records the last-defrost timestamp at completion, not at start", () => {
+    // Fresh instance so the assertion does not depend on describe-level state
+    const isolated = new HVACStrategy(baseHvacOptions);
     const data = createStateChangeData({
       currentTemp: 18.0,
       weatherTemp: -5.0,
     });
 
-    const evaluation = strategy.evaluateConditions(data);
-    expect(evaluation.needsDefrost).toBe(false);
+    // Entering a cycle does not start the next-cycle period...
+    isolated.startDefrost();
+    expect(isolated.evaluateConditions(data).needsDefrost).toBe(true);
+
+    // ...only completing it does.
+    isolated.completeDefrost();
+    expect(isolated.evaluateConditions(data).needsDefrost).toBe(false);
   });
 });
 
@@ -548,17 +556,20 @@ describe("Heating Strategy - Edge Cases and Boundary Conditions", () => {
 
   test("should handle defrost threshold boundary", () => {
     const strategy = new HVACStrategy(baseHvacOptions); // Fresh instance
-    // Exactly at defrost threshold
+    // Exactly at the defrost threshold: legacy uses an inclusive boundary
+    // (weather_temp > threshold -> false), and a valid 0 °C reading is a
+    // legitimate defrost boundary.
     const exactThresholdData = createStateChangeData({
       weatherTemp: 0.0, // Exactly at defrost threshold
     });
     const evaluation8 = strategy.evaluateConditions(exactThresholdData);
-    expect(evaluation8.needsDefrost).toBe(false);
+    expect(evaluation8.needsDefrost).toBe(true);
 
-    // Just below defrost threshold - test commented out
-    // const belowThresholdData = createStateChangeData({
-    //   weatherTemp: -0.1, // Just below defrost threshold
-    // });
-    // expect(strategy.needsDefrost(belowThresholdData.toBe(true);
+    // Just above the threshold -> no defrost
+    const aboveThresholdData = createStateChangeData({
+      weatherTemp: 0.1,
+    });
+    const evaluation9 = strategy.evaluateConditions(aboveThresholdData);
+    expect(evaluation9.needsDefrost).toBe(false);
   });
 });
