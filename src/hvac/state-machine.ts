@@ -21,6 +21,11 @@ import {
   deriveTemperatureSensor,
 } from "../home-assistant/client.ts";
 import { CyclingMonitor } from "./cycling-monitor.ts";
+import {
+  SensorHealthMonitor,
+  type DegradedStatus,
+  type SensorHealthState,
+} from "./sensor-health.ts";
 
 /**
  * Simplified HVAC events that can trigger state transitions
@@ -48,7 +53,16 @@ export type HVACEvent =
         [key: string]: any;
       };
     }
-  | { type: "MANUAL_OVERRIDE"; mode: HVACMode; temperature?: number };
+  | { type: "MANUAL_OVERRIDE"; mode: HVACMode; temperature?: number }
+  /**
+   * Home Assistant became reachable again: the controller hands over the unit
+   * states it actually observed, and the machine reconciles them with the
+   * current schedule and the normal/fallback rules.
+   */
+  | {
+      type: "HA_RECONNECTED";
+      observedUnits?: Array<{ entityId: string; state: string }>;
+    };
 
 /**
  * State machine type definitions
@@ -416,7 +430,10 @@ export class HVACStrategy {
    * An out-of-range outdoor reading, an in-band indoor reading and a
    * temporarily unreadable sensor are deliberately *not* stop conditions.
    */
-  public shouldContinueHeating(data: StateChangeData): boolean {
+  public shouldContinueHeating(
+    data: StateChangeData,
+    options: { hallDegraded?: boolean } = {},
+  ): boolean {
     const thresholds = this.hvacOptions.heating.temperatureThresholds;
 
     // Start-eligible evaluations belong to the ordinary heating path.
@@ -427,7 +444,12 @@ export class HVACStrategy {
 
     // Indoor stop threshold reached: the cycle is over (and the turn-off path
     // commands the units off, regardless of outdoor start eligibility).
+    //
+    // Not while the hall sensor is failed: the approved retention policy
+    // removes hall-based stopping until recovery, so a stale indoor reading
+    // must not end the cycle (the schedule cutoff still does).
     if (
+      !options.hallDegraded &&
       Number.isFinite(data.currentTemp) &&
       data.currentTemp >= thresholds.indoorMax
     ) {
@@ -442,11 +464,40 @@ export class HVACStrategy {
       outdoorTemp: `${data.weatherTemp}°C`,
       hour: `${data.hour}:00 ${data.isWeekday ? "weekday" : "weekend"}`,
       stopThreshold: `${thresholds.indoorMax}°C`,
+      hallDegraded: !!options.hallDegraded,
       reason:
         "no start eligibility and no stop condition: the outdoor range gates starts, it does not end a running cycle (no commands sent)",
     });
 
     return true;
+  }
+
+  /** Reached indoor stop threshold for heating (independent of outdoor input). */
+  public hasReachedHeatingStopThreshold(currentTemp: number): boolean {
+    return (
+      Number.isFinite(currentTemp) &&
+      currentTemp >= this.hvacOptions.heating.temperatureThresholds.indoorMax
+    );
+  }
+
+  /**
+   * Start eligibility for automatic heating: the schedule window is open and
+   * the outdoor reading is inside the configured operating range (both
+   * inclusive). Deliberately independent of the indoor reading, so the
+   * thermostat-controlled fallback start during a hall-sensor fault uses the
+   * same range gate as a normal start.
+   */
+  public isHeatingStartEligible(
+    weatherTemp: number,
+    hour: number,
+    isWeekday: boolean,
+  ): boolean {
+    if (!Number.isFinite(weatherTemp)) return false;
+    if (!this.isActiveHour(hour, isWeekday)) return false;
+    return this.isWithinTemperatureRange(
+      { weatherTemp } as StateChangeData,
+      this.hvacOptions.heating.temperatureThresholds,
+    );
   }
 
   private needsDefrost(data: StateChangeData): boolean {
@@ -1050,6 +1101,18 @@ export function createHVACMachine(
   // for the defrost period gate (the machine and its strategy survive a
   // controller stop/start in the same process).
   hvacStrategy: HVACStrategy = new HVACStrategy(hvacOptions),
+  // Hall/outdoor failure detection and degraded-mode state (issue 2). Shared
+  // with HVACStateMachine and the controller so command paths, guard decisions
+  // and status reporting all read the same single source of truth.
+  sensorHealth: SensorHealthMonitor = new SensorHealthMonitor({
+    entityIds: { hall: hvacOptions.tempSensor, outdoor: hvacOptions.outdoorSensor },
+    reportTimeoutMs: hvacOptions.sensorHealth?.reportTimeoutMs,
+    dailyReminderMs:
+      hvacOptions.sensorHealth?.dailyReminderHours !== undefined
+        ? hvacOptions.sensorHealth.dailyReminderHours * 60 * 60 * 1000
+        : undefined,
+    logger,
+  }),
 ) {
   /**
    * Room-selection ownership of the running heating cycle (issue 3), kept in
@@ -1066,6 +1129,24 @@ export function createHVACMachine(
    * with the process (no persistence layer).
    */
   const heatingOwnedEntities = new Set<string>();
+
+  /**
+   * Hall-sensor failure: the indoor reading is not trustworthy, so no indoor
+   * threshold decision is taken — not for stopping a running cycle, and not
+   * for blocking a start (approved thermostat-controlled fallback).
+   */
+  const hallDegraded = (): boolean => sensorHealth.isDegraded("hall");
+
+  /**
+   * Effective outdoor reading: the current reading when it is readable,
+   * otherwise the retained last-valid value (explicitly stale fallback data).
+   * Never fabricated: with no retained value the result is `undefined` and no
+   * new automatic heating starts.
+   */
+  const effectiveOutdoorTemp = (context: HVACContext): number | undefined => {
+    if (isFiniteNumber(context.outdoorTemp)) return context.outdoorTemp;
+    return sensorHealth.effectiveOutdoorTemp().value;
+  };
 
   /**
    * Stop the previously started units the current evaluation no longer selects.
@@ -1088,12 +1169,13 @@ export function createHVACMachine(
     // claimed as released.
     if (!haClient) return [];
 
-    const outdoorTemp = context.outdoorTemp;
+    const outdoorTemp = effectiveOutdoorTemp(context);
 
     // Room selection is a correction *inside* the approved operating range.
-    // An outdoor reading outside −5 … 15 °C (or an unreadable one) must not
-    // shut a running unit down — the separate running-unit policy owns that
-    // decision — so no selection change is applied here.
+    // An outdoor reading outside −5 … 15 °C (or an unreadable one with no
+    // retained fallback) must not shut a running unit down — the separate
+    // running-unit policy owns that decision — so no selection change is
+    // applied here.
     if (
       !isFiniteNumber(outdoorTemp) ||
       outdoorTemp < hvacOptions.heating.temperatureThresholds.outdoorMin ||
@@ -1196,6 +1278,11 @@ export function createHVACMachine(
             UPDATE_CONDITIONS: {
               actions: ["updateConditions", "eventAutoEvaluate"],
             },
+            // Home Assistant came back: reconcile the observed unit states with
+            // the current schedule (fresh clock), then evaluate normally.
+            HA_RECONNECTED: {
+              actions: ["recordObservedUnits", "refreshClock", "eventAutoEvaluate"],
+            },
             MANUAL_OVERRIDE: {
               target: "evaluating",
               actions: "processManualOverride",
@@ -1248,6 +1335,10 @@ export function createHVACMachine(
               target: "evaluating",
               actions: "refreshClock",
             },
+            HA_RECONNECTED: {
+              target: "evaluating",
+              actions: ["recordObservedUnits", "refreshClock"],
+            },
           },
         },
         heating: {
@@ -1288,6 +1379,11 @@ export function createHVACMachine(
             UPDATE_CONDITIONS: {
               actions: ["updateConditions", "eventAutoEvaluate"],
             },
+            // Reconnected: re-read state is already in the event; reconcile on
+            // the ordinary AUTO_EVALUATE path (continuation/cutoff semantics).
+            HA_RECONNECTED: {
+              actions: ["recordObservedUnits", "refreshClock", "eventAutoEvaluate"],
+            },
             MANUAL_OVERRIDE: {
               target: "evaluating",
               actions: "processManualOverride",
@@ -1303,6 +1399,10 @@ export function createHVACMachine(
             },
             UPDATE_CONDITIONS: {
               actions: ["updateConditions", "eventAutoEvaluate"],
+            },
+            HA_RECONNECTED: {
+              target: "evaluating",
+              actions: ["recordObservedUnits", "refreshClock"],
             },
             AUTO_EVALUATE: {
               target: "evaluating",
@@ -1334,6 +1434,11 @@ export function createHVACMachine(
             },
             UPDATE_CONDITIONS: {
               actions: ["updateConditions", "eventDefrostReevaluate"],
+            },
+            // Reconnect during a defrost cycle: record what the units actually
+            // report; the cycle itself keeps its own duration/constraint rules.
+            HA_RECONNECTED: {
+              actions: "recordObservedUnits",
             },
             DEFROST_REEVALUATE: [
               // Spontaneous events never restart or duplicate the cycle
@@ -1561,6 +1666,50 @@ export function createHVACMachine(
           };
         }),
 
+        /**
+         * Reconnect reconciliation (issue 2): replace HAG's in-memory belief
+         * about which units it is driving with the states the controller
+         * actually observed on the device.
+         *
+         * Outgoing intent only — an observed `heat`/`cool` mode is treated as
+         * "HAG-managed and running" so a later room-selection correction can
+         * stop a unit HAG did not itself start in this process; every other
+         * observed mode releases ownership. Nothing is claimed about command
+         * success; the controller reads the units back after the reconcile.
+         */
+        recordObservedUnits: assign(({ context, event }) => {
+          if (event.type !== "HA_RECONNECTED") return context;
+
+          const observed = event.observedUnits ?? [];
+          const enabled = new Set(
+            hvacOptions.hvacEntities
+              .filter((entity) => entity.enabled)
+              .map((entity) => entity.entityId),
+          );
+
+          heatingOwnedEntities.clear();
+          const observedModes: Record<string, string> = {};
+          for (const unit of observed) {
+            if (!enabled.has(unit.entityId)) continue;
+            observedModes[unit.entityId] = unit.state;
+            if (unit.state === "heat" || unit.state === "cool") {
+              heatingOwnedEntities.add(unit.entityId);
+            }
+          }
+
+          logger.info(
+            "🔄 [HVAC] Home Assistant reconnect - reconciling observed unit states",
+            {
+              observedUnits: observedModes,
+              claimedAsRunning: [...heatingOwnedEntities],
+              reason:
+                "observed device state replaces the in-memory belief; the current schedule and rules then decide what to command",
+            },
+          );
+
+          return { ...context, observedUnits: observedModes };
+        }),
+
         eventDefrostReevaluate: ({ self }) => {
           self.send({ type: "DEFROST_REEVALUATE" });
         },
@@ -1615,7 +1764,13 @@ export function createHVACMachine(
             }
 
             const { entities: heatingEntities, matchedRule } =
-              selectHeatingEntities(hvacOptions, context);
+              selectHeatingEntities(hvacOptions, {
+                ...context,
+                // Room selection uses the effective outdoor value: a current
+                // reading, or the retained last-valid fallback while the
+                // outdoor sensor is failed.
+                outdoorTemp: effectiveOutdoorTemp(context),
+              });
 
             // Use manual override preset mode if available, otherwise use config default
             const presetMode =
@@ -1934,15 +2089,50 @@ export function createHVACMachine(
 
         shouldAutoHeat: ({ context }) => {
           if (context.systemMode !== SystemMode.AUTO) return false;
-          // Zero is a valid temperature: only missing/non-finite readings block
-          // evaluation (full zero-validity handling is issue 1's scope).
-          if (!isFiniteNumber(context.indoorTemp) || !isFiniteNumber(context.outdoorTemp)) {
+
+          // Start eligibility always uses a valid outdoor reading or the
+          // approved retained fallback (never a fabricated value). With
+          // neither, no new automatic heating starts.
+          const effectiveOutdoor = effectiveOutdoorTemp(context);
+          if (!isFiniteNumber(effectiveOutdoor)) {
+            logger.warning(
+              "⚠️ No valid outdoor reading (current or retained) - no automatic heating start",
+              {
+                entityId: sensorHealth.sensorState("outdoor").entityId,
+                outdoorSensor: sensorHealth.sensorState("outdoor"),
+              },
+            );
             return false;
+          }
+
+          // Hall-sensor failure: deliberate thermostat-controlled fallback
+          // start. The indoor reading is not used (no fabricated temperature);
+          // the AC's own thermostat holds the room temperature.
+          if (hallDegraded() || !isFiniteNumber(context.indoorTemp)) {
+            const eligible = hvacStrategy.isHeatingStartEligible(
+              effectiveOutdoor,
+              context.currentHour,
+              context.isWeekday,
+            );
+            logger.info(
+              "🔥 Auto heat guard - hall-sensor fault fallback evaluation",
+              {
+                eligible,
+                hallDegraded: hallDegraded(),
+                indoorTemp: context.indoorTemp,
+                effectiveOutdoorTemp: effectiveOutdoor,
+                outdoorRetained: sensorHealth.effectiveOutdoorTemp().staleFallback,
+                reason: eligible
+                  ? "starting eligible units on their own thermostats (schedule open, outdoor in range)"
+                  : "not start-eligible (schedule closed or outdoor outside the operating range)",
+              },
+            );
+            return eligible;
           }
 
           const evaluation = hvacStrategy.evaluateConditions({
             currentTemp: context.indoorTemp,
-            weatherTemp: context.outdoorTemp,
+            weatherTemp: effectiveOutdoor,
             hour: context.currentHour,
             isWeekday: context.isWeekday,
           });
@@ -2069,14 +2259,18 @@ export function createHVACMachine(
           // Manual overrides keep their own (re-asserting) path.
           if (context.manualOverride) return false;
 
-          const continues = hvacStrategy.shouldContinueHeating({
-            // Unreadable readings are passed through: they are not a reason to
-            // end a running cycle (issue 2 owns the fallback policy).
-            currentTemp: context.indoorTemp ?? NaN,
-            weatherTemp: context.outdoorTemp ?? NaN,
-            hour: context.currentHour,
-            isWeekday: context.isWeekday,
-          });
+          const continues = hvacStrategy.shouldContinueHeating(
+            {
+              // Unreadable readings are passed through: they are not a reason to
+              // end a running cycle (issue 2 owns the fallback policy).
+              currentTemp: context.indoorTemp ?? NaN,
+              weatherTemp: effectiveOutdoorTemp(context) ?? NaN,
+              hour: context.currentHour,
+              isWeekday: context.isWeekday,
+            },
+            // A failed hall sensor removes hall-based stopping until recovery.
+            { hallDegraded: hallDegraded() },
+          );
 
           logger.debug("🔍 Heating continuation guard evaluation", {
             continues,
@@ -2119,8 +2313,29 @@ export function createHVACMachine(
 
           // Zero is a valid temperature: only missing/non-finite readings block
           // evaluation (full zero-validity handling is issue 1's scope).
-          if (!isFiniteNumber(context.indoorTemp) || !isFiniteNumber(context.outdoorTemp)) {
+          if (!isFiniteNumber(context.indoorTemp)) {
             return false;
+          }
+
+          // Deliberately NOT hall-fault aware: the shared turn-off guard is also
+          // on the cooling and defrost evaluation paths, and issue 2's approved
+          // policy is a *heating* runtime policy only. Retention of a running
+          // heating cycle is owned by `heatingContinues` on the heating state's
+          // own evaluation path, which is where a hall fault must be honoured.
+          if (!isFiniteNumber(context.outdoorTemp)) {
+            const reached =
+              hvacStrategy.hasReachedHeatingStopThreshold(context.indoorTemp);
+
+            logger.info(
+              "🔥 Turn off guard - outdoor reading unusable, indoor stop threshold only",
+              {
+                indoorTemp: context.indoorTemp,
+                stopThresholdReached: reached,
+                reason:
+                  "heating must not survive the indoor stop threshold just because the outdoor sensor failed",
+              },
+            );
+            return reached;
           }
 
           const evaluation = hvacStrategy.evaluateConditions({
@@ -2239,19 +2454,69 @@ export class HVACStateMachine {
    * reused across a controller stop/start in the same process.
    */
   private strategy: HVACStrategy;
+  /** Hall/outdoor failure detection (issue 2) - shared with the controller. */
+  private sensorHealth: SensorHealthMonitor;
 
-  constructor(hvacOptions?: HvacOptions, haClient?: HomeAssistantClient) {
+  constructor(
+    hvacOptions?: HvacOptions,
+    haClient?: HomeAssistantClient,
+    sensorHealth?: SensorHealthMonitor,
+  ) {
     this.logger = new LoggerService("HAG.hvac.state-machine");
     this.hvacOptions = hvacOptions;
     this.haClient = haClient;
     this.strategy = new HVACStrategy(hvacOptions!);
+    this.sensorHealth =
+      sensorHealth ??
+      new SensorHealthMonitor({
+        entityIds: {
+          hall: hvacOptions!.tempSensor,
+          outdoor: hvacOptions!.outdoorSensor,
+        },
+        reportTimeoutMs: hvacOptions?.sensorHealth?.reportTimeoutMs,
+        dailyReminderMs:
+          hvacOptions?.sensorHealth?.dailyReminderHours !== undefined
+            ? hvacOptions.sensorHealth.dailyReminderHours * 60 * 60 * 1000
+            : undefined,
+        logger: this.logger,
+      });
     this.machine = createHVACMachine(
       hvacOptions!,
       this.logger,
       haClient,
       this.commandQueue,
       this.strategy,
+      this.sensorHealth,
     );
+  }
+
+  /** Shared hall/outdoor failure detection state (issue 2). */
+  getSensorHealth(): SensorHealthMonitor {
+    return this.sensorHealth;
+  }
+
+  /**
+   * Is the current (freshly read) local time inside the configured active-hours
+   * window? Used by the controller to know whether a post-reconnect reconcile
+   * was required to command the managed units off.
+   */
+  isWithinActiveHours(): boolean {
+    const now = new Date();
+    return this.strategy.isActiveHour(
+      now.getHours(),
+      now.getDay() >= 1 && now.getDay() <= 5,
+    );
+  }
+
+  /**
+   * Wait until every HVAC command batch enqueued so far has settled.
+   *
+   * Used by the controller after a reconnect: the commands it issues are
+   * queued, so it must not read a unit back (nor report an effect) before they
+   * have actually been attempted.
+   */
+  async awaitPendingCommands(): Promise<void> {
+    await this.commandQueue.run(async () => undefined, undefined);
   }
 
   /**
@@ -2455,9 +2720,12 @@ export class HVACStateMachine {
     canHeat: boolean;
     canCool: boolean;
     systemMode: SystemMode;
+    degraded: DegradedStatus;
+    sensorHealth: SensorHealthState[];
   } {
     const currentState = this.getCurrentState();
     const context = this.getContext();
+    const health = this.sensorHealth.status();
 
     return {
       currentState,
@@ -2469,6 +2737,10 @@ export class HVACStateMachine {
         context.systemMode !== SystemMode.HEAT_ONLY &&
         context.systemMode !== SystemMode.OFF,
       systemMode: context.systemMode,
+      // Explicit degraded status, separate from the HVAC state: the machine can
+      // be `heating`/`idle`/`evaluating` while a sensor fault is active.
+      degraded: health,
+      sensorHealth: health.sensors,
     };
   }
 }

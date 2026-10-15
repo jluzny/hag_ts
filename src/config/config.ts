@@ -203,6 +203,66 @@ export const HvacEntitySchema = z.object({
 });
 
 /**
+ * Sensor failure detection / degraded-mode timing (issue 2).
+ *
+ * `reportTimeoutMs` is the approved initial silent-reporting timeout (30
+ * minutes). Freshness comes from Home Assistant's own report timestamp
+ * (`last_reported`), so an unchanged-but-reporting sensor is not a fault.
+ */
+export const SensorHealthOptionsSchema = z
+  .object({
+    reportTimeoutMs: z
+      .number()
+      .int()
+      .positive()
+      .default(30 * 60 * 1000)
+      .describe(
+        "Milliseconds without a confirmed sensor report before the sensor is treated as failed (approved initial value: 30 minutes; adjust from measured reporting behaviour).",
+      ),
+    dailyReminderHours: z
+      .number()
+      .positive()
+      .default(24)
+      .describe(
+        "Hours between repeat reminders while a sensor fault persists (one reminder per interval, never per evaluation).",
+      ),
+  })
+  .optional()
+  .describe("Hall/outdoor sensor failure detection and alert timing");
+
+/**
+ * Degraded-mode alert transport (issue 2). Alerts go through the Hermes
+ * home-assistant profile's Telegram route; disabled unless a deployment
+ * explicitly enables it and supplies the bot token for the configured chat.
+ * Alert delivery failure must never affect HVAC control.
+ */
+export const AlertOptionsSchema = z
+  .object({
+    telegram: z
+      .object({
+        enabled: z
+          .boolean()
+          .default(false)
+          .describe(
+            "Enable Telegram alert delivery. Offline tests and unconfigured deployments stay silent.",
+          ),
+        botToken: z
+          .string()
+          .optional()
+          .describe(
+            "Telegram bot token of the Hermes home-assistant profile route (supply via environment, never commit).",
+          ),
+        chatId: z
+          .string()
+          .optional()
+          .describe("Allowed chat id of the Hermes home-assistant profile route."),
+      })
+      .optional(),
+  })
+  .optional()
+  .describe("Degraded-mode alert transport configuration");
+
+/**
  * HVAC system configuration schema
  */
 export const HvacOptionsSchema = z.object({
@@ -243,6 +303,8 @@ export const HvacOptionsSchema = z.object({
     .describe(
       "Max age in ms for per-unit sensor readings. Readings older than this are considered stale and replaced by the hall sensor value.",
     ),
+  sensorHealth: SensorHealthOptionsSchema,
+  alerts: AlertOptionsSchema,
 });
 
 /**
@@ -305,6 +367,8 @@ export type CoolingOptions = z.infer<typeof CoolingOptionsSchema>;
 export type ActiveHours = z.infer<typeof ActiveHoursSchema>;
 export type HvacEntity = z.infer<typeof HvacEntitySchema>;
 export type HvacOptions = z.infer<typeof HvacOptionsSchema>;
+export type SensorHealthOptions = z.infer<typeof SensorHealthOptionsSchema>;
+export type AlertOptions = z.infer<typeof AlertOptionsSchema>;
 export type ApplicationOptions = z.infer<typeof ApplicationOptionsSchema>;
 export type Settings = z.infer<typeof SettingsSchema>;
 

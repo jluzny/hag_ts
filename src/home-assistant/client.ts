@@ -451,6 +451,10 @@ export class HomeAssistantClient {
   >();
   private subscriptions = new Set<string>();
   private pingTimer?: NodeJS.Timeout;
+  /** Observers of connection up/down transitions (degraded-mode alerting). */
+  private connectionHandlers = new Set<(connected: boolean) => void>();
+  /** Last connection state reported to the handlers above. */
+  private lastReportedConnected = false;
   private config: HassOptions;
   private logger: LoggerService;
 
@@ -496,6 +500,9 @@ export class HomeAssistantClient {
           // This will be called on both initial connection and reconnections
           this.setupConnectedState();
         }
+        // Report connection up/down transitions to observers (degraded-mode
+        // alerting and reconnect reconciliation live in the controller).
+        this.notifyConnectionState();
       });
     }
 
@@ -598,6 +605,29 @@ export class HomeAssistantClient {
     return snapshot
       ? isConnectedState(snapshot.value) && snapshot.context.ws !== undefined
       : false;
+  }
+
+  /**
+   * Emit connection up/down transitions exactly once each to the registered
+   * handlers. Handler failures are isolated: a broken observer must not break
+   * the connection itself.
+   */
+  private notifyConnectionState(): void {
+    const connected = this.connected;
+    if (connected === this.lastReportedConnected) return;
+    this.lastReportedConnected = connected;
+    this.logger.info(
+      connected
+        ? "🔌 Home Assistant connection established"
+        : "🔌 Home Assistant connection lost",
+    );
+    for (const handler of [...this.connectionHandlers]) {
+      try {
+        handler(connected);
+      } catch (error) {
+        this.logger.error("Connection state handler failed", error);
+      }
+    }
   }
 
   /**
@@ -926,9 +956,18 @@ export class HomeAssistantClient {
 
   /**
    * Add state change event handler (convenience method)
+   *
+   * The handler also receives the parsed new state, so callers can use Home
+   * Assistant's own report timestamp (`last_reported`) as freshness evidence —
+   * `last_changed` only moves on a value change and is not a heartbeat.
    */
   onStateChanged(
-    handler: (entityId: string, oldState: string, newState: string) => void,
+    handler: (
+      entityId: string,
+      oldState: string,
+      newState: string,
+      newStateData?: HassStateImpl,
+    ) => void,
     monitoredSensors?: Set<string>,
   ): void {
     this.addEventHandler("state_changed", (event: HassEventImpl) => {
@@ -944,10 +983,34 @@ export class HomeAssistantClient {
         // For non-monitored entities, skip if value unchanged.
         const isMonitored = monitoredSensors?.has(entityId);
         if (oldState !== newState || isMonitored) {
-          handler(entityId, oldState, newState);
+          handler(
+            entityId,
+            oldState,
+            newState,
+            stateChangeData.newState ?? undefined,
+          );
         }
       }
     });
+  }
+
+  /**
+   * Observe Home Assistant connection state transitions.
+   *
+   * HAG must alert when the connection is lost and reconcile actual device and
+   * sensor state when it returns; retrying the connection itself stays with the
+   * client's connection state machine. The handler receives `true` on connect
+   * (including the first one) and `false` when the connection is lost.
+   */
+  onConnectionStateChange(handler: (connected: boolean) => void): void {
+    this.connectionHandlers.add(handler);
+  }
+
+  /** Stop observing connection state transitions. */
+  removeConnectionStateChangeHandler(
+    handler: (connected: boolean) => void,
+  ): void {
+    this.connectionHandlers.delete(handler);
   }
 
   private async handleMessage(data: HagWebSocketMessage): Promise<void> {

@@ -13,6 +13,7 @@ import { HVACMode, HVACStatus, OperationResult } from "../types/common.ts";
 import { HVACOperationError, StateError } from "../core/exceptions.ts";
 import { AppEvent, EventBus } from "../core/event-system.ts";
 import { HVACStateMachine } from "./state-machine.ts";
+import { SensorHealthMonitor, type SensorRole } from "./sensor-health.ts";
 import { HVACContext } from "../types/common.ts";
 
 /**
@@ -36,6 +37,12 @@ export class HVACController {
   private eventBus: EventBus;
   private stateMachine: HVACStateMachine;
   private sensorUpdateInterval?: number;
+  /** Hall/outdoor failure detection (issue 2) — shared with the state machine. */
+  private sensorHealth: SensorHealthMonitor;
+  /** True once the HA connection was lost, so a later reconnect reconciles. */
+  private connectionWasLost = false;
+  /** Read-back result of the last post-reconnect reconcile. */
+  private lastReconcile?: HVACStatus["lastReconcile"];
 
   constructor(
     hvacOptions?: HvacOptions,
@@ -43,6 +50,7 @@ export class HVACController {
     haClient?: HomeAssistantClient,
     stateMachine?: HVACStateMachine,
     eventBus?: EventBus,
+    sensorHealth?: SensorHealthMonitor,
   ) {
     this.logger = new LoggerService("HAG.hvac.controller");
     this.hvacOptions = hvacOptions!;
@@ -50,6 +58,31 @@ export class HVACController {
     this.haClient = haClient!;
     this.stateMachine = stateMachine!;
     this.eventBus = eventBus!;
+    this.sensorHealth =
+      sensorHealth ??
+      new SensorHealthMonitor({
+        entityIds: {
+          hall: this.hvacOptions.tempSensor,
+          outdoor: this.hvacOptions.outdoorSensor,
+        },
+        reportTimeoutMs: this.hvacOptions.sensorHealth?.reportTimeoutMs,
+        dailyReminderMs:
+          this.hvacOptions.sensorHealth?.dailyReminderHours !== undefined
+            ? this.hvacOptions.sensorHealth.dailyReminderHours * 60 * 60 * 1000
+            : undefined,
+        logger: this.logger,
+        // Freshness evidence is Home Assistant's own report timestamp. Reading
+        // it re-asks HA for its stored report time; it is never treated as a
+        // new report by itself.
+        readReport: async (role: SensorRole, entityId: string) => {
+          const state = await this.haClient.getState(entityId);
+          return {
+            entityId,
+            rawState: state.state,
+            reportedAt: state.lastReported ?? state.lastUpdated,
+          };
+        },
+      });
   }
 
   /**
@@ -81,6 +114,9 @@ export class HVACController {
       this.logger.info("⚙️ Step 2: Starting HVAC state machine");
       this.stateMachine.start();
       this.logger.info("✅ Step 2 completed: HVAC state machine started");
+
+      // Connection loss/recovery: alert, retry (client-side) and reconcile.
+      this.haClient.onConnectionStateChange(this.handleConnectionStateChange);
 
       // Step 3: Setup event-driven temperature monitoring
       this.logger.info(
@@ -118,6 +154,12 @@ export class HVACController {
       this.abortController.abort();
     }
 
+    // Stop observing connection transitions and cancel fault/reminder timers.
+    this.haClient.removeConnectionStateChangeHandler(
+      this.handleConnectionStateChange,
+    );
+    this.sensorHealth.dispose();
+
     // Clear sensor update interval
     if (this.sensorUpdateInterval) {
       clearInterval(this.sensorUpdateInterval);
@@ -145,6 +187,139 @@ export class HVACController {
   }
 
   /**
+   * Connection up/down handling (issue 2).
+   *
+   * Loss: alert through the configured route and record that the outage
+   * happened — no command is claimed to have succeeded while unreachable and
+   * the schedule cutoff cannot be guaranteed.
+   * Recovery: read the actual device and sensor state, ask the machine to
+   * reconcile it with the current schedule, then read the units back.
+   */
+  private handleConnectionStateChange = (connected: boolean): void => {
+    if (!connected) {
+      this.connectionWasLost = true;
+      this.sensorHealth.noteHaDisconnected();
+      this.logger.warning(
+        "⚠️ Home Assistant unreachable - commands cannot be confirmed and the schedule cutoff is not guaranteed",
+      );
+      return;
+    }
+
+    if (!this.connectionWasLost) return; // initial connect: startup path covers it
+    this.connectionWasLost = false;
+    this.sensorHealth.noteHaConnected();
+    void this.reconcileAfterReconnect();
+  };
+
+  /**
+   * Reconcile after a reconnect: read what the device and the sensors actually
+   * report now, let the machine apply the current schedule and the
+   * normal/fallback rules (including commanding managed units off outside
+   * active hours), then read the units back instead of assuming the commands
+   * took effect.
+   */
+  private async reconcileAfterReconnect(): Promise<void> {
+    const enabled = this.hvacOptions.hvacEntities.filter((e) => e.enabled);
+
+    try {
+      this.logger.info("🔄 Reconciling after Home Assistant reconnect", {
+        units: enabled.map((entity) => entity.entityId),
+      });
+
+      // 1. Actual sensor state (freshness evidence per report timestamp).
+      for (const sensorId of this.getSensors()) {
+        const role: SensorRole =
+          sensorId === this.hvacOptions.tempSensor ? "hall" : "outdoor";
+        try {
+          const state = await this.haClient.getState(sensorId);
+          this.sensorHealth.report(role, {
+            entityId: sensorId,
+            rawState: state.state,
+            reportedAt: state.lastReported ?? state.lastUpdated,
+          });
+        } catch (error) {
+          this.logger.warning("⚠️ Post-reconnect sensor read failed", {
+            entityId: sensorId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      // 2. Actual unit state. A unit that cannot be read is reported as
+      //    unreadable — never assumed off and never assumed commanded.
+      const observedUnits: Array<{ entityId: string; state: string }> = [];
+      const unreadable: string[] = [];
+      for (const entity of enabled) {
+        try {
+          const state = await this.haClient.getState(entity.entityId);
+          observedUnits.push({ entityId: entity.entityId, state: state.state });
+        } catch {
+          unreadable.push(entity.entityId);
+        }
+      }
+
+      // 3. Reconcile on the ordinary evaluation paths with a freshly read clock.
+      this.stateMachine.send({ type: "HA_RECONNECTED", observedUnits });
+
+      // 4. Let the machine's queued commands settle before reading back.
+      await this.stateMachine.awaitPendingCommands();
+      await this.verifyReconciledUnits(unreadable);
+    } catch (error) {
+      this.logger.error("❌ Post-reconnect reconcile failed", error);
+    }
+  }
+
+  /**
+   * Read the units back after a reconcile and record the observed result.
+   *
+   * Outside active hours the reconcile must have commanded every managed unit
+   * off; the read-back records which units do not report `off` (or could not be
+   * read) instead of claiming the commands succeeded.
+   */
+  private async verifyReconciledUnits(alreadyUnreadable: string[]): Promise<void> {
+    const enabled = this.hvacOptions.hvacEntities.filter((e) => e.enabled);
+    const withinActiveHours = this.stateMachine.isWithinActiveHours();
+    const commandedOff = withinActiveHours
+      ? []
+      : enabled.map((entity) => entity.entityId);
+
+    const stillNotOff: string[] = [];
+    const unreadable = [...alreadyUnreadable];
+
+    if (!withinActiveHours) {
+      for (const entityId of commandedOff) {
+        try {
+          const state = await this.haClient.getState(entityId);
+          if (state.state !== "off") stillNotOff.push(entityId);
+        } catch {
+          if (!unreadable.includes(entityId)) unreadable.push(entityId);
+        }
+      }
+    }
+
+    this.lastReconcile = {
+      at: new Date().toISOString(),
+      commandedOff,
+      stillNotOff,
+      unreadable,
+    };
+
+    if (stillNotOff.length > 0) {
+      this.logger.warning(
+        "⚠️ Post-reconnect read-back: units did not report off outside active hours",
+        { stillNotOff, commandedOff },
+      );
+    } else {
+      this.logger.info("✅ Post-reconnect read-back recorded", this.lastReconcile);
+    }
+  }
+
+  /** Shared sensor failure detection state (issue 2). */
+  getSensorHealth(): SensorHealthMonitor {
+    return this.sensorHealth;
+  }
+
+  /**
    * Get current status
    */
   getStatus(): HVACStatus {
@@ -152,6 +327,21 @@ export class HVACController {
       const haConnected = this.haClient.connected;
       const currentState = this.stateMachine.getCurrentState();
       const hvacMode = this.getCurrentHVACMode();
+
+      // Once the state machine is stopped its context is not readable (getContext
+      // throws). The controller's own sensor-health monitor still is, so the
+      // degraded status survives a stop instead of taking the status call down.
+      let conditions: HVACContext | undefined;
+      let degraded: HVACStatus["degraded"] = this.sensorHealth.status();
+      try {
+        const machineStatus = this.stateMachine.getStatus();
+        conditions = machineStatus.context;
+        degraded = machineStatus.degraded;
+      } catch {
+        this.logger.debug(
+          "ℹ️ State machine context unavailable for status (machine stopped)",
+        );
+      }
 
       const status: HVACStatus = {
         controller: {
@@ -164,8 +354,12 @@ export class HVACController {
         stateMachine: {
           currentState: currentState,
           hvacMode: hvacMode,
+          conditions: conditions,
         },
         timestamp: new Date().toISOString(),
+        // Explicit degraded status, separate from the HVAC state.
+        degraded: degraded,
+        lastReconcile: this.lastReconcile,
       };
 
       return status;
@@ -319,7 +513,7 @@ export class HVACController {
     // Register event handler for sensor changes
     // Pass monitored sensors so even same-value updates trigger re-evaluation
     const monitoredSensorIds = new Set(sensors);
-    this.haClient.onStateChanged((entityId, oldState, newState) => {
+    this.haClient.onStateChanged((entityId, oldState, newState, stateData) => {
       if (sensors.includes(entityId)) {
         this.logger.debug("📊 Sensor event received", {
           entityId,
@@ -329,7 +523,7 @@ export class HVACController {
         });
 
         // Handle sensor update
-        this.handleSensorChange(entityId, newState);
+        this.handleSensorChange(entityId, newState, stateData);
       }
     }, monitoredSensorIds);
 
@@ -342,13 +536,36 @@ export class HVACController {
   /**
    * Handle sensor state changes - process only the changed sensor
    */
-  private handleSensorChange(entityId: string, newState: string): void {
+  private handleSensorChange(
+    entityId: string,
+    newState: string,
+    newStateData?: {
+      lastReported?: Date;
+      lastUpdated?: Date;
+    },
+  ): void {
     try {
       this.logger.debug("📊 Processing single sensor change", {
         entityId,
         newState,
         timestamp: new Date().toISOString(),
       });
+
+      // Confirmed report: record Home Assistant's own report timestamp before
+      // deciding anything, so freshness is never inferred from the value.
+      if (
+        entityId === this.hvacOptions.tempSensor ||
+        entityId === this.hvacOptions.outdoorSensor
+      ) {
+        const role: SensorRole =
+          entityId === this.hvacOptions.tempSensor ? "hall" : "outdoor";
+        this.sensorHealth.report(role, {
+          entityId,
+          rawState: newState,
+          reportedAt:
+            newStateData?.lastReported ?? newStateData?.lastUpdated ?? new Date(),
+        });
+      }
 
       // Get current temperatures from state machine context
       const currentContext = this.stateMachine.getStatus().context;
@@ -459,10 +676,29 @@ export class HVACController {
       const sensors = this.getSensors();
       const sensorStates: Record<string, string> = {};
 
-      // Get all sensor readings once at startup
+      // Get all sensor readings once at startup. Home Assistant's own report
+      // timestamp is the freshness reference: a failed read is an immediate
+      // "no reading" fault, never an assumed reading.
       for (const sensorId of sensors) {
-        const state = await this.haClient.getState(sensorId);
-        sensorStates[sensorId] = state.state;
+        const role: SensorRole =
+          sensorId === this.hvacOptions.tempSensor ? "hall" : "outdoor";
+        try {
+          const state = await this.haClient.getState(sensorId);
+          sensorStates[sensorId] = state.state;
+          this.sensorHealth.report(role, {
+            entityId: sensorId,
+            rawState: state.state,
+            reportedAt: state.lastReported ?? state.lastUpdated,
+          });
+        } catch (error) {
+          this.logger.warning("⚠️ Startup sensor read failed", {
+            entityId: sensorId,
+            role,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          sensorStates[sensorId] = "";
+          this.sensorHealth.noteNoReading(role);
+        }
       }
 
       // Parse temperatures and apply calibration

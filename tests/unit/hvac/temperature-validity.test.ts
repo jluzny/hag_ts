@@ -27,6 +27,7 @@ import {
   BASE_DATE,
   BEDROOM,
   DISABLED,
+  type FakeHomeAssistantClient,
   Harness,
   LIVING_ROOM,
   flush,
@@ -79,6 +80,17 @@ const sendRaw = (
     },
   });
 };
+
+/**
+ * Every numeric value that reached the fake client (device intent). Used to pin
+ * that an unusable reading is never sent as a number.
+ */
+const sentNumbers = (ha: FakeHomeAssistantClient): number[] =>
+  ha.calls.flatMap((call) =>
+    Object.values(call.data ?? {}).filter(
+      (value): value is number => typeof value === "number",
+    ),
+  );
 
 // ---------------------------------------------------------------------------
 // Valid zero / negative readings keep ordinary heating eligible
@@ -299,23 +311,28 @@ describe("Issue 1 - the heating path records a finite zero reading", () => {
 // Missing / non-finite input stays distinguishable from a valid zero
 // ---------------------------------------------------------------------------
 
-describe("Issue 1 - missing and non-finite input are not valid readings", () => {
-  test("a missing indoor reading blocks evaluation while outdoor 0.0 °C is valid", async () => {
+describe("Issue 1/Issue 2 - missing and non-finite input are not valid readings", () => {
+  test("a missing indoor reading is never interpreted as a temperature (issue 2 fallback start)", async () => {
     const h = harness(heatingOptions());
     sendRaw(h, undefined as unknown as number, 0.0);
     await flush();
 
-    expect(h.state).toBe("idle");
-    expect(h.ha.calls).toEqual([]);
+    // Issue 2 supersedes the earlier "a missing indoor reading blocks
+    // evaluation" behaviour for a failed hall sensor: with a start-eligible
+    // outdoor reading, the eligible units start on their own thermostats. The
+    // missing reading is still never *interpreted* as a number.
+    expect(h.state).toBe("heating");
+    expect(sentNumbers(h.ha)).toEqual([21.0, 21.0]);
+    expect(sentNumbers(h.ha).every((value) => Number.isFinite(value))).toBe(true);
   });
 
-  test("a NaN indoor reading blocks evaluation while outdoor 0.0 °C is valid", async () => {
+  test("a NaN indoor reading is never interpreted as a temperature (issue 2 fallback start)", async () => {
     const h = harness(heatingOptions());
     sendRaw(h, Number.NaN, 0.0);
     await flush();
 
-    expect(h.state).toBe("idle");
-    expect(h.ha.calls).toEqual([]);
+    expect(h.state).toBe("heating");
+    expect(sentNumbers(h.ha)).toEqual([21.0, 21.0]);
   });
 
   test("a NaN outdoor reading blocks evaluation while indoor demand is valid", async () => {
@@ -323,6 +340,8 @@ describe("Issue 1 - missing and non-finite input are not valid readings", () => 
     sendRaw(h, 20.0, Number.NaN);
     await flush();
 
+    // No retained outdoor value exists in this harness, so no new automatic
+    // heating may start: eligibility is never fabricated.
     expect(h.state).toBe("idle");
     expect(h.ha.calls).toEqual([]);
   });
@@ -332,7 +351,9 @@ describe("Issue 1 - missing and non-finite input are not valid readings", () => 
     sendRaw(h, Number.POSITIVE_INFINITY, 0.0);
     await flush();
 
-    expect(h.state).toBe("idle");
-    expect(h.ha.calls).toEqual([]);
+    // An infinite indoor reading is unusable (issue 2's fallback start), and it
+    // must never reach the device as a number.
+    expect(h.state).toBe("heating");
+    expect(sentNumbers(h.ha)).toEqual([21.0, 21.0]);
   });
 });

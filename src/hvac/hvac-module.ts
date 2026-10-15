@@ -7,6 +7,8 @@ import { injectable } from "@needle-di/core";
 import { BaseModule } from "../core/module-registry.ts";
 import { HVACController } from "./controller.ts";
 import { HVACStateMachine } from "./state-machine.ts";
+import { SensorHealthMonitor } from "./sensor-health.ts";
+import { selectNotifier } from "./notifier.ts";
 import type { HvacOptions, ApplicationOptions } from "../config/config.ts";
 import { HomeAssistantClient } from "../home-assistant/client.ts";
 import { EventBus } from "../core/event-system.ts";
@@ -24,6 +26,7 @@ export class HvacModule extends BaseModule {
 
   private stateMachine: HVACStateMachine;
   private controller: HVACController;
+  private sensorHealth: SensorHealthMonitor;
 
   constructor(
     hvacOptions?: HvacOptions,
@@ -43,15 +46,51 @@ export class HvacModule extends BaseModule {
       );
     }
 
+    // Hall/outdoor failure detection (issue 2): one monitor instance shared by
+    // the state machine and the controller, so guard decisions, status
+    // reporting and alerts all read the same state.
+    this.sensorHealth = new SensorHealthMonitor({
+      entityIds: {
+        hall: hvacOptions.tempSensor,
+        outdoor: hvacOptions.outdoorSensor,
+      },
+      reportTimeoutMs: hvacOptions.sensorHealth?.reportTimeoutMs,
+      dailyReminderMs:
+        hvacOptions.sensorHealth?.dailyReminderHours !== undefined
+          ? hvacOptions.sensorHealth.dailyReminderHours * 60 * 60 * 1000
+          : undefined,
+      notifier: selectNotifier(hvacOptions.alerts, this.logger!),
+      logger: this.logger!,
+      // Freshness evidence is Home Assistant's own report timestamp.
+      readReport: async (role, entityId) => {
+        const state = await haClient.getState(entityId);
+        return {
+          entityId,
+          rawState: state.state,
+          reportedAt: state.lastReported ?? state.lastUpdated,
+        };
+      },
+    });
+
     // Create instances with injected dependencies
-    this.stateMachine = new HVACStateMachine(hvacOptions, haClient);
+    this.stateMachine = new HVACStateMachine(
+      hvacOptions,
+      haClient,
+      this.sensorHealth,
+    );
     this.controller = new HVACController(
       hvacOptions,
       appOptions,
       haClient,
       this.stateMachine,
       eventBus,
+      this.sensorHealth,
     );
+  }
+
+  /** Shared sensor failure detection state (issue 2). */
+  getSensorHealth(): SensorHealthMonitor {
+    return this.sensorHealth;
   }
 
   /**

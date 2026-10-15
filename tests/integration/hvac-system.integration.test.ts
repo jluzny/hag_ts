@@ -101,6 +101,20 @@ class MockHomeAssistantClient {
     return this._connected;
   }
 
+  // Issue 2: connection-loss/reconnect observation surface used by the
+  // controller (the real client notifies on connection transitions).
+  private connectionHandlers = new Set<(connected: boolean) => void>();
+
+  onConnectionStateChange(handler: (connected: boolean) => void): void {
+    this.connectionHandlers.add(handler);
+  }
+
+  removeConnectionStateChangeHandler(
+    handler: (connected: boolean) => void,
+  ): void {
+    this.connectionHandlers.delete(handler);
+  }
+
   async getState(entityId: string) {
     const mockState = this.mockStates.get(entityId);
     if (!mockState) {

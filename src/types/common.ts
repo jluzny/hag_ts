@@ -95,10 +95,10 @@ export interface HassEvent {
 /**
  * State change data from Home Assistant
  */
-export interface HassStateChangeData {
+export interface HassStateChangeData<TState extends HassState = HassState> {
   entityId: string;
-  newState: HassState | null;
-  oldState: HassState | null;
+  newState: TState | null;
+  oldState: TState | null;
 }
 
 /**
@@ -146,6 +146,11 @@ export interface HVACContext {
     needsDefrost: boolean;
     reason: string;
   };
+  /**
+   * Unit modes most recently observed on the device after a Home Assistant
+   * reconnect (entity id -> reported state). Outgoing/observed intent only.
+   */
+  observedUnits?: Record<string, string>;
 }
 
 /**
@@ -176,6 +181,15 @@ export interface HVACStatus {
   };
   timestamp: string;
   aiAnalysis?: string;
+  /** Explicit degraded status, separate from the HVAC state (issue 2). */
+  degraded?: import("../hvac/sensor-health.ts").DegradedStatus;
+  /** Result of the last post-reconnect read-back, if any (issue 2). */
+  lastReconcile?: {
+    at: string;
+    commandedOff: string[];
+    stillNotOff: string[];
+    unreadable: string[];
+  };
 }
 
 /**

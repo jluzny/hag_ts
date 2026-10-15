@@ -12,6 +12,11 @@
 import { setSystemTime } from "bun:test";
 import { createActor } from "xstate";
 import { createHVACMachine } from "../../../src/hvac/state-machine.ts";
+import {
+  SensorHealthMonitor,
+  type SensorHealthOptions,
+} from "../../../src/hvac/sensor-health.ts";
+import { type Notifier } from "../../../src/hvac/notifier.ts";
 import { type HvacOptions } from "../../../src/config/config.ts";
 import { SystemMode } from "../../../src/types/common.ts";
 import { LoggerService } from "../../../src/core/logging.ts";
@@ -331,16 +336,39 @@ export class Harness {
   // Deliberately loosely typed: these tests drive raw xstate actors directly.
   readonly actor: any;
   private readonly startMs: number;
+  /** Issue 2: the shared sensor-health monitor, when one was injected. */
+  readonly health?: SensorHealthMonitor;
 
-  constructor(options: HvacOptions = makeOptions()) {
+  constructor(
+    options: HvacOptions = makeOptions(),
+    deps: {
+      /**
+       * Sensor-health monitor factory. It receives the harness clock so monitor
+       * timers (report timeout, daily reminder) advance with `harness.advance()`.
+       */
+      sensorHealth?: (clock: FakeClock) => SensorHealthMonitor;
+    } = {},
+  ) {
     this.startMs = Date.now(); // the caller pins the wall clock before construction
-    const machine = createHVACMachine(options, new LoggerService("test.defrost"), this.ha);
+    this.health = deps.sensorHealth?.(this.clock);
+    const machine = createHVACMachine(
+      options,
+      new LoggerService("test.defrost"),
+      this.ha,
+      undefined,
+      undefined,
+      this.health,
+    );
     this.actor = createActor(machine as any, { clock: this.clock as any });
     this.actor.start();
   }
 
   get state(): string {
     return this.actor.getSnapshot().value as string;
+  }
+
+  get context(): Record<string, unknown> {
+    return this.actor.getSnapshot().context as Record<string, unknown>;
   }
 
   /** Mirrors HVACController.handleSensorChange: fresh hour read from the wall clock. */
@@ -357,6 +385,16 @@ export class Harness {
     } as never);
   }
 
+  /**
+   * Issue 2: Home Assistant reconnect with the unit states the controller
+   * actually observed on the device.
+   */
+  sendReconnected(
+    observedUnits: Array<{ entityId: string; state: string }> = [],
+  ): void {
+    this.actor.send({ type: "HA_RECONNECTED", observedUnits } as never);
+  }
+
   /** Advance the virtual timer clock and the pinned wall clock together. */
   advance(ms: number): void {
     this.clock.advance(ms, (virtualNow: number) => {
@@ -368,6 +406,55 @@ export class Harness {
     await (this.actor as unknown as { stop: () => Promise<void> | void }).stop();
   }
 }
+
+/** Recorded alert bodies; nothing leaves the process. */
+export class RecordingNotifier implements Notifier {
+  readonly messages: string[] = [];
+
+  async send(message: string): Promise<void> {
+    this.messages.push(message);
+  }
+}
+
+/** A notifier whose transport always fails - must never break HVAC control. */
+export class FailingNotifier implements Notifier {
+  readonly messages: string[] = [];
+
+  async send(message: string): Promise<void> {
+    this.messages.push(message);
+    throw new Error("simulated transport failure");
+  }
+}
+
+/**
+ * Build an issue-2 sensor-health monitor wired to the harness fake clock.
+ *
+ * `now` follows the pinned wall clock (bun:test setSystemTime), which
+ * `Harness.advance()` keeps in step with virtual time.
+ */
+export const makeSensorHealth = (
+  options: HvacOptions,
+  deps: {
+    clock: FakeClock;
+    notifier?: Notifier;
+    readReport?: SensorHealthOptions["readReport"];
+    reportTimeoutMs?: number;
+    dailyReminderMs?: number;
+    logger?: LoggerService;
+  },
+): SensorHealthMonitor =>
+  new SensorHealthMonitor({
+    entityIds: { hall: options.tempSensor, outdoor: options.outdoorSensor },
+    scheduler: {
+      setTimeout: (fn, ms) => deps.clock.setTimeout(fn, ms),
+      clearTimeout: (id) => deps.clock.clearTimeout(id as number),
+    },
+    notifier: deps.notifier,
+    readReport: deps.readReport,
+    reportTimeoutMs: deps.reportTimeoutMs,
+    dailyReminderMs: deps.dailyReminderMs,
+    logger: deps.logger ?? new LoggerService("test.sensor-health"),
+  });
 
 /** Let queued promises / async xstate actions settle. */
 export const flush = async (): Promise<void> => {

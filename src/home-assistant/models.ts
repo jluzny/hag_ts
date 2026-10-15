@@ -58,6 +58,15 @@ export class HassStateImpl implements HassState {
     public readonly attributes: Record<string, unknown>,
     public readonly lastChanged: Date,
     public readonly lastUpdated: Date,
+    /**
+     * Home Assistant's own report timestamp (`last_reported`).
+     *
+     * This is the only freshness evidence HAG may use: Home Assistant advances
+     * it on every report the integration makes, including a report whose value
+     * did not change (`state_reported`), while `last_changed` only moves on a
+     * value change and is therefore not a heartbeat.
+     */
+    public readonly lastReported?: Date,
   ) {}
 
   /**
@@ -105,12 +114,17 @@ export class HassStateImpl implements HassState {
       );
     }
 
-    const lastChanged = data.last_changed
-      ? new Date(data.last_changed as string)
-      : new Date();
-    const lastUpdated = data.last_updated
-      ? new Date(data.last_updated as string)
-      : new Date();
+    const parseDate = (value: unknown, fallback: Date): Date => {
+      if (typeof value !== "string") return fallback;
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? fallback : parsed;
+    };
+
+    const lastChanged = parseDate(data.last_changed, new Date());
+    const lastUpdated = parseDate(data.last_updated, lastChanged);
+    // `last_reported` is Home Assistant's report timestamp; fall back to
+    // `last_updated` only when an older HA version does not send it.
+    const lastReported = parseDate(data.last_reported, lastUpdated);
     const attributes = (data.attributes as Record<string, unknown>) || {};
 
     return new HassStateImpl(
@@ -119,6 +133,7 @@ export class HassStateImpl implements HassState {
       attributes,
       lastChanged,
       lastUpdated,
+      lastReported,
     );
   }
 }
@@ -144,7 +159,7 @@ export class HassEventImpl implements HassEvent {
   /**
    * Get state change data if this is a state change event
    */
-  getStateChangeData(): HassStateChangeData | null {
+  getStateChangeData(): HassStateChangeData<HassStateImpl> | null {
     if (!this.isStateChanged()) {
       return null;
     }
