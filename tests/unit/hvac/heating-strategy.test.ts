@@ -203,7 +203,9 @@ describe("Heating Strategy - Active Hours Logic", () => {
   const strategy = new HVACStrategy(baseHvacOptions);
 
   test("should heat during weekday active hours", () => {
-    const activeHours = [7, 8, 10, 15, 20, 22];
+    // activeHours.end is exclusive (hour < end): 21 is the last active hour
+    // with end: 22, and the approved semantics keep that boundary.
+    const activeHours = [7, 8, 10, 15, 20, 21];
 
     for (const hour of activeHours) {
       const data = createStateChangeData({
@@ -219,7 +221,8 @@ describe("Heating Strategy - Active Hours Logic", () => {
   });
 
   test("should not heat outside weekday active hours", () => {
-    const inactiveHours = [6, 23, 0, 1, 5];
+    // 22 is the exclusive end of active hours (hour < end).
+    const inactiveHours = [6, 22, 23, 0, 1, 5];
 
     for (const hour of inactiveHours) {
       const data = createStateChangeData({
@@ -235,7 +238,8 @@ describe("Heating Strategy - Active Hours Logic", () => {
   });
 
   test("should heat during weekend active hours", () => {
-    const activeHours = [8, 10, 15, 20, 22];
+    // activeHours.end is exclusive (hour < end).
+    const activeHours = [8, 10, 15, 20, 21];
 
     for (const hour of activeHours) {
       const data = createStateChangeData({
@@ -251,7 +255,8 @@ describe("Heating Strategy - Active Hours Logic", () => {
   });
 
   test("should not heat outside weekend active hours", () => {
-    const inactiveHours = [7, 23, 0, 1, 5];
+    // 22 is the exclusive end of active hours (hour < end).
+    const inactiveHours = [7, 22, 23, 0, 1, 5];
 
     for (const hour of inactiveHours) {
       const data = createStateChangeData({
@@ -535,14 +540,23 @@ describe("Heating Strategy - Edge Cases and Boundary Conditions", () => {
     const evaluation5 = strategy.evaluateConditions(startHourWeekday);
     expect(evaluation5.shouldHeat).toBe(true);
 
+    const lastActiveHourWeekday = createStateChangeData({
+      currentTemp: 18.0,
+      weatherTemp: 5.0,
+      hour: 21, // Last active hour (end: 22 is exclusive)
+      isWeekday: true,
+    });
+    const evaluation6a = strategy.evaluateConditions(lastActiveHourWeekday);
+    expect(evaluation6a.shouldHeat).toBe(true);
+
     const endHourWeekday = createStateChangeData({
       currentTemp: 18.0,
       weatherTemp: 5.0,
-      hour: 22, // End of active hours
+      hour: 22, // Exclusive end of active hours: already inactive
       isWeekday: true,
     });
     const evaluation6 = strategy.evaluateConditions(endHourWeekday);
-    expect(evaluation6.shouldHeat).toBe(true);
+    expect(evaluation6.shouldHeat).toBe(false);
 
     const startHourWeekend = createStateChangeData({
       currentTemp: 18.0,

@@ -1388,7 +1388,7 @@ export function createHVACMachine(
               hvacOptions.heating.temperature;
 
             // Record state change for cycling monitoring
-            if (context.indoorTemp) {
+            if (isFiniteNumber(context.indoorTemp)) {
               hvacStrategy.cyclingMonitor.recordStateChange(
                 "OFF",
                 "HEAT",
@@ -1396,7 +1396,7 @@ export function createHVACMachine(
               );
             }
 
-            if (context.indoorTemp) {
+            if (isFiniteNumber(context.indoorTemp)) {
               hvacStrategy
                 .getCyclingMonitor()
                 .recordStateChange("OFF", "HEAT", context.indoorTemp);
@@ -1705,7 +1705,15 @@ export function createHVACMachine(
 
         shouldAutoCool: ({ context }) => {
           if (context.systemMode !== SystemMode.AUTO) return false;
-          if (!context.indoorTemp || !context.outdoorTemp) return false;
+          // Zero is a valid temperature: only missing/non-finite readings block
+          // evaluation (issue 1). A truthiness check would treat a finite 0 °C
+          // reading as absent input and silently skip the cooling evaluation.
+          if (
+            !isFiniteNumber(context.indoorTemp) ||
+            !isFiniteNumber(context.outdoorTemp)
+          ) {
+            return false;
+          }
 
           const evaluation = hvacStrategy.evaluateConditions({
             currentTemp: context.indoorTemp,
