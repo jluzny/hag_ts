@@ -856,6 +856,42 @@ export class HvacCommandQueue {
 }
 
 /**
+ * Witness of the `off` commands the machine actually issued.
+ *
+ * Review round 1 F4: the controller's post-reconnect read-back must claim only
+ * the units that were really commanded off — never a computed set of "all
+ * enabled units outside active hours" while the machine deliberately commanded
+ * nothing (running defrost cycle, active manual override). The machine records
+ * every successfully delivered off command here; the reset happens before the
+ * reconnect reconcile event and the flush after the queued batches settle.
+ *
+ * Under-claiming is the safe direction: a batch failure is not recorded, so
+ * the read-back never asserts an effect for a command that did not go out.
+ */
+export class OffCommandWitness {
+  private offCommands: string[] = [];
+
+  /** Start a fresh recording window (the controller calls this per reconcile). */
+  begin(): void {
+    this.offCommands = [];
+  }
+
+  /** Record one successfully delivered off command. */
+  recordOff(entityId: string): void {
+    if (!this.offCommands.includes(entityId)) {
+      this.offCommands.push(entityId);
+    }
+  }
+
+  /** Consume the recorded ids (in first-command order) and clear the window. */
+  take(): string[] {
+    const out = this.offCommands;
+    this.offCommands = [];
+    return out;
+  }
+}
+
+/**
  * True only for present, finite numbers. Zero is a legitimate temperature, so
  * falsy checks (`!value`) must not be used for temperature validity.
  */
@@ -908,6 +944,10 @@ function raceAbandoned<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> 
  * entity) — room selection uses it to stop exactly the units the effective
  * outdoor reading no longer selects (issue 3).
  *
+ * `offCommandWitness` records each successfully delivered `off` command at the
+ * call site, so the controller can read back exactly what was commanded
+ * (review round 1 F4). Only successful sends are recorded.
+ *
  * Fail-safe `off` commands (completion, abort, stop, turn off) are retried a
  * bounded number of times: leaving a unit in forced cool (or heating) because a
  * single command was lost is the failure mode this guards against. Only the
@@ -934,6 +974,9 @@ async function commandHvacEntities(
   failSafeOff = false,
   // Optional explicit target set (default: every enabled entity).
   entities?: HvacEntity[],
+  // Truthful reconcile read-back (F4): records the off commands that were
+  // actually issued and delivered.
+  offCommandWitness?: OffCommandWitness,
 ): Promise<string[]> {
   const runBatch = async (signal: AbortSignal): Promise<string[]> => {
     if (!haClient) {
@@ -996,6 +1039,9 @@ async function commandHvacEntities(
           mode,
           reason,
         });
+        // Successful off command delivered to the client: recorded so the
+        // post-reconnect read-back claims only what was issued (F4).
+        if (mode === "off") offCommandWitness?.recordOff(entity.entityId);
       } else {
         failedEntities.push(entity.entityId);
         logger.error("❌ Failed to command HVAC entity", lastError, {
@@ -1113,6 +1159,11 @@ export function createHVACMachine(
         : undefined,
     logger,
   }),
+  // Truthful post-reconnect read-back (review round 1, F4): the controller
+  // begins this window before the reconcile event and consumes it after the
+  // command batches settle, so `lastReconcile.commandedOff` names exactly the
+  // units the machine commanded off — not a computed expectation.
+  offCommandWitness?: OffCommandWitness,
 ) {
   /**
    * Room-selection ownership of the running heating cycle (issue 3), kept in
@@ -1219,6 +1270,7 @@ export function createHVACMachine(
       commandQueue,
       false,
       excluded,
+      offCommandWitness,
     );
 
     // Ownership is dropped only for the units the stop was delivered to: a
@@ -1436,9 +1488,14 @@ export function createHVACMachine(
               actions: ["updateConditions", "eventDefrostReevaluate"],
             },
             // Reconnect during a defrost cycle: record what the units actually
-            // report; the cycle itself keeps its own duration/constraint rules.
+            // report, then evaluate the cycle against the CURRENT schedule with
+            // a freshly read clock (review round 1 F3/D3) — the same rules a
+            // spontaneous DEFROST_REEVALUATE goes through. Inside active hours
+            // the cycle continues undisturbed; past the cutoff the abort path
+            // switches the cycle-controlled units off immediately instead of
+            // leaving them in cool until the duration timer completes the cycle.
             HA_RECONNECTED: {
-              actions: "recordObservedUnits",
+              actions: ["recordObservedUnits", "refreshClock", "eventDefrostReevaluate"],
             },
             DEFROST_REEVALUATE: [
               // Spontaneous events never restart or duplicate the cycle
@@ -1567,6 +1624,9 @@ export function createHVACMachine(
             (entity) => (entity.defrost ? "cool" : "off"),
             "defrost_start",
             commandQueue,
+            undefined,
+            undefined,
+            offCommandWitness,
           );
 
           logger.info(`❄️ [HVAC] Defrost cycle started`, {
@@ -1601,6 +1661,8 @@ export function createHVACMachine(
             "defrost_complete",
             commandQueue,
             true,
+            undefined,
+            offCommandWitness,
           );
 
           logger.info(`✅ [HVAC] Defrost cycle completed`, {
@@ -1638,6 +1700,8 @@ export function createHVACMachine(
             "defrost_abort",
             commandQueue,
             true,
+            undefined,
+            offCommandWitness,
           );
 
           // Every managed unit was commanded off: no heating ownership remains.
@@ -2059,6 +2123,8 @@ export function createHVACMachine(
             "turn_off",
             commandQueue,
             true,
+            undefined,
+            offCommandWitness,
           );
 
           // Every managed unit was commanded off: no heating ownership remains,
@@ -2179,14 +2245,26 @@ export function createHVACMachine(
         /** Defrost entry from an off/idle evaluation (legacy: Off requires heating demand). */
         shouldAutoDefrost: ({ context }) => {
           if (context.systemMode !== SystemMode.AUTO) return false;
-          if (!isFiniteNumber(context.indoorTemp) || !isFiniteNumber(context.outdoorTemp)) {
+          if (!isFiniteNumber(context.indoorTemp)) {
+            return false;
+          }
+
+          // Owner decision (review round 1 F3/D1): while the outdoor sensor is
+          // failed, the calibrated last-valid outdoor value drives the defrost
+          // threshold AND the operating-range gate — the same retained input the
+          // heating start already uses. It is explicitly stale fallback data (no
+          // expiry, no persistence); with no retained value there is no defrost
+          // entry. The hall-demand/validity gate above is NOT touched: the
+          // indoor reading decides nothing while the hall sensor is failed.
+          const effectiveOutdoor = effectiveOutdoorTemp(context);
+          if (!isFiniteNumber(effectiveOutdoor)) {
             return false;
           }
 
           const eligible = hvacStrategy.isDefrostEntryEligible(
             {
               currentTemp: context.indoorTemp,
-              weatherTemp: context.outdoorTemp,
+              weatherTemp: effectiveOutdoor,
               hour: context.currentHour,
               isWeekday: context.isWeekday,
             },
@@ -2197,6 +2275,12 @@ export function createHVACMachine(
             eligible,
             origin: "off/idle",
             systemMode: context.systemMode,
+            outdoorTemp: `${effectiveOutdoor}°C`,
+            outdoorSource: isFiniteNumber(context.outdoorTemp)
+              ? "live reading"
+              : `retained last-valid fallback (stale${
+                  sensorHealth.effectiveOutdoorTemp().staleFallback ? "" : " label unavailable"
+                })`,
             reason: eligible ? "Auto defrost approved" : "Auto defrost denied",
           });
           return eligible;
@@ -2213,14 +2297,23 @@ export function createHVACMachine(
           ) {
             return false;
           }
-          if (!isFiniteNumber(context.indoorTemp) || !isFiniteNumber(context.outdoorTemp)) {
+          if (!isFiniteNumber(context.indoorTemp)) {
+            return false;
+          }
+
+          // Same retained-outdoor policy as `shouldAutoDefrost` (owner decision,
+          // review round 1 F3/D1): a failed outdoor sensor must not silently
+          // disable custom defrost for the whole outage, and the value used is
+          // the explicitly stale-labelled calibrated last-valid reading.
+          const effectiveOutdoor = effectiveOutdoorTemp(context);
+          if (!isFiniteNumber(effectiveOutdoor)) {
             return false;
           }
 
           const eligible = hvacStrategy.isDefrostEntryEligible(
             {
               currentTemp: context.indoorTemp,
-              weatherTemp: context.outdoorTemp,
+              weatherTemp: effectiveOutdoor,
               hour: context.currentHour,
               isWeekday: context.isWeekday,
             },
@@ -2230,6 +2323,12 @@ export function createHVACMachine(
           logger.debug("🔍 Defrost guard evaluation", {
             eligible,
             origin: "active heating",
+            outdoorTemp: `${effectiveOutdoor}°C`,
+            outdoorSource: isFiniteNumber(context.outdoorTemp)
+              ? "live reading"
+              : `retained last-valid fallback (stale${
+                  sensorHealth.effectiveOutdoorTemp().staleFallback ? "" : " label unavailable"
+                })`,
             reason: eligible ? "Defrost cycle required" : "Defrost not needed",
           });
           return eligible;
@@ -2456,6 +2555,13 @@ export class HVACStateMachine {
   private strategy: HVACStrategy;
   /** Hall/outdoor failure detection (issue 2) - shared with the controller. */
   private sensorHealth: SensorHealthMonitor;
+  /**
+   * Witness of the off commands this machine actually issued (review round 1
+   * F4). The controller opens the window before the reconnect reconcile event
+   * and consumes it after the queued batches settle; `lastReconcile` then
+   * truthfully names the units that were commanded off.
+   */
+  private offCommandWitness = new OffCommandWitness();
 
   constructor(
     hvacOptions?: HvacOptions,
@@ -2487,6 +2593,7 @@ export class HVACStateMachine {
       this.commandQueue,
       this.strategy,
       this.sensorHealth,
+      this.offCommandWitness,
     );
   }
 
@@ -2517,6 +2624,28 @@ export class HVACStateMachine {
    */
   async awaitPendingCommands(): Promise<void> {
     await this.commandQueue.run(async () => undefined, undefined);
+  }
+
+  /**
+   * Open the off-command witness window (review round 1 F4).
+   *
+   * Called by the controller immediately before it delivers the reconnect
+   * reconcile event, so everything the machine commands while processing that
+   * event (and its follow-on evaluations) is captured.
+   */
+  beginReconcileWitness(): void {
+    this.offCommandWitness.begin();
+  }
+
+  /**
+   * Consume the ids the machine actually commanded off in the open witness
+   * window (clearing it). Only successful sends are included; an inconclusive
+   * or failed command is never claimed.
+   *
+   * Must be called after `awaitPendingCommands()` so every batch settled.
+   */
+  takeReconciledOffCommands(): string[] {
+    return this.offCommandWitness.take();
   }
 
   /**
@@ -2589,6 +2718,8 @@ export class HVACStateMachine {
         );
         // Queued behind any in-flight defrost command, so the off commands are
         // the last thing that reaches the device for these units.
+        // These offs are deliberately NOT recorded in the command witness:
+        // stopping tears the controller down, no reconcile read-back runs.
         await commandHvacEntities(
           this.haClient,
           this.hvacOptions,

@@ -273,6 +273,9 @@ export class HVACController {
       }
 
       // 3. Reconcile on the ordinary evaluation paths with a freshly read clock.
+      //    The witness window opens first: it captures exactly the off commands
+      //    the machine issues while processing the reconcile (review round 1 F4).
+      this.stateMachine.beginReconcileWitness();
       this.stateMachine.send({ type: "HA_RECONNECTED", observedUnits });
 
       // 4. Let the machine's queued commands settle before reading back.
@@ -286,28 +289,27 @@ export class HVACController {
   /**
    * Read the units back after a reconcile and record the observed result.
    *
-   * Outside active hours the reconcile must have commanded every managed unit
-   * off; the read-back records which units do not report `off` (or could not be
-   * read) instead of claiming the commands succeeded.
+   * `commandedOff` is the witness of the off commands the machine issued while
+   * processing the reconcile — only successfully delivered sends are included
+   * (review round 1 F4). The read-back verifies exactly those units and never
+   * claims an effect for a command that was not issued: a machine that
+   * deliberately commanded nothing (e.g. an active defrost cycle or a manual
+   * override winning outside active hours) records an empty list, and the
+   * "did not report off" warning cannot fire for units nobody commanded.
    */
   private async verifyReconciledUnits(alreadyUnreadable: string[]): Promise<void> {
-    const enabled = this.hvacOptions.hvacEntities.filter((e) => e.enabled);
     const withinActiveHours = this.stateMachine.isWithinActiveHours();
-    const commandedOff = withinActiveHours
-      ? []
-      : enabled.map((entity) => entity.entityId);
+    const commandedOff = this.stateMachine.takeReconciledOffCommands();
 
     const stillNotOff: string[] = [];
     const unreadable = [...alreadyUnreadable];
 
-    if (!withinActiveHours) {
-      for (const entityId of commandedOff) {
-        try {
-          const state = await this.haClient.getState(entityId);
-          if (state.state !== "off") stillNotOff.push(entityId);
-        } catch {
-          if (!unreadable.includes(entityId)) unreadable.push(entityId);
-        }
+    for (const entityId of commandedOff) {
+      try {
+        const state = await this.haClient.getState(entityId);
+        if (state.state !== "off") stillNotOff.push(entityId);
+      } catch {
+        if (!unreadable.includes(entityId)) unreadable.push(entityId);
       }
     }
 
@@ -320,8 +322,16 @@ export class HVACController {
 
     if (stillNotOff.length > 0) {
       this.logger.warning(
-        "⚠️ Post-reconnect read-back: units did not report off outside active hours",
+        "⚠️ Post-reconnect read-back: units commanded off did not report off",
         { stillNotOff, commandedOff },
+      );
+    } else if (!withinActiveHours && commandedOff.length === 0) {
+      // The machine commanded nothing off during the reconcile. That is a
+      // deliberate machine decision, not a lost command: it must not be
+      // reported as a defect, and there is nothing to read back.
+      this.logger.info(
+        "✅ Post-reconnect read-back recorded - no off commands were issued during the reconcile (machine state, e.g. an active defrost cycle or a manual override, commands nothing)",
+        this.lastReconcile,
       );
     } else {
       this.logger.info("✅ Post-reconnect read-back recorded", this.lastReconcile);
