@@ -243,6 +243,26 @@ describe("Room selection - immediate exclusion without a start-eligible hall rea
     expect(h.ha.callsFor(LIVING_ROOM)).toEqual(heatBatch(LIVING_ROOM, 21.0));
     expect(h.ha.callsFor(DISABLED)).toEqual([]);
   });
+
+  test("a failed hall reading does not block the exclusion (issue 2 integration)", async () => {
+    const h = harness(roomSelectionOptions());
+
+    h.sendConditions(21.0, 9.0); // start: all enabled units
+    await flush();
+    expect(turnOffCalls(h)).toEqual([]);
+
+    // The hall sensor fails (unavailable/non-finite) at the same time as the
+    // effective outdoor reading crosses 10 °C: the fault must not force a
+    // shutdown, but it must not block the approved room-selection exclusion
+    // either. The running units keep their targets otherwise.
+    h.sendConditions(NaN, 11.0);
+    await flush();
+
+    expect(h.state).toBe("heating");
+    expect(turnOffCalls(h)).toEqual([BEDROOM]);
+    expect(h.ha.callsFor(LIVING_ROOM)).toEqual(heatBatch(LIVING_ROOM, 21.0));
+    expect(h.ha.callsFor(DISABLED)).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------
