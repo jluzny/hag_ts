@@ -82,6 +82,20 @@ export class HVACController {
             reportedAt: state.lastReported ?? state.lastUpdated,
           };
         },
+        // A probe-detected recovery (a fresh report is no state_changed event)
+        // must still reevaluate the normal heating rules exactly once.
+        onRecovery: (role: SensorRole, value: number) => {
+          void this.handleSensorRecovery(role, value);
+        },
+        // Retained fallback values go through the same calibration the live
+        // readings use (fallback eligibility must not diverge from live).
+        calibrate: (role: SensorRole, value: number) =>
+          this.applyCalibration(
+            role === "hall"
+              ? this.hvacOptions.tempSensor
+              : this.hvacOptions.outdoorSensor,
+            value,
+          ),
       });
   }
 
@@ -640,6 +654,78 @@ export class HVACController {
       this.logger.error("❌ Failed to handle sensor change", error, {
         entityId,
         newState,
+      });
+    }
+  }
+
+  /**
+   * Probe-detected sensor recovery: reevaluate the normal heating rules ONCE.
+   *
+   * A recovery seen only through the freshness probe produces no
+   * `state_changed` event, so nothing else triggers an evaluation; this reads
+   * both sensors fresh (recording the report evidence like startup does) and
+   * sends one UPDATE_CONDITIONS. Called by the sensor-health monitor exactly
+   * once per recovery episode.
+   */
+  async handleSensorRecovery(role: SensorRole, value: number): Promise<void> {
+    try {
+      this.logger.info("🔁 Sensor recovery reevaluation", {
+        role,
+        recoveredValue: value,
+      });
+
+      const updatedData: Partial<HVACContext> = {
+        currentHour: new Date().getHours(),
+        isWeekday: new Date().getDay() >= 1 && new Date().getDay() <= 5,
+      };
+
+      for (const sensorId of this.getSensors()) {
+        try {
+          const state = await this.haClient.getState(sensorId);
+          this.sensorHealth.report(sensorId === this.hvacOptions.tempSensor ? "hall" : "outdoor", {
+            entityId: sensorId,
+            rawState: state.state,
+            reportedAt: state.lastReported ?? state.lastUpdated,
+          });
+          const parsed = parseFloat(state.state);
+          if (Number.isFinite(parsed)) {
+            const calibrated = this.applyCalibration(sensorId, parsed);
+            if (sensorId === this.hvacOptions.tempSensor) {
+              updatedData.indoorTemp = calibrated;
+            } else {
+              updatedData.outdoorTemp = calibrated;
+            }
+          }
+        } catch (error) {
+          this.logger.warning("⚠️ Sensor recovery read failed", {
+            entityId: sensorId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      // One evaluation; the machine's ordinary update path decides the rest.
+      if (
+        updatedData.indoorTemp !== undefined &&
+        updatedData.outdoorTemp !== undefined
+      ) {
+        this.stateMachine.send({
+          type: "UPDATE_CONDITIONS",
+          data: updatedData,
+          eventSource: {
+            type: "sensor_recovery",
+            entityId:
+              role === "hall"
+                ? this.hvacOptions.tempSensor
+                : this.hvacOptions.outdoorSensor,
+            newValue: String(value),
+          },
+        });
+        await this.stateMachine.awaitPendingCommands();
+      }
+    } catch (error) {
+      this.logger.error("❌ Sensor recovery evaluation failed", error, {
+        role,
       });
     }
   }

@@ -441,6 +441,10 @@ export const makeSensorHealth = (
     reportTimeoutMs?: number;
     dailyReminderMs?: number;
     logger?: LoggerService;
+    /** Probe-decided recovery hook (issue 2 review round 1, F1). */
+    onRecovery?: SensorHealthOptions["onRecovery"];
+    /** Calibration map applied before a valid value is retained (F5). */
+    calibrate?: SensorHealthOptions["calibrate"];
   },
 ): SensorHealthMonitor =>
   new SensorHealthMonitor({
@@ -453,6 +457,8 @@ export const makeSensorHealth = (
     readReport: deps.readReport,
     reportTimeoutMs: deps.reportTimeoutMs,
     dailyReminderMs: deps.dailyReminderMs,
+    onRecovery: deps.onRecovery,
+    calibrate: deps.calibrate,
     logger: deps.logger ?? new LoggerService("test.sensor-health"),
   });
 

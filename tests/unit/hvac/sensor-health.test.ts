@@ -57,6 +57,8 @@ const fixture = (deps: {
   readReport?: Parameters<typeof makeSensorHealth>[1]["readReport"];
   reportTimeoutMs?: number;
   dailyReminderMs?: number;
+  onRecovery?: Parameters<typeof makeSensorHealth>[1]["onRecovery"];
+  calibrate?: Parameters<typeof makeSensorHealth>[1]["calibrate"];
 } = {}): Fixture => {
   setSystemTime(BASE_DATE);
   const clock = new FakeClock();
@@ -68,6 +70,8 @@ const fixture = (deps: {
     readReport: deps.readReport,
     reportTimeoutMs: deps.reportTimeoutMs,
     dailyReminderMs: deps.dailyReminderMs,
+    onRecovery: deps.onRecovery,
+    calibrate: deps.calibrate,
   });
 
   return {
@@ -461,5 +465,285 @@ describe("Issue 2 - notification failures never break control", () => {
     f.monitor.dispose();
     f.advance(48 * 60 * 60_000);
     expect(f.notifier.messages.length).toBe(before);
+  });
+});
+
+/**
+ * Review round 1 (t_6269b36c) regression pins: F1/F2/F5/F6.
+ *
+ * F1: the approved recovery also covers sensors that resume reporting the SAME
+ * value (state_reported traffic with an advancing last_reported): the probe
+ * cycle keeps running while a fault is active, so a probe-detected fresh, valid
+ * report ends degraded mode with exactly one recovery notification.
+ * F2: a thrown probe is inconclusive - retried with backoff before the sensor
+ * can be declared silent.
+ * F5: the retained outdoor fallback stores the calibrated value.
+ * F6: a fault reason change is updated in place without a second onset alert.
+ */
+describe("Issue 2 review round 1 - probe-detected recovery without a value change", () => {
+  test("a sensor that resumes reporting the SAME value recovers through the probe channel", async () => {
+    let probeCalls = 0;
+    let reportedAt = BASE_DATE;
+    const f = setup({
+      reportTimeoutMs: 30 * 60_000,
+      readReport: async (role, entityId) => {
+        probeCalls += 1;
+        return {
+          entityId,
+          rawState: role === "hall" ? "18.0" : "7.0",
+          reportedAt,
+        };
+      },
+    });
+
+    f.monitor.report("hall", {
+      entityId: "sensor.hall",
+      rawState: "18.0",
+      reportedAt: reportedAt,
+    });
+
+    // The sensor goes silent (last_reported stops advancing): silent fault.
+    f.advance(31 * 60_000);
+    await flush();
+    expect(probeCalls).toBe(1);
+    expect(f.monitor.isDegraded("hall")).toBe(true);
+    expect(f.monitor.sensorState("hall").reason).toBe("silent");
+    const alertsBefore = f.notifier.messages.length;
+    expect(alertsBefore).toBe(1);
+
+    // The sensor resumes reporting the SAME value: last_reported advances again
+    // but state_changed never fires, so only the probe can see the recovery.
+    reportedAt = new Date(reportedAt.getTime() + 35 * 60_000);
+    f.advance(31 * 60_000);
+    await flush();
+
+    expect(probeCalls).toBeGreaterThan(1); // the probe cycle survived the fault
+    expect(f.monitor.isDegraded("hall")).toBe(false);
+    // Exactly one recovery notification - no fault, no reminder churn either.
+    expect(f.notifier.messages.length).toBe(alertsBefore + 1);
+    expect(f.notifier.messages.at(-1)).toContain("recovered");
+  });
+
+  test("a probe-detected recovery is evaluated exactly once via the recovery hook", async () => {
+    let reportedAt = BASE_DATE;
+    const recoveries: Array<{ role: string; value: number }> = [];
+    const f = setup({
+      reportTimeoutMs: 30 * 60_000,
+      onRecovery: (role, value) => recoveries.push({ role, value }),
+      readReport: async (role, entityId) => {
+        return { entityId, rawState: role === "hall" ? "18.0" : "7.0", reportedAt };
+      },
+    });
+
+    f.monitor.report("hall", {
+      entityId: "sensor.hall",
+      rawState: "18.0",
+      reportedAt,
+    });
+
+    // Silent fault ... then recovery on the same value via the probe.
+    f.advance(31 * 60_000);
+    await flush();
+    reportedAt = new Date(reportedAt.getTime() + 35 * 60_000);
+    f.advance(31 * 60_000);
+    await flush();
+
+    expect(f.monitor.isDegraded("hall")).toBe(false);
+    expect(recoveries).toEqual([{ role: "hall", value: 18 }]);
+
+    // Staying healthy: further probe cycles never re-run recovery.
+    const recoveriesCount = recoveries.length;
+    for (let i = 0; i < 3; i++) {
+      reportedAt = new Date(reportedAt.getTime() + 35 * 60_000);
+      f.advance(31 * 60_000);
+      await flush();
+    }
+    expect(recoveries.length).toBe(recoveriesCount);
+  });
+
+  test("a value-change recovery (sensor change event) also fires the recovery hook exactly once", () => {
+    const recoveries: Array<{ role: string; value: number }> = [];
+    const f = setup({ onRecovery: (role, value) => recoveries.push({ role, value }) });
+
+    f.monitor.report("hall", {
+      entityId: "sensor.hall",
+      rawState: "unavailable",
+      reportedAt: f.at(0),
+    });
+    f.monitor.report("hall", {
+      entityId: "sensor.hall",
+      rawState: "18.5",
+      reportedAt: f.at(60_000),
+    });
+
+    expect(recoveries).toEqual([{ role: "hall", value: 18.5 }]);
+    expect(f.notifier.messages.length).toBe(2); // fault, recovery
+  });
+});
+
+describe("Issue 2 review round 1 - probe failures are inconclusive, not silent", () => {
+  test("a thrown probe is retried with a 60 s backoff before the silent fault", async () => {
+    let probeCalls = 0;
+    const f = setup({
+      reportTimeoutMs: 30 * 60_000,
+      readReport: async () => {
+        probeCalls += 1;
+        throw new Error("simulated REST read failure");
+      },
+    });
+    f.monitor.report("hall", {
+      entityId: "sensor.hall",
+      rawState: "18.0",
+      reportedAt: f.at(0),
+    });
+
+    // First timeout: the probe throws - inconclusive, NO silent fault yet.
+    f.advance(31 * 60_000);
+    await flush();
+    expect(probeCalls).toBe(1);
+    expect(f.monitor.isDegraded("hall")).toBe(false);
+    expect(f.notifier.messages).toEqual([]);
+
+    // The retry comes quickly (backoff, not another full timeout interval) ...
+    const delays = f.clock.pendingDelays();
+    expect(delays).toContain(60_000);
+
+    // ... and a recovered probe keeps the sensor healthy forever.
+    // (Replace the throwing probe: evidence never said the sensor was stale.)
+  });
+
+  test("a sensor whose probe keeps succeeding with an advancing timestamp never faults through retry", async () => {
+    let reportedAt = BASE_DATE;
+    const throwing = { value: true };
+    const f = setup({
+      reportTimeoutMs: 30 * 60_000,
+      readReport: async (role, entityId) => {
+        if (throwing.value) throw new Error("simulated REST read failure");
+        return { entityId, rawState: role === "hall" ? "18.0" : "7.0", reportedAt };
+      },
+    });
+    f.monitor.report("hall", {
+      entityId: "sensor.hall",
+      rawState: "18.0",
+      reportedAt,
+    });
+
+    // Timeout instant: probe fails, retry at the 60 s backoff.
+    f.advance(31 * 60_000);
+    await flush();
+    throwing.value = false;
+    // The 60 s retry probe succeeds and sees a fresher report.
+    reportedAt = new Date(reportedAt.getTime() + 32 * 60_000);
+    f.advance(90_000);
+    await flush();
+
+    expect(f.monitor.isDegraded("hall")).toBe(false);
+    expect(f.notifier.messages).toEqual([]);
+
+    // Crossing later_timeout intervals with successful probes stays healthy.
+    throwing.value = false;
+    reportedAt = new Date(reportedAt.getTime() + 2 * 31 * 60_000);
+    f.advance(2 * 31 * 60_000);
+    await flush();
+    expect(f.monitor.isDegraded("hall")).toBe(false);
+  });
+
+  test("a sensor that is genuinely still not reporting IS declared silent after the retry", async () => {
+    const reportedAt = BASE_DATE;
+    const f = setup({
+      reportTimeoutMs: 30 * 60_000,
+      // The probe works but confirms the SAME stale report every time.
+      readReport: async (role, entityId) => {
+        return { entityId, rawState: role === "hall" ? "18.0" : "7.0", reportedAt };
+      },
+    });
+    f.monitor.report("hall", {
+      entityId: "sensor.hall",
+      rawState: "18.0",
+      reportedAt,
+    });
+
+    f.advance(31 * 60_000);
+    await flush();
+    expect(f.monitor.isDegraded("hall")).toBe(true);
+    expect(f.monitor.sensorState("hall").reason).toBe("silent");
+  });
+});
+
+describe("Issue 2 review round 1 - the retained fallback stores the calibrated value", () => {
+  test("effectiveOutdoorTemp and lastValidHallTemp carry the calibration offset", () => {
+    const f = setup({
+      calibrate: (role, value) => (role === "hall" ? value + 0.8 : value - 0.5),
+    });
+
+    f.monitor.report("hall", {
+      entityId: "sensor.hall",
+      rawState: "18.0",
+      reportedAt: f.at(0),
+    });
+    f.monitor.report("outdoor", {
+      entityId: "sensor.outdoor",
+      rawState: "7.5",
+      reportedAt: f.at(0),
+    });
+
+    expect(f.monitor.effectiveOutdoorTemp().value).toBe(7.0);
+    expect(f.monitor.lastValidHallTemp()).toBe(18.8);
+
+    // After the outdoor sensor fails, the retained fallback is calibrated too.
+    f.monitor.report("outdoor", {
+      entityId: "sensor.outdoor",
+      rawState: "unavailable",
+      reportedAt: f.at(60_000),
+    });
+    expect(f.monitor.effectiveOutdoorTemp()).toEqual({
+      value: 7.0,
+      staleFallback: true,
+    });
+  });
+
+  test("without a calibration hook the parsed value is stored as before", () => {
+    const f = setup();
+    f.monitor.report("outdoor", {
+      entityId: "sensor.outdoor",
+      rawState: "7.5",
+      reportedAt: f.at(0),
+    });
+    expect(f.monitor.effectiveOutdoorTemp().value).toBe(7.5);
+  });
+});
+
+describe("Issue 2 review round 1 - fault reason changes update in place", () => {
+  test("a silent -> invalid change updates the reason without a second onset alert", async () => {
+    const f = setup();
+    f.monitor.report("hall", {
+      entityId: "sensor.hall",
+      rawState: "18.0",
+      reportedAt: f.at(0),
+    });
+
+    // Silent onset.
+    f.advance(31 * 60_000);
+    await flush();
+    expect(f.monitor.sensorState("hall").reason).toBe("silent");
+    expect(f.notifier.messages.length).toBe(1);
+
+    // The sensor starts returning garbage while still reporting.
+    f.monitor.report("hall", {
+      entityId: "sensor.hall",
+      rawState: "unavailable",
+      reportedAt: f.at(32 * 60_000),
+    });
+    expect(f.monitor.isDegraded("hall")).toBe(true);
+    // Reason updated in place: status() does not keep the stale reason.
+    expect(f.monitor.sensorState("hall").reason).toBe("invalid");
+    expect(
+      f.monitor.status().sources.map((s) => ({ source: s.source, reason: s.reason })),
+    ).toEqual([{ source: "hall", reason: "invalid" }]);
+    // No second onset alert; the episode `since` stays at the silent onset
+    // (the 30-min timeout instant: FakeClock fires timers at their due time).
+    expect(f.notifier.messages.length).toBe(1);
+    const seen = f.monitor.sensorState("hall");
+    expect(new Date(seen.faultSince!).getTime()).toBe(baseMs + 30 * 60_000);
   });
 });

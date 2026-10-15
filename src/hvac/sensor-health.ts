@@ -83,10 +83,31 @@ export interface SensorHealthOptions {
     role: SensorRole,
     entityId: string,
   ) => Promise<SensorReport | undefined>;
+  /**
+   * Called exactly once per recovery with the first confirmed fresh, valid
+   * value that ended degraded mode. The monitor itself never evaluates HVAC
+   * rules; the controller uses this to route a probe-detected recovery (a
+   * fresh report is not a state change, so no `state_changed` event follows)
+   * into the same evaluation the ordinary sensor-change path performs.
+   */
+  onRecovery?: (role: SensorRole, validValue: number) => void;
+  /**
+   * Calibration applied to a valid parsed reading before it is retained as the
+   * last-valid value / fallback. Live evaluations calibrate fresh readings the
+   * same way, so the retained fallback must never use the raw value.
+   */
+  calibrate?: (role: SensorRole, value: number) => number;
 }
 
 export const DEFAULT_SENSOR_REPORT_TIMEOUT_MS = 30 * 60 * 1000;
 export const DEFAULT_DAILY_REMINDER_MS = 24 * 60 * 60 * 1000;
+/**
+ * Backoff between freshness probe retries: a single failed REST read at the
+ * timeout instant is inconclusive, not evidence of silence. The retry fires
+ * long before the next full reporting timeout would, so a healthy-but-unchanged
+ * sensor is re-checked quickly and is not declared silent on the throw.
+ */
+export const PROBE_RETRY_BACKOFF_MS = 60 * 1000;
 
 const schedulerOrDefault: Scheduler = {
   setTimeout: (fn, ms) => setTimeout(fn, ms),
@@ -123,6 +144,11 @@ interface RoleRecord {
   fault?: { reason: SensorFaultReason; since: number };
   timeoutTimer?: unknown;
   reminderTimer?: unknown;
+  /**
+   * Set when the last freshness probe failed and the check was inconclusive:
+   * the next probe decides the fault instead of a single thrown REST read.
+   */
+  probeRetryArmed?: boolean;
 }
 
 interface ConnectionFault {
@@ -139,6 +165,8 @@ export class SensorHealthMonitor {
   private readonly logger: LoggerService;
   private readonly nowFn: () => number;
   private readonly readReport?: SensorHealthOptions["readReport"];
+  private readonly onRecovery?: SensorHealthOptions["onRecovery"];
+  private readonly calibrate?: SensorHealthOptions["calibrate"];
   private disposed = false;
 
   constructor(private readonly options: SensorHealthOptions) {
@@ -150,6 +178,8 @@ export class SensorHealthMonitor {
     this.logger = options.logger;
     this.nowFn = options.now ?? (() => Date.now());
     this.readReport = options.readReport;
+    this.onRecovery = options.onRecovery;
+    this.calibrate = options.calibrate;
     this.records = {
       hall: { role: "hall", entityId: options.entityIds.hall },
       outdoor: { role: "outdoor", entityId: options.entityIds.outdoor },
@@ -201,9 +231,12 @@ export class SensorHealthMonitor {
       return;
     }
 
-    record.lastValidValue = value;
+    // The retained value is stored calibrated: live evaluations calibrate fresh
+    // readings, so the fallback must not silently diverge from them.
+    const stored = this.calibrate ? this.calibrate(role, value) : value;
+    record.lastValidValue = stored;
     record.lastValidAt = at;
-    this.recover(role, value);
+    this.recover(role, stored);
   }
 
   // -------------------------------------------------------------------------
@@ -230,7 +263,18 @@ export class SensorHealthMonitor {
     const record = this.records[role];
     if (record.fault) {
       // One alert per fault episode - a persisting fault is not re-announced
-      // on every evaluation (the daily reminder covers persistence).
+      // on every evaluation (the daily reminder covers persistence). A reason
+      // change is updated in place (the alerts use the current reason), still
+      // without a second onset alert and without resetting the episode start.
+      if (record.fault.reason !== reason) {
+        this.logger.warning("🚨 Sensor fault reason changed", {
+          role,
+          entityId: record.entityId,
+          previousReason: record.fault.reason,
+          reason,
+        });
+        record.fault.reason = reason;
+      }
       return;
     }
 
@@ -256,6 +300,7 @@ export class SensorHealthMonitor {
 
     const faultedForMs = this.nowFn() - record.fault.since;
     record.fault = undefined;
+    record.probeRetryArmed = undefined;
     this.clearReminderTimer(record);
 
     this.logger.info("✅ Sensor recovered - leaving degraded mode", {
@@ -266,6 +311,10 @@ export class SensorHealthMonitor {
     });
 
     this.notify(this.recoveryMessage(role, value));
+    // The evaluation itself is not the monitor's business: the controller
+    // routes a probe-detected recovery (no state_changed event exists for it)
+    // into the same evaluation an ordinary sensor change gets.
+    this.onRecovery?.(role, value);
   }
 
   /** Home Assistant became unreachable: alert once, never claim success. */
@@ -335,32 +384,59 @@ export class SensorHealthMonitor {
    * Reporting timeout elapsed: ask Home Assistant for the sensor's current
    * report timestamp before declaring a silent fault. A sensor that keeps
    * reporting the same value therefore stays healthy.
+   *
+   * The probe cycle also runs while a fault is active: HA `state_changed`
+   * fires only on value changes, so a sensor that resumes reporting the SAME
+   * value (last_reported advancing) is otherwise invisible and degraded mode
+   * would stick. A probe-detected fresh, valid report recovers through
+   * `report()` -> `recover()` (which also fires the recovery evaluation hook).
    */
   private async checkFreshness(role: SensorRole): Promise<void> {
     if (this.disposed) return;
     const record = this.records[role];
-    if (record.fault) return;
 
     if (this.readReport) {
+      let probed = false;
       try {
         const latest = await this.readReport(role, record.entityId);
         if (latest) this.report(role, latest);
+        probed = true;
       } catch (error) {
         this.logger.debug("🔌 Sensor freshness probe failed", {
           role,
           error: error instanceof Error ? error.message : String(error),
         });
       }
+      if (this.disposed) return;
+
+      if (!probed && !record.fault && !record.probeRetryArmed) {
+        // A single thrown REST read is inconclusive, not evidence of silence:
+        // retry quickly (backoff) before the silent fault is declared.
+        record.probeRetryArmed = true;
+        this.clearTimeoutTimer(record);
+        record.timeoutTimer = this.scheduler.setTimeout(() => {
+          record.timeoutTimer = undefined;
+          void this.checkFreshness(record.role);
+        }, PROBE_RETRY_BACKOFF_MS);
+        return;
+      }
     }
 
-    if (this.disposed || record.fault) return;
+    if (this.disposed) return;
+    record.probeRetryArmed = undefined;
 
     const now = this.nowFn();
-    if (
+    const stale =
       record.lastReportAt === undefined ||
-      now - record.lastReportAt >= this.reportTimeoutMs
-    ) {
-      this.enterFault(role, "silent");
+      now - record.lastReportAt >= this.reportTimeoutMs;
+
+    if (stale) {
+      if (!record.fault) {
+        this.enterFault(role, "silent");
+      }
+      // While silent, keep the probe cycle alive so a resumed report (even a
+      // same-value one) is seen at the next timeout.
+      if (this.readReport) this.armTimeoutTimer(record);
       return;
     }
 

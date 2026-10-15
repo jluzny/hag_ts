@@ -70,6 +70,19 @@ export class HvacModule extends BaseModule {
           reportedAt: state.lastReported ?? state.lastUpdated,
         };
       },
+      // A probe-detected recovery (a fresh report is no state_changed event)
+      // must still reevaluate the normal heating rules exactly once.
+      onRecovery: (role, value) => {
+        void this.controller?.handleSensorRecovery(role, value);
+      },
+      // Retained fallback values go through the same calibration the live
+      // readings use (fallback eligibility must not diverge from live).
+      calibrate: (role, value) => {
+        const sensorId =
+          role === "hall" ? hvacOptions.tempSensor : hvacOptions.outdoorSensor;
+        const offset = hvacOptions.temperatureCalibration?.[sensorId];
+        return offset === undefined ? value : value + offset;
+      },
     });
 
     // Create instances with injected dependencies
