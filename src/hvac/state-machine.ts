@@ -395,6 +395,60 @@ export class HVACStrategy {
     return shouldCool;
   }
 
+  /**
+   * Continuation semantics for an already-running heating cycle.
+   *
+   * The outdoor operating range gates heating *starts*; it must not stop a
+   * cycle that is already running. `true` therefore means: this evaluation no
+   * longer qualifies for a heating start, no stop condition applies either, and
+   * the machine may stay in `heating` without issuing new commands (the running
+   * units keep their existing targets — settings are not rewritten just to hold
+   * the cycle).
+   *
+   * It returns `false` (the ordinary paths decide) when:
+   *  - the evaluation is start-eligible (`shouldHeat`): the ordinary heating
+   *    path re-asserts the settings and applies room selection;
+   *  - the schedule window has closed: the schedule cutoff stays binding;
+   *  - the indoor stop threshold (indoorMax) has been reached: the turn-off
+   *    path ends the cycle with explicit off commands;
+   *  - cooling demand takes precedence.
+   *
+   * An out-of-range outdoor reading, an in-band indoor reading and a
+   * temporarily unreadable sensor are deliberately *not* stop conditions.
+   */
+  public shouldContinueHeating(data: StateChangeData): boolean {
+    const thresholds = this.hvacOptions.heating.temperatureThresholds;
+
+    // Start-eligible evaluations belong to the ordinary heating path.
+    if (this.shouldHeat(data)) return false;
+
+    // Schedule cutoff: the cycle must not survive the active-hours window.
+    if (!this.isActiveHour(data.hour, data.isWeekday)) return false;
+
+    // Indoor stop threshold reached: the cycle is over (and the turn-off path
+    // commands the units off, regardless of outdoor start eligibility).
+    if (
+      Number.isFinite(data.currentTemp) &&
+      data.currentTemp >= thresholds.indoorMax
+    ) {
+      return false;
+    }
+
+    // Cooling demand takes precedence over a running heating cycle.
+    if (this.shouldCool(data)) return false;
+
+    this.logger.debug("🔥 Heating cycle continues", {
+      currentTemp: `${data.currentTemp}°C`,
+      outdoorTemp: `${data.weatherTemp}°C`,
+      hour: `${data.hour}:00 ${data.isWeekday ? "weekday" : "weekend"}`,
+      stopThreshold: `${thresholds.indoorMax}°C`,
+      reason:
+        "no start eligibility and no stop condition: the outdoor range gates starts, it does not end a running cycle (no commands sent)",
+    });
+
+    return true;
+  }
+
   private needsDefrost(data: StateChangeData): boolean {
     const defrost = this.hvacOptions.heating.defrost;
 
@@ -1048,6 +1102,17 @@ export function createHVACMachine(
                 target: "defrosting",
                 guard: "canDefrost",
               },
+              // Continuation: a running heating cycle survives an evaluation
+              // that no longer qualifies for a start (outdoor range exit,
+              // indoor hysteresis band, temporarily unreadable sensor). This is
+              // an internal transition — no entry actions, no commands — so the
+              // running units keep their existing settings. Room-selection
+              // narrowing (issue 3) runs on the ordinary start-eligible path
+              // below, which stays unchanged.
+              {
+                guard: "heatingContinues",
+                actions: "logHeatingContinuation",
+              },
               {
                 target: "evaluating",
               },
@@ -1329,6 +1394,19 @@ export function createHVACMachine(
           logger.debug(
             "❄️ [HVAC] Defrost cycle continues - schedule/operating constraints still satisfied",
           );
+        },
+
+        // Continuation of a running heating cycle: deliberately no commands.
+        // The units keep their existing targets/settings, so the cycle is not
+        // held by rewriting them.
+        logHeatingContinuation: ({ context }) => {
+          logger.info("🔥 [HVAC] Heating cycle continues", {
+            indoorTemp: context.indoorTemp,
+            outdoorTemp: context.outdoorTemp,
+            hour: `${context.currentHour}:00 ${context.isWeekday ? "weekday" : "weekend"}`,
+            reason:
+              "no stop condition applied and the evaluation is not start-eligible (outdoor range exit / indoor hysteresis band / unreadable reading); running settings kept, no commands sent",
+          });
         },
 
 
@@ -1803,6 +1881,37 @@ export function createHVACMachine(
          */
         defrostCanContinue: ({ context }) =>
           hvacStrategy.isActiveHour(context.currentHour, context.isWeekday),
+
+        /**
+         * Continuation guard used from the `heating` state only: an already
+         * running heating cycle may stay in `heating` when an evaluation no
+         * longer qualifies for a start but no stop condition applies. Manual
+         * decisions and non-AUTO system modes keep the pre-existing paths.
+         */
+        heatingContinues: ({ context }) => {
+          if (context.systemMode !== SystemMode.AUTO) return false;
+          // Manual overrides keep their own (re-asserting) path.
+          if (context.manualOverride) return false;
+
+          const continues = hvacStrategy.shouldContinueHeating({
+            // Unreadable readings are passed through: they are not a reason to
+            // end a running cycle (issue 2 owns the fallback policy).
+            currentTemp: context.indoorTemp ?? NaN,
+            weatherTemp: context.outdoorTemp ?? NaN,
+            hour: context.currentHour,
+            isWeekday: context.isWeekday,
+          });
+
+          logger.debug("🔍 Heating continuation guard evaluation", {
+            continues,
+            indoorTemp: context.indoorTemp,
+            outdoorTemp: context.outdoorTemp,
+            reason: continues
+              ? "Running heating cycle continues - no stop condition applies"
+              : "Ordinary evaluation decides",
+          });
+          return continues;
+        },
 
         shouldTurnOff: ({ context }) => {
           // Don't turn off if manual override is active
