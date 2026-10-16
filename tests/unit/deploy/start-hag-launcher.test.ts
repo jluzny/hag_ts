@@ -147,8 +147,20 @@ function createSandbox(options: SandboxOptions = {}): Sandbox {
 function runLauncher(
   sandbox: Sandbox,
   extraEnv: Record<string, string> = {},
+  outputFile?: string,
 ) {
-  return spawnSync("sh", [LAUNCHER], {
+  // With `outputFile`, the launcher's stdout/stderr belong to a regular file
+  // that the launcher's backgrounded `bun ... | tee` pipeline also inherits.
+  // That is the portable way to wait on this contract: bun 1.2.19 (the
+  // deployment host) returns from spawnSync while the pipeline is still
+  // running, and when the caller's read end is a pipe, `tee` can die before it
+  // finishes writing. With a regular file the pipeline keeps its output
+  // descriptor regardless of when the parent returns, so the tests can poll
+  // for the settled outcome instead of trusting spawnSync's return time.
+  const args = outputFile
+    ? ["-c", 'exec sh "$1" >"$2" 2>&1', "sh", LAUNCHER, outputFile]
+    : [LAUNCHER];
+  return spawnSync("sh", args, {
     cwd: sandbox.dir,
     encoding: "utf8",
     timeout: 15_000,
@@ -188,6 +200,29 @@ function recordContents(sandbox: Sandbox): Record<string, string> {
     if (index > 0) record[line.slice(0, index)] = line.slice(index + 1);
   }
   return record;
+}
+
+/** All keys the fake bun writes into the record file. */
+const RECORD_KEYS = [
+  "argv",
+  "cwd",
+  "ha_token_present",
+  "telegram_token_present",
+] as const;
+
+/**
+ * True once the record file holds every key, not merely once it exists. On the
+ * deployment host spawnSync can return while the record is still being written,
+ * so reading it right after the file appears can observe a partial write.
+ */
+function recordIsComplete(sandbox: Sandbox): boolean {
+  try {
+    if (!existsSync(sandbox.recordPath)) return false;
+    const record = recordContents(sandbox);
+    return RECORD_KEYS.every((key) => record[key] !== undefined);
+  } catch {
+    return false;
+  }
 }
 
 describe("tracked production launcher", () => {
@@ -283,15 +318,34 @@ describe("launcher runtime contract (sandboxed, offline)", () => {
       telegramToken: FAKE_TELEGRAM_TOKEN,
     });
 
-    const result = runLauncher(sandbox);
+    // The launcher's stdout/stderr go to a regular file the pipeline inherits,
+    // so the backgrounded `bun ... | tee` keeps its descriptors no matter when
+    // spawnSync returns. The test then waits for the settled outcome — a
+    // complete record plus a tee-written log. Both waits share a single
+    // deadline so the whole test fits inside the repo's `--timeout 1000`
+    // budget with headroom, even when the first wait spends most of the
+    // budget before the second one starts.
+    const launcherOutputPath = join(sandbox.dir, "launcher-output.txt");
+    const result = runLauncher(sandbox, {}, launcherOutputPath);
 
     expect(result.status).toBe(0);
+    // With the `outputFile` redirect these assertions are formally vacuous:
+    // the launcher's stdout/stderr belong to the output file, so spawnSync
+    // captures almost none of it. They are kept as a guard for the case where
+    // the redirect itself fails; the launcher output file and the tee-written
+    // log are both checked below, and those are where non-echoing is proven.
     expect(`${result.stdout}${result.stderr}`).not.toContain(FAKE_HA_TOKEN);
     expect(`${result.stdout}${result.stderr}`).not.toContain(
       FAKE_TELEGRAM_TOKEN,
     );
 
-    expect(await waitFor(() => existsSync(sandbox.recordPath))).toBe(true);
+    const outcomeDeadline = Date.now() + 450;
+    expect(
+      await waitFor(
+        () => recordIsComplete(sandbox),
+        outcomeDeadline - Date.now(),
+      ),
+    ).toBe(true);
     const record = recordContents(sandbox);
 
     expect(record.argv).toBe(
@@ -308,9 +362,14 @@ describe("launcher runtime contract (sandboxed, offline)", () => {
         return readFileSync(sandbox.logPath, "utf8").includes(
           "fake-bun-started",
         );
-      }),
+      }, outcomeDeadline - Date.now()),
     ).toBe(true);
     const log = readFileSync(sandbox.logPath, "utf8");
+    // The launcher's output was kept in a file, not a pipe; it is checked here
+    // with the log so both channels prove the run never echoed a token.
+    const launcherOutput = readFileSync(launcherOutputPath, "utf8");
+    expect(launcherOutput).not.toContain(FAKE_HA_TOKEN);
+    expect(launcherOutput).not.toContain(FAKE_TELEGRAM_TOKEN);
     expect(log).not.toContain(FAKE_HA_TOKEN);
     expect(log).not.toContain(FAKE_TELEGRAM_TOKEN);
   });
@@ -341,9 +400,12 @@ describe("launcher runtime contract (sandboxed, offline)", () => {
     });
 
     expect(result.status).toBe(0);
-    expect(await waitFor(() => existsSync(sandbox.recordPath))).toBe(true);
-    expect(recordContents(sandbox).ha_token_present).toBe("yes");
-    expect(recordContents(sandbox).telegram_token_present).toBe("");
+    // Same race as the main runtime test: the record may still be mid-write
+    // when spawnSync returns, so wait for the complete record, not the file.
+    expect(await waitFor(() => recordIsComplete(sandbox), 450)).toBe(true);
+    const record = recordContents(sandbox);
+    expect(record.ha_token_present).toBe("yes");
+    expect(record.telegram_token_present).toBe("");
   });
 
   test("fails clearly when the bun runtime is missing", () => {
@@ -454,7 +516,11 @@ describe("credential migration recipe rehearsal", () => {
       HAG_TELEGRAM_ENV_FILE: sandbox.telegramEnvPath,
     });
     expect(live.status).toBe(0);
-    expect(await waitFor(() => existsSync(sandbox.recordPath))).toBe(true);
+    // Same mid-write race as the runtime tests above: spawnSync can return
+    // while the fake bun is still writing the record, so wait for the
+    // complete record — reading right after the file merely appears can
+    // observe a partial write.
+    expect(await waitFor(() => recordIsComplete(sandbox), 450)).toBe(true);
     expect(recordContents(sandbox).ha_token_present).toBe("yes");
   });
 });
