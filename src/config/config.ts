@@ -226,6 +226,13 @@ export const SensorHealthOptionsSchema = z
       .describe(
         "Hours between repeat reminders while a sensor fault persists (one reminder per interval, never per evaluation).",
       ),
+    notificationGraceMinutes: z
+      .number()
+      .min(0)
+      .default(60)
+      .describe(
+        "Approved notification debounce: minutes a fault episode (hall sensor, outdoor sensor or the Home Assistant connection) must persist continuously after detection before the initial alert is sent. Detection, logging and degraded mode stay immediate; an episode that resolves inside the window sends neither a fault nor a recovery message. 0 disables the debounce (alert immediately).",
+      ),
   })
   .optional()
   .describe("Hall/outdoor sensor failure detection and alert timing");

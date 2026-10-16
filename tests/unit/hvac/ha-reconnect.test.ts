@@ -152,6 +152,10 @@ const start = async (
   const monitor = makeSensorHealth(hvacOptions, {
     clock: new FakeClock(),
     notifier,
+    // These tests pin the reconnect path (alert on loss, recovery on
+    // reconnect), not the notification debounce: alert immediately. The grace
+    // window has its own tests in sensor-health.test.ts.
+    notificationGraceMs: 0,
   });
   const machine = new HVACStateMachine(hvacOptions, client, monitor);
   const controller = new HVACController(

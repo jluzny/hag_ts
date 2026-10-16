@@ -70,6 +70,10 @@ export class HVACController {
           this.hvacOptions.sensorHealth?.dailyReminderHours !== undefined
             ? this.hvacOptions.sensorHealth.dailyReminderHours * 60 * 60 * 1000
             : undefined,
+        notificationGraceMs:
+          this.hvacOptions.sensorHealth?.notificationGraceMinutes !== undefined
+            ? this.hvacOptions.sensorHealth.notificationGraceMinutes * 60 * 1000
+            : undefined,
         logger: this.logger,
         // Freshness evidence is Home Assistant's own report timestamp. Reading
         // it re-asks HA for its stored report time; it is never treated as a

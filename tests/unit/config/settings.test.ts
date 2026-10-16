@@ -403,4 +403,59 @@ describe("Entity validation", () => {
 
     expect(() => HvacOptionsSchema.parse(invalidEntity)).toThrow(ZodError);
   });
+
+  test("the sensor-health notification grace is configurable and defaults to one hour", () => {
+    const base = {
+      tempSensor: "sensor.indoor_temperature",
+      outdoorSensor: "sensor.outdoor_temperature",
+      systemMode: SystemMode.AUTO,
+      hvacEntities: [],
+      heating: {
+        temperature: 21.0,
+        presetMode: "comfort",
+        temperatureThresholds: {
+          indoorMin: 19.0,
+          indoorMax: 22.0,
+          outdoorMin: -10.0,
+          outdoorMax: 15.0,
+        },
+      },
+      cooling: {
+        temperature: 24.0,
+        presetMode: "eco",
+        temperatureThresholds: {
+          indoorMin: 23.0,
+          indoorMax: 26.0,
+          outdoorMin: 10.0,
+          outdoorMax: 45.0,
+        },
+      },
+    };
+
+    // Approved default: the onset fault alert waits one hour.
+    const defaults = HvacOptionsSchema.parse({ ...base, sensorHealth: {} });
+    expect(defaults.sensorHealth?.notificationGraceMinutes).toBe(60);
+    // The other sensor-health timings keep their approved defaults.
+    expect(defaults.sensorHealth?.reportTimeoutMs).toBe(30 * 60 * 1000);
+    expect(defaults.sensorHealth?.dailyReminderHours).toBe(24);
+
+    const configured = HvacOptionsSchema.parse({
+      ...base,
+      sensorHealth: { notificationGraceMinutes: 15 },
+    });
+    expect(configured.sensorHealth?.notificationGraceMinutes).toBe(15);
+
+    // 0 disables the debounce (alert immediately); negative values are invalid.
+    const immediate = HvacOptionsSchema.parse({
+      ...base,
+      sensorHealth: { notificationGraceMinutes: 0 },
+    });
+    expect(immediate.sensorHealth?.notificationGraceMinutes).toBe(0);
+    expect(() =>
+      HvacOptionsSchema.parse({
+        ...base,
+        sensorHealth: { notificationGraceMinutes: -1 },
+      }),
+    ).toThrow(ZodError);
+  });
 });

@@ -59,6 +59,10 @@ export class HvacModule extends BaseModule {
         hvacOptions.sensorHealth?.dailyReminderHours !== undefined
           ? hvacOptions.sensorHealth.dailyReminderHours * 60 * 60 * 1000
           : undefined,
+      notificationGraceMs:
+        hvacOptions.sensorHealth?.notificationGraceMinutes !== undefined
+          ? hvacOptions.sensorHealth.notificationGraceMinutes * 60 * 1000
+          : undefined,
       notifier: selectNotifier(hvacOptions.alerts, this.logger!),
       logger: this.logger!,
       // Freshness evidence is Home Assistant's own report timestamp.

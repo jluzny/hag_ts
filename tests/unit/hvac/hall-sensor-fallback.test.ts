@@ -60,6 +60,10 @@ const scaffold = (
         clock,
         notifier,
         readReport: deps.readReport,
+        // These tests describe the fallback/control behaviour, not the
+        // notification debounce: alert immediately (the grace window has its
+        // own tests in sensor-health.test.ts).
+        notificationGraceMs: 0,
       })),
   });
 

@@ -15,8 +15,13 @@
  *    indefinitely (no expiry) for heating start eligibility and room
  *    selection, and always labelled as stale fallback data — never relabelled
  *    fresh;
- *  - alerts: one per fault onset, one daily reminder while the fault persists,
- *    one recovery notification. Exactly one of each, no per-evaluation spam.
+ *  - alerts: the initial alert for a fault episode is sent only once the same
+ *    episode has been continuously active for the configured notification
+ *    grace (approved default: one hour) *after detection* — a fault that
+ *    resolves inside the window produces neither a fault nor a recovery
+ *    message. Once the onset alert has been issued: one daily reminder while
+ *    the fault persists (cadence anchored to the sent onset) and one recovery
+ *    notification. Exactly one of each, no per-evaluation spam.
  *
  * Minimal by design: in-memory only, no persistence layer, no HVAC
  * evaluation is triggered from here. Timers exist only for fault/notification
@@ -69,6 +74,16 @@ export interface SensorHealthOptions {
   reportTimeoutMs?: number;
   /** Daily reminder interval while a fault persists. */
   dailyReminderMs?: number;
+  /**
+   * Notification grace window (approved policy): the initial fault alert for
+   * an episode is sent only once the same episode has been continuously
+   * active for this long *after detection*. A fault that resolves inside the
+   * window sends neither a fault nor a recovery message. `0` disables the
+   * debounce (alert immediately, the pre-policy behaviour).
+   *
+   * Detection, logging and degraded mode are unaffected: they stay immediate.
+   */
+  notificationGraceMs?: number;
   scheduler?: Scheduler;
   notifier?: Notifier;
   logger: LoggerService;
@@ -101,6 +116,14 @@ export interface SensorHealthOptions {
 
 export const DEFAULT_SENSOR_REPORT_TIMEOUT_MS = 30 * 60 * 1000;
 export const DEFAULT_DAILY_REMINDER_MS = 24 * 60 * 60 * 1000;
+/**
+ * Approved notification debounce: the initial Telegram fault alert (hall,
+ * outdoor or Home Assistant connection) is sent only when the same fault
+ * episode has been continuously active for one hour after detection. A fault
+ * that resolves inside the window is announced with neither a fault nor a
+ * recovery message. Detection, logging and degraded mode stay immediate.
+ */
+export const DEFAULT_NOTIFICATION_GRACE_MS = 60 * 60 * 1000;
 /**
  * Backoff between freshness probe retries: a single failed REST read at the
  * timeout instant is inconclusive, not evidence of silence. The retry fires
@@ -141,7 +164,7 @@ interface RoleRecord {
   lastReportAt?: number;
   lastValidValue?: number;
   lastValidAt?: number;
-  fault?: { reason: SensorFaultReason; since: number };
+  fault?: EpisodeFault;
   timeoutTimer?: unknown;
   reminderTimer?: unknown;
   /**
@@ -151,15 +174,45 @@ interface RoleRecord {
   probeRetryArmed?: boolean;
 }
 
-interface ConnectionFault {
+/**
+ * A fault episode and its notification state.
+ *
+ * The object identity is the episode identity: a stale timer callback or a
+ * late reason change can only ever act on the episode it was armed for
+ * (`record.fault === episode`), so a callback from a recovered or superseded
+ * episode can never send an alert.
+ */
+interface FaultEpisode {
   since: number;
+  /** Pending notification-grace timer for this episode's onset alert. */
+  graceTimer?: unknown;
+  /**
+   * Set when this episode survived the notification grace window and its onset
+   * alert was issued (with `notificationGraceMs` at or below zero: immediately
+   * at detection). Gates the recovery notification and the daily reminders, so
+   * a fault that resolved inside the grace window is announced with neither.
+   *
+   * Whether the transport actually delivered the message is the transport's
+   * own truth (`Notifier.send` never rejects; a failure is logged): the
+   * monitor never claims delivery, and it never retries a failed send, so a
+   * broken route cannot turn into alert spam.
+   */
+  alertIssued?: boolean;
 }
+
+interface EpisodeFault extends FaultEpisode {
+  reason: SensorFaultReason;
+}
+
+/** The Home Assistant connection outage is an episode without a reason. */
+type ConnectionFault = FaultEpisode;
 
 export class SensorHealthMonitor {
   private readonly records: Record<SensorRole, RoleRecord>;
   private connectionFault?: ConnectionFault;
   private readonly reportTimeoutMs: number;
   private readonly dailyReminderMs: number;
+  private readonly notificationGraceMs: number;
   private readonly scheduler: Scheduler;
   private readonly notifier: Notifier;
   private readonly logger: LoggerService;
@@ -173,6 +226,8 @@ export class SensorHealthMonitor {
     this.reportTimeoutMs =
       options.reportTimeoutMs ?? DEFAULT_SENSOR_REPORT_TIMEOUT_MS;
     this.dailyReminderMs = options.dailyReminderMs ?? DEFAULT_DAILY_REMINDER_MS;
+    this.notificationGraceMs =
+      options.notificationGraceMs ?? DEFAULT_NOTIFICATION_GRACE_MS;
     this.scheduler = options.scheduler ?? schedulerOrDefault;
     this.notifier = options.notifier ?? new NullNotifier();
     this.logger = options.logger;
@@ -248,7 +303,9 @@ export class SensorHealthMonitor {
    *
    * The `Notifier` contract is "send must never throw"; this also swallows a
    * rejected promise, so a failing transport cannot surface as an unhandled
-   * rejection (nor affect HVAC control) even if a transport misbehaves.
+   * rejection (nor affect HVAC control) even if a transport misbehaves. A
+   * failed delivery is reported as a failure and never claimed as delivered;
+   * it is not retried, so a broken route cannot become an alert loop.
    */
   private notify(message: string): void {
     this.notifier.send(message).catch((error) => {
@@ -263,9 +320,10 @@ export class SensorHealthMonitor {
     const record = this.records[role];
     if (record.fault) {
       // One alert per fault episode - a persisting fault is not re-announced
-      // on every evaluation (the daily reminder covers persistence). A reason
-      // change is updated in place (the alerts use the current reason), still
-      // without a second onset alert and without resetting the episode start.
+      // on every evaluation (the daily reminder covers persistence), and a
+      // reason change never restarts the notification grace window. The reason
+      // is updated in place (the alerts use the current reason) without a
+      // second onset alert and without resetting the episode start.
       if (record.fault.reason !== reason) {
         this.logger.warning("🚨 Sensor fault reason changed", {
           role,
@@ -278,7 +336,8 @@ export class SensorHealthMonitor {
       return;
     }
 
-    record.fault = { reason, since: this.nowFn() };
+    const fault: EpisodeFault = { reason, since: this.nowFn() };
+    record.fault = fault;
     this.logger.warning("🚨 Sensor fault detected - degraded mode", {
       role,
       entityId: record.entityId,
@@ -288,19 +347,25 @@ export class SensorHealthMonitor {
         record.lastReportAt !== undefined
           ? new Date(record.lastReportAt).toISOString()
           : "never",
+      // Approved notification policy: the alert waits for the grace window.
+      notificationGraceMs: this.notificationGraceMs,
     });
 
-    this.notify(this.faultMessage(role, reason));
-    this.armReminderTimer(record);
+    this.armGraceTimer(record, fault);
   }
 
   private recover(role: SensorRole, value: number): void {
     const record = this.records[role];
-    if (!record.fault) return;
+    const fault = record.fault;
+    if (!fault) return;
 
-    const faultedForMs = this.nowFn() - record.fault.since;
+    const faultedForMs = this.nowFn() - fault.since;
+    const alertIssued = !!fault.alertIssued;
     record.fault = undefined;
     record.probeRetryArmed = undefined;
+    // Timers die with the episode: a pending grace timer can no longer fire
+    // (its callback also re-checks the episode identity), nor can a reminder.
+    this.clearGraceTimer(fault);
     this.clearReminderTimer(record);
 
     this.logger.info("✅ Sensor recovered - leaving degraded mode", {
@@ -308,38 +373,116 @@ export class SensorHealthMonitor {
       entityId: record.entityId,
       value,
       faultedForMs,
+      alertIssued,
     });
 
-    this.notify(this.recoveryMessage(role, value));
+    // A fault that resolved inside the notification grace window was never
+    // announced: it gets neither a fault nor a recovery message.
+    if (alertIssued) this.notify(this.recoveryMessage(role, value));
     // The evaluation itself is not the monitor's business: the controller
     // routes a probe-detected recovery (no state_changed event exists for it)
     // into the same evaluation an ordinary sensor change gets.
     this.onRecovery?.(role, value);
   }
 
-  /** Home Assistant became unreachable: alert once, never claim success. */
+  /**
+   * Home Assistant became unreachable: detect immediately, alert only if the
+   * outage outlives the notification grace window.
+   */
   noteHaDisconnected(): void {
     if (this.disposed || this.connectionFault) return;
-    this.connectionFault = { since: this.nowFn() };
+    const fault: ConnectionFault = { since: this.nowFn() };
+    this.connectionFault = fault;
     this.logger.warning("🚨 Home Assistant connection lost", {
       reason:
         "commands cannot be confirmed and the schedule cutoff is not guaranteed while unreachable",
+      notificationGraceMs: this.notificationGraceMs,
     });
-    this.notify(
-      "HAG: Home Assistant connection lost — HVAC commands cannot be confirmed and the " +
-        "schedule cutoff is not guaranteed until the connection returns. Retrying.",
-    );
+    this.armConnectionGraceTimer(fault);
   }
 
   /** Home Assistant is reachable again: recovery notification. */
   noteHaConnected(): void {
     if (this.disposed || !this.connectionFault) return;
-    const outageMs = this.nowFn() - this.connectionFault.since;
+    const fault = this.connectionFault;
+    const outageMs = this.nowFn() - fault.since;
+    const alertIssued = !!fault.alertIssued;
     this.connectionFault = undefined;
-    this.logger.info("✅ Home Assistant reconnected", { outageMs });
+    this.clearGraceTimer(fault);
+    this.logger.info("✅ Home Assistant reconnected", { outageMs, alertIssued });
+    // An outage that ended inside the grace window was never announced: it gets
+    // neither an outage nor a recovery message.
+    if (!alertIssued) return;
     this.notify(
       "HAG: Home Assistant reconnected — reading actual device and sensor state and " +
         "reconciling with the current schedule.",
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Notification grace (the onset alert waits for a continuous episode)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Arm the onset alert for a fresh episode.
+   *
+   * The alert is only issued if the *same* episode is still active when the
+   * window closes: a recovery (or a new episode) clears this timer and makes
+   * the callback a no-op. `notificationGraceMs <= 0` disables the debounce and
+   * alerts immediately.
+   */
+  private armGraceTimer(record: RoleRecord, fault: EpisodeFault): void {
+    this.clearGraceTimer(fault);
+    if (this.notificationGraceMs <= 0) {
+      this.announceSensorOnset(record, fault);
+      return;
+    }
+    fault.graceTimer = this.scheduler.setTimeout(() => {
+      fault.graceTimer = undefined;
+      // Stale-callback guard: disposed, recovered or already superseded.
+      if (this.disposed || record.fault !== fault) return;
+      this.announceSensorOnset(record, fault);
+    }, this.notificationGraceMs);
+  }
+
+  private armConnectionGraceTimer(fault: ConnectionFault): void {
+    this.clearGraceTimer(fault);
+    if (this.notificationGraceMs <= 0) {
+      this.announceConnectionOutage(fault);
+      return;
+    }
+    fault.graceTimer = this.scheduler.setTimeout(() => {
+      fault.graceTimer = undefined;
+      if (this.disposed || this.connectionFault !== fault) return;
+      this.announceConnectionOutage(fault);
+    }, this.notificationGraceMs);
+  }
+
+  private clearGraceTimer(fault: FaultEpisode | undefined): void {
+    if (fault?.graceTimer !== undefined) {
+      this.scheduler.clearTimeout(fault.graceTimer);
+      fault.graceTimer = undefined;
+    }
+  }
+
+  /**
+   * Issue the onset alert for an episode that survived the grace window and
+   * start the reminder cadence anchored to this instant. Exactly one onset per
+   * episode.
+   */
+  private announceSensorOnset(record: RoleRecord, fault: EpisodeFault): void {
+    if (fault.alertIssued) return;
+    fault.alertIssued = true;
+    this.notify(this.faultMessage(record.role, fault.reason));
+    this.armReminderTimer(record, fault);
+  }
+
+  private announceConnectionOutage(fault: ConnectionFault): void {
+    if (fault.alertIssued) return;
+    fault.alertIssued = true;
+    this.notify(
+      "HAG: Home Assistant connection lost — HVAC commands cannot be confirmed and the " +
+        "schedule cutoff is not guaranteed until the connection returns. Retrying.",
     );
   }
 
@@ -362,14 +505,16 @@ export class SensorHealthMonitor {
     }
   }
 
-  private armReminderTimer(record: RoleRecord): void {
+  private armReminderTimer(record: RoleRecord, fault: EpisodeFault): void {
     this.clearReminderTimer(record);
     record.reminderTimer = this.scheduler.setTimeout(() => {
       record.reminderTimer = undefined;
-      if (!record.fault) return;
-      this.notify(this.reminderMessage(record));
-      // Re-arm only while the fault persists.
-      this.armReminderTimer(record);
+      // Stale-callback guard: the episode may have recovered, been superseded
+      // by a new one, or the monitor may have been disposed.
+      if (this.disposed || record.fault !== fault) return;
+      this.notify(this.reminderMessage(record, fault));
+      // Re-arm only while the same episode persists.
+      this.armReminderTimer(record, fault);
     }, this.dailyReminderMs);
   }
 
@@ -545,8 +690,8 @@ export class SensorHealthMonitor {
     );
   }
 
-  private reminderMessage(record: RoleRecord): string {
-    const minutes = Math.round((this.nowFn() - record.fault!.since) / 60000);
+  private reminderMessage(record: RoleRecord, fault: EpisodeFault): string {
+    const minutes = Math.round((this.nowFn() - fault.since) / 60000);
     const label = record.role === "hall" ? "hall temperature" : "outdoor temperature";
     return (
       `HAG: ${label} sensor fault still active after ${minutes} min — degraded mode ` +
@@ -566,8 +711,13 @@ export class SensorHealthMonitor {
   dispose(): void {
     this.disposed = true;
     for (const role of ["hall", "outdoor"] as SensorRole[]) {
-      this.clearTimeoutTimer(this.records[role]);
-      this.clearReminderTimer(this.records[role]);
+      const record = this.records[role];
+      // Pending notification grace windows die with the monitor: no alert may
+      // be issued after disposal.
+      this.clearGraceTimer(record.fault);
+      this.clearTimeoutTimer(record);
+      this.clearReminderTimer(record);
     }
+    this.clearGraceTimer(this.connectionFault);
   }
 }

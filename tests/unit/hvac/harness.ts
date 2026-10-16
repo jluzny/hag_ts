@@ -440,6 +440,12 @@ export const makeSensorHealth = (
     readReport?: SensorHealthOptions["readReport"];
     reportTimeoutMs?: number;
     dailyReminderMs?: number;
+    /**
+     * Notification grace window in ms. `0` (used by the fixtures that pin the
+     * per-episode alert cadence rather than the debounce) alerts immediately;
+     * omitted means the monitor's production default (one hour).
+     */
+    notificationGraceMs?: number;
     logger?: LoggerService;
     /** Probe-decided recovery hook (issue 2 review round 1, F1). */
     onRecovery?: SensorHealthOptions["onRecovery"];
@@ -457,6 +463,7 @@ export const makeSensorHealth = (
     readReport: deps.readReport,
     reportTimeoutMs: deps.reportTimeoutMs,
     dailyReminderMs: deps.dailyReminderMs,
+    notificationGraceMs: deps.notificationGraceMs,
     onRecovery: deps.onRecovery,
     calibrate: deps.calibrate,
     logger: deps.logger ?? new LoggerService("test.sensor-health"),

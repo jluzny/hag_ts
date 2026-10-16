@@ -1157,6 +1157,10 @@ export function createHVACMachine(
       hvacOptions.sensorHealth?.dailyReminderHours !== undefined
         ? hvacOptions.sensorHealth.dailyReminderHours * 60 * 60 * 1000
         : undefined,
+    notificationGraceMs:
+      hvacOptions.sensorHealth?.notificationGraceMinutes !== undefined
+        ? hvacOptions.sensorHealth.notificationGraceMinutes * 60 * 1000
+        : undefined,
     logger,
   }),
   // Truthful post-reconnect read-back (review round 1, F4): the controller
@@ -2583,6 +2587,10 @@ export class HVACStateMachine {
         dailyReminderMs:
           hvacOptions?.sensorHealth?.dailyReminderHours !== undefined
             ? hvacOptions.sensorHealth.dailyReminderHours * 60 * 60 * 1000
+            : undefined,
+        notificationGraceMs:
+          hvacOptions?.sensorHealth?.notificationGraceMinutes !== undefined
+            ? hvacOptions.sensorHealth.notificationGraceMinutes * 60 * 1000
             : undefined,
         logger: this.logger,
       });
