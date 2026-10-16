@@ -446,6 +446,13 @@ export const makeSensorHealth = (
      * omitted means the monitor's production default (one hour).
      */
     notificationGraceMs?: number;
+    /**
+     * Scheduler override. The default wraps `clock`; the stale-callback tests
+     * pass a wrapper whose `clearTimeout` can be made a no-op, so a timer
+     * callback can be forced to run after a recovery/dispose (something the
+     * bare FakeClock makes impossible, since it deletes the timer).
+     */
+    scheduler?: SensorHealthOptions["scheduler"];
     logger?: LoggerService;
     /** Probe-decided recovery hook (issue 2 review round 1, F1). */
     onRecovery?: SensorHealthOptions["onRecovery"];
@@ -455,7 +462,7 @@ export const makeSensorHealth = (
 ): SensorHealthMonitor =>
   new SensorHealthMonitor({
     entityIds: { hall: options.tempSensor, outdoor: options.outdoorSensor },
-    scheduler: {
+    scheduler: deps.scheduler ?? {
       setTimeout: (fn, ms) => deps.clock.setTimeout(fn, ms),
       clearTimeout: (id) => deps.clock.clearTimeout(id as number),
     },

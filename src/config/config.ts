@@ -229,9 +229,13 @@ export const SensorHealthOptionsSchema = z
     notificationGraceMinutes: z
       .number()
       .min(0)
+      // 7 days. Beyond that the delay approaches the JavaScript timer ceiling
+      // (~24.8 days): the runtime would silently clamp it to 1 ms, turning a
+      // very long grace into an immediate alert — the opposite of the policy.
+      .max(10080)
       .default(60)
       .describe(
-        "Approved notification debounce: minutes a fault episode (hall sensor, outdoor sensor or the Home Assistant connection) must persist continuously after detection before the initial alert is sent. Detection, logging and degraded mode stay immediate; an episode that resolves inside the window sends neither a fault nor a recovery message. 0 disables the debounce (alert immediately).",
+        "Approved notification debounce: minutes a fault episode (hall sensor, outdoor sensor or the Home Assistant connection) must persist continuously after detection before the initial alert is sent. Detection, logging and degraded mode stay immediate; an episode that resolves inside the window sends neither a fault nor a recovery message. 0 disables the debounce (alert immediately); capped at 10080 (7 days).",
       ),
   })
   .optional()

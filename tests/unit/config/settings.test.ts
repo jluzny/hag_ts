@@ -457,5 +457,26 @@ describe("Entity validation", () => {
         sensorHealth: { notificationGraceMinutes: -1 },
       }),
     ).toThrow(ZodError);
+
+    // Review round 1 F2: an absurd grace is rejected instead of being silently
+    // clamped to a 1 ms timer (which would invert the policy into an immediate
+    // alert). The 7-day cap is accepted.
+    const maxGrace = HvacOptionsSchema.parse({
+      ...base,
+      sensorHealth: { notificationGraceMinutes: 10080 },
+    });
+    expect(maxGrace.sensorHealth?.notificationGraceMinutes).toBe(10080);
+    expect(() =>
+      HvacOptionsSchema.parse({
+        ...base,
+        sensorHealth: { notificationGraceMinutes: 10081 },
+      }),
+    ).toThrow(ZodError);
+    expect(() =>
+      HvacOptionsSchema.parse({
+        ...base,
+        sensorHealth: { notificationGraceMinutes: 35792 },
+      }),
+    ).toThrow(ZodError);
   });
 });

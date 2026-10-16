@@ -27,6 +27,7 @@ import {
   DEFAULT_DAILY_REMINDER_MS,
   DEFAULT_NOTIFICATION_GRACE_MS,
   DEFAULT_SENSOR_REPORT_TIMEOUT_MS,
+  type Scheduler,
   SensorHealthMonitor,
   parseSensorReading,
 } from "../../../src/hvac/sensor-health.ts";
@@ -120,6 +121,92 @@ afterEach(() => {
   active = undefined;
   setSystemTime();
 });
+
+/**
+ * Timer scheduler that models a runtime which *fails to cancel* a timer: an id
+ * registered via `makeUncancellable()` survives `clearTimeout`, so its callback
+ * still runs later (the callback was already dispatched / is queued on the
+ * event loop). The bare `FakeClock` deletes the timer on `clearTimeout`, so it
+ * can never reproduce the stale-callback scenario — this wrapper is what makes
+ * the monitor's episode-identity guards observable.
+ */
+class NonCancellingScheduler implements Scheduler {
+  private readonly uncancellable = new Set<unknown>();
+  /** Every timer the monitor armed, in arm order. */
+  readonly armed: { id: unknown; fn: () => void; ms: number }[] = [];
+
+  constructor(private readonly clock: FakeClock) {}
+
+  setTimeout(fn: () => void, ms: number): unknown {
+    const id = this.clock.setTimeout(fn, ms);
+    this.armed.push({ id, fn, ms });
+    return id;
+  }
+
+  clearTimeout(id: unknown): void {
+    // The scheduler "loses" the cancellation for the marked ids only.
+    if (this.uncancellable.has(id)) return;
+    this.clock.clearTimeout(id as number);
+  }
+
+  /** Simulate a timer whose callback can no longer be cancelled. */
+  makeUncancellable(id: unknown): void {
+    this.uncancellable.add(id);
+  }
+
+  /** The most recently armed timer with this exact delay. */
+  lastArmed(ms: number): { id: unknown; fn: () => void } {
+    const found = [...this.armed].reverse().find((timer) => timer.ms === ms);
+    if (!found) throw new Error(`no timer armed with a ${ms} ms delay`);
+    return { id: found.id, fn: found.fn };
+  }
+}
+
+interface StaleFixture extends Fixture {
+  scheduler: NonCancellingScheduler;
+}
+
+/**
+ * Fixture with a scheduler whose cancellation can be defeated on demand, plus a
+ * report timeout that cannot interfere with the window under test (48 h, versus
+ * the 1 h grace these tests use).
+ */
+const staleFixture = (deps: {
+  dailyReminderMs?: number;
+  notificationGraceMs?: number;
+  reportTimeoutMs?: number;
+} = {}): StaleFixture => {
+  setSystemTime(BASE_DATE);
+  const clock = new FakeClock();
+  const notifier = new RecordingNotifier();
+  const scheduler = new NonCancellingScheduler(clock);
+  const monitor = makeSensorHealth(makeOptions(), {
+    clock,
+    scheduler,
+    notifier,
+    reportTimeoutMs: deps.reportTimeoutMs ?? 48 * 60 * 60_000,
+    notificationGraceMs: deps.notificationGraceMs ?? DEFAULT_NOTIFICATION_GRACE_MS,
+    dailyReminderMs: deps.dailyReminderMs,
+  });
+
+  return {
+    clock,
+    notifier,
+    scheduler,
+    monitor,
+    advance: (ms: number) =>
+      clock.advance(ms, (virtualNow) => {
+        setSystemTime(new Date(baseMs + virtualNow));
+      }),
+    at: (offsetMs: number) => new Date(baseMs + offsetMs),
+  };
+};
+
+const setupStale = (deps: Parameters<typeof staleFixture>[0] = {}): StaleFixture => {
+  const f = staleFixture(deps);
+  active = f;
+  return f;
+};
 
 describe("Issue 2 - a sensor failure is detected without false positives", () => {
   test("unavailable, unknown, empty and non-finite readings are a fault immediately", () => {
@@ -1186,9 +1273,11 @@ describe("Notification debounce - the onset alert waits for a continuous grace w
     f.advance(30 * 60_000);
     expect(f.notifier.messages).toEqual([]);
 
-    // Back inside the window: neither an outage nor a recovery message.
+    // Back inside the window: neither an outage nor a recovery message, and the
+    // pending outage window is cleared there and then (F1: no advance() first).
     f.monitor.noteHaConnected();
     expect(f.notifier.messages).toEqual([]);
+    expect(f.clock.pendingDelays()).not.toContain(DEFAULT_NOTIFICATION_GRACE_MS);
     f.advance(2 * 60 * 60_000);
     expect(f.notifier.messages).toEqual([]);
 
@@ -1224,8 +1313,187 @@ describe("Notification debounce - the onset alert waits for a continuous grace w
     expect(f.clock.pending()).toBeGreaterThan(0);
 
     f.monitor.dispose();
+    // Review round 1 F1: the timers are *cleared*, immediately — asserted before
+    // any advance(), because advancing first would drain fired timers and could
+    // not tell "cleared" from "leaked and no-opped".
+    expect(f.clock.pending()).toBe(0);
     f.advance(48 * 60 * 60_000);
     expect(f.notifier.messages).toEqual([]);
     expect(f.clock.pending()).toBe(0);
+  });
+});
+
+/**
+ * Review round 1 (t_6bc1b7c8) F1: the acceptance items "timers cleared on
+ * recovery/dispose" and "stale callbacks cannot send after recovery or a new
+ * episode" need tests that actually discriminate.
+ *
+ * Two independent mechanisms are pinned here:
+ *  1. clearing — asserted on `clock.pending()`/`pendingDelays()` with no
+ *     advance() in between, so a leaked timer cannot hide behind a drained one;
+ *  2. the callbacks' own guards — asserted with a scheduler whose `clearTimeout`
+ *     is defeated for the timer under test, so the callback genuinely runs
+ *     after the episode ended / was superseded / after dispose().
+ */
+describe("Notification debounce - cleared timers and stale callbacks (review round 1 F1)", () => {
+  test("an early recovery clears the pending window at once, before any timer fires", () => {
+    const recovered: Array<[string, number]> = [];
+    const f = setup({
+      notificationGraceMs: DEFAULT_NOTIFICATION_GRACE_MS,
+      onRecovery: (role, value) => recovered.push([role, value]),
+    });
+    f.monitor.report("hall", {
+      entityId: "sensor.hall",
+      rawState: "unavailable",
+      reportedAt: f.at(0),
+    });
+    expect(f.monitor.isDegraded("hall")).toBe(true);
+    // Detection is immediate, the alert is not: the window is armed.
+    expect(f.clock.pendingDelays()).toContain(DEFAULT_NOTIFICATION_GRACE_MS);
+
+    // The recovery clears it there and then — no advance() in between.
+    f.monitor.report("hall", {
+      entityId: "sensor.hall",
+      rawState: "18.5",
+      reportedAt: f.at(60_000),
+    });
+    expect(f.monitor.isDegraded("hall")).toBe(false);
+    expect(f.clock.pendingDelays()).not.toContain(DEFAULT_NOTIFICATION_GRACE_MS);
+    expect(f.notifier.messages).toEqual([]);
+    // The HVAC recovery reevaluation hook is a behaviour guarantee of its own:
+    // it still fires for a fault that was never announced.
+    expect(recovered).toEqual([["hall", 18.5]]);
+  });
+
+  test("a stale grace callback cannot alert after its episode recovered", () => {
+    const f = setupStale();
+    f.monitor.report("hall", {
+      entityId: "sensor.hall",
+      rawState: "unavailable",
+      reportedAt: f.at(0),
+    });
+    // The scheduler loses this cancellation: the callback stays scheduled.
+    f.scheduler.makeUncancellable(
+      f.scheduler.lastArmed(DEFAULT_NOTIFICATION_GRACE_MS).id,
+    );
+
+    // The episode resolves one minute into the window.
+    f.advance(60_000);
+    f.monitor.report("hall", {
+      entityId: "sensor.hall",
+      rawState: "18.0",
+      reportedAt: f.at(f.clock.now),
+    });
+    expect(f.notifier.messages).toEqual([]);
+    // Premise of this test: the callback really is still pending, so the
+    // silence below comes from the monitor's guard, not from a cancelled timer.
+    expect(f.clock.pendingDelays()).toContain(DEFAULT_NOTIFICATION_GRACE_MS);
+
+    // Past the window the stale callback runs - and must announce nothing.
+    f.advance(DEFAULT_NOTIFICATION_GRACE_MS);
+    expect(f.notifier.messages).toEqual([]);
+  });
+
+  test("a stale grace callback cannot alert for an episode a new one superseded", () => {
+    const f = setupStale();
+    const report = (rawState: string): void =>
+      f.monitor.report("hall", {
+        entityId: "sensor.hall",
+        rawState,
+        reportedAt: f.at(f.clock.now),
+      });
+
+    report("unavailable"); // episode A at t = 0
+    f.scheduler.makeUncancellable(
+      f.scheduler.lastArmed(DEFAULT_NOTIFICATION_GRACE_MS).id,
+    );
+    f.advance(60_000);
+    report("18.0"); // A resolves at t = 1 min
+    f.advance(60_000);
+    report("unavailable"); // episode B starts at t = 2 min
+
+    // t = 60 min: A's stale window closes while B's is still open. The stale
+    // callback must not alert for A ...
+    f.advance(DEFAULT_NOTIFICATION_GRACE_MS - 2 * 60_000);
+    expect(f.notifier.messages).toEqual([]);
+
+    // ... and B's own window still closes on time, exactly once.
+    f.advance(2 * 60_000);
+    expect(f.notifier.messages.length).toBe(1);
+    expect(f.notifier.messages[0]).toContain("hall temperature sensor fault");
+    expect(f.monitor.sensorState("hall").faultSince).toBe(
+      f.at(2 * 60_000).toISOString(),
+    );
+  });
+
+  test("a stale grace callback cannot alert after dispose", () => {
+    const f = setupStale();
+    f.monitor.report("hall", {
+      entityId: "sensor.hall",
+      rawState: "unavailable",
+      reportedAt: f.at(0),
+    });
+    f.scheduler.makeUncancellable(
+      f.scheduler.lastArmed(DEFAULT_NOTIFICATION_GRACE_MS).id,
+    );
+
+    f.monitor.dispose();
+    // Premise: the window survives the (lost) cancellation ...
+    expect(f.clock.pendingDelays()).toContain(DEFAULT_NOTIFICATION_GRACE_MS);
+    // ... and the stale callback still stays silent after disposal.
+    f.advance(2 * 60 * 60_000);
+    expect(f.notifier.messages).toEqual([]);
+  });
+
+  test("a stale connection-window callback cannot alert after HA reconnected", () => {
+    const f = setupStale();
+    f.monitor.noteHaDisconnected();
+    f.scheduler.makeUncancellable(
+      f.scheduler.lastArmed(DEFAULT_NOTIFICATION_GRACE_MS).id,
+    );
+
+    // Reconnected 30 min into the window: neither an outage nor a recovery.
+    f.advance(30 * 60_000);
+    f.monitor.noteHaConnected();
+    expect(f.notifier.messages).toEqual([]);
+    // Premise: the outage window is still scheduled ...
+    expect(f.clock.pendingDelays()).toContain(DEFAULT_NOTIFICATION_GRACE_MS);
+
+    // ... and the stale callback stays silent when it fires. Nothing invents a
+    // successful outage onset after the connection already returned.
+    f.advance(DEFAULT_NOTIFICATION_GRACE_MS);
+    expect(f.notifier.messages).toEqual([]);
+    expect(f.monitor.status().degraded).toBe(false);
+  });
+
+  test("a stale reminder callback cannot send after the episode recovered", () => {
+    const REMINDER_MS = 60_000;
+    const f = setupStale({ dailyReminderMs: REMINDER_MS });
+    f.monitor.report("hall", {
+      entityId: "sensor.hall",
+      rawState: "unavailable",
+      reportedAt: f.at(0),
+    });
+
+    // The window closes: one onset alert, and the reminder cadence starts.
+    f.advance(DEFAULT_NOTIFICATION_GRACE_MS);
+    expect(f.notifier.messages.length).toBe(1);
+    f.scheduler.makeUncancellable(f.scheduler.lastArmed(REMINDER_MS).id);
+
+    // The sensor recovers before the reminder is due.
+    f.monitor.report("hall", {
+      entityId: "sensor.hall",
+      rawState: "19.0",
+      reportedAt: f.at(f.clock.now),
+    });
+    expect(f.notifier.messages.length).toBe(2);
+    expect(f.notifier.messages[1]).toContain("recovered");
+    // Premise: the reminder callback is still pending despite the recovery.
+    expect(f.clock.pendingDelays()).toContain(REMINDER_MS);
+
+    // The stale reminder fires one interval later and must stay silent.
+    f.advance(REMINDER_MS);
+    expect(f.notifier.messages.length).toBe(2);
+    expect(f.notifier.messages[1]).toContain("recovered");
   });
 });
