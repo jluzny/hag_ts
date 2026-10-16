@@ -13,6 +13,12 @@ bun.lock
 .env
 .env.local
 
+# Deployment-local secret env files (real values, mode 0600, server only).
+# The sanitized *.env.example templates stay tracked.
+.hag_ha_token.env
+.hag_telegram.env
+*.env
+
 # Coverage reports
 /coverage
 

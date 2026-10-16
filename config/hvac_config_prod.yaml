@@ -75,7 +75,18 @@ hvacOptions:
   activeHours:
     start: 9
     startWeekday: 9 # Weekday start
-    end: 23
+    end: 22
 
   evaluationCacheMs: 100 # Cache evaluations for 100ms
   sensorStalenessMs: 1800000 # 30 minutes - per-unit sensors older than this are considered stale
+
+  # Degraded-mode fault alerts (hall sensor, outdoor sensor, Home Assistant
+  # connection) go through the Hermes home-assistant profile's Telegram route.
+  # The bot token is a secret: only the ${HASS_TelegramBotToken} placeholder is
+  # committed, and the real value lives in the deployment-local 0600 env file
+  # sourced by start_hag.sh. The chat id is intended non-secret configuration.
+  alerts:
+    telegram:
+      enabled: true
+      botToken: "${HASS_TelegramBotToken}"
+      chatId: "7600528001"

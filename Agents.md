@@ -270,3 +270,78 @@ bun run prod:start         # Start production server
 
 - Run typecheck and lint everytime you finish a batch of code changes
 - Always use bun and bunx instead of npm and npx
+
+## Production Configuration and Secret Policy
+
+Durable rules for this repository. They exist because production drifted from
+Git: the deployed server carried an active window (09:00-22:00) and enabled
+Telegram fault alerts that were committed nowhere, and the credentials needed
+to start the service lived in an untracked launcher script.
+
+### Intended non-secret configuration lives in Git
+
+- Every *intended* non-secret production setting (active hours, enabled units,
+  thresholds, presets, alert enablement, chat destination, ...) must be
+  reviewed, committed and pushed in the same change that intends it. See
+  `config/hvac_config_prod.yaml`; its committed values are pinned by
+  `tests/unit/config/prod-config-policy.test.ts`.
+- Production must match the tracked effective non-secret settings. A deployment
+  that differs from Git is drift to be reconciled, never a second source of
+  truth.
+- Before deploying: inspect the deployed revision and the on-server `git diff`;
+  reconcile intentional non-secret drift by committing it here. Preserve edits
+  that belong to another change instead of stashing them indefinitely, and stage
+  the exact files you mean to change - never a blanket `git add -A`.
+- Never `git reset --hard`, `git checkout --` or `git clean` over deployed files
+  while unreconciled local data exists: back up first (see below).
+- `bun.lockb` and other dependency/environment rewrites are reported and
+  preserved separately: commit them only as an explicit, reviewed dependency
+  change, never as a side effect of a deploy.
+
+### Secrets never enter Git
+
+- Tracked configuration carries `${ENV_VAR}` placeholders only, e.g.
+  `token: "${HASS_HassOptions__Token}"` and
+  `botToken: "${HASS_TelegramBotToken}"`.
+- Real values live only in deployment-local env files that are gitignored and
+  mode 0600:
+  - `~/.hag_ha_token.env` - Home Assistant long-lived token;
+  - `~/.hag_telegram.env` - Telegram bot token of the alert route.
+
+  Tracked templates with placeholder values live at
+  `.hag_ha_token.env.example` and `.hag_telegram.env.example`.
+- Launchers, cron entries and logs must never contain credentials, and no secret
+  value may be printed or copied off the server during a migration. Migrate a
+  credential by transforming it server-side into the protected env file.
+- Before publishing, scan the staged diff for token-shaped content; the scan must
+  return nothing:
+  `git diff --cached | grep -nE 'eyJ[A-Za-z0-9_.-]{10,}|[0-9]{8,10}:[A-Za-z0-9_-]{30,}'`
+
+### Deployment is verified by readback, not by pushing
+
+- A successful push is not evidence that production runs the change. Evidence
+  required per deploy: the deployed revision (`git rev-parse HEAD` == published
+  hash), the deployed config hash (`sha256sum config/hvac_config_prod.yaml`),
+  the effective settings loaded through the real `ConfigLoader`, and process /
+  Home Assistant readback.
+- Rehearse launcher changes offline first: `HAG_DRY_RUN=1 sh start_hag.sh` with
+  sandbox overrides, plus `bun test`, `bun run lint` and `bun run check`
+  compared against a baseline of the previous revision.
+
+### Production deployment surface
+
+| Purpose | Path |
+| --- | --- |
+| Checkout / working copy | `/home/jiri/apps/hag_ts` (server `jiri@192.168.0.119`) |
+| Launcher (tracked, secret-free) | `/home/jiri/apps/hag_ts/start_hag.sh`, started by the deployment's root `@reboot` cron entry |
+| Production config (tracked) | `/home/jiri/apps/hag_ts/config/hvac_config_prod.yaml` |
+| Bun runtime | `/home/jiri/.bun/bin/bun` |
+| Home Assistant token (0600, ignored) | `/home/jiri/.hag_ha_token.env` |
+| Telegram bot token (0600, ignored) | `/home/jiri/.hag_telegram.env` |
+| Service log (`tee`, truncated per start) | `/home/jiri/apps/hag_ts/log.log` |
+
+The launcher reads every path above from its environment defaults, so it can be
+pointed at a sandbox for rehearsal without editing it. The `@reboot` entry
+itself lives in the root user's crontab, which the deployment user cannot read:
+report that limitation rather than asserting an unverified cron.
+
